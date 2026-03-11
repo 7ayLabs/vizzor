@@ -1,11 +1,12 @@
 // ---------------------------------------------------------------------------
-// React hook that wraps the streaming AI client for the Vizzor TUI
+// React hook that wraps the streaming AI provider for the Vizzor TUI
 // ---------------------------------------------------------------------------
 
 import { useState, useCallback } from 'react';
-import { analyzeStream } from '../../ai/stream.js';
+import { getProvider, getToolHandler } from '../../ai/client.js';
 import { CHAT_SYSTEM_PROMPT } from '../../ai/prompts/chat.js';
 import { VIZZOR_TOOLS } from '../../ai/tools.js';
+import { buildContextBlock } from '../../ai/context-injector.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -31,7 +32,7 @@ export interface UseAIStreamResult {
 /**
  * React hook that manages streaming AI chat sessions.
  *
- * Calls `analyzeStream()` from `src/ai/stream.ts` with the Vizzor system
+ * Calls the active provider's `analyzeStream()` method with the Vizzor system
  * prompt and tool definitions. Exposes incremental text, tool execution
  * status, and a `sendMessage` callback.
  */
@@ -48,36 +49,47 @@ export function useAIStream(): UseAIStreamResult {
     setActiveTools([]);
     setCompletedTools([]);
 
-    analyzeStream(
-      CHAT_SYSTEM_PROMPT,
-      message,
-      {
-        onText(delta: string): void {
-          setStreamingText((prev) => prev + delta);
-        },
-        onToolStart(name: string): void {
-          setActiveTools((prev) => [...prev, name]);
-        },
-        onToolEnd(name: string): void {
-          setActiveTools((prev) => prev.filter((t) => t !== name));
-          setCompletedTools((prev) => [...prev, name]);
-        },
-        onDone(_fullText: string): void {
-          setIsStreaming(false);
-          setActiveTools([]);
-          setCompletedTools([]);
-        },
+    const provider = getProvider();
+    const toolHandler = getToolHandler();
+
+    const callbacks = {
+      onText(delta: string): void {
+        setStreamingText((prev) => prev + delta);
       },
-      VIZZOR_TOOLS,
-    ).catch(() => {
-      // If the stream fails, ensure we leave a clean state.
+      onToolStart(name: string): void {
+        setActiveTools((prev) => [...prev, name]);
+      },
+      onToolEnd(name: string): void {
+        setActiveTools((prev) => prev.filter((t) => t !== name));
+        setCompletedTools((prev) => [...prev, name]);
+      },
+      onDone(_fullText: string): void {
+        setIsStreaming(false);
+        setActiveTools([]);
+        setCompletedTools([]);
+      },
+    };
+
+    // For providers without tool support, inject real-time data into prompt
+    const startStream = async (): Promise<void> => {
+      let systemPrompt = CHAT_SYSTEM_PROMPT;
+
+      if (!provider.supportsTools) {
+        const context = await buildContextBlock(message);
+        if (context) systemPrompt = systemPrompt + '\n' + context;
+        await provider.analyzeStream(systemPrompt, message, callbacks);
+      } else {
+        await provider.analyzeStream(systemPrompt, message, callbacks, VIZZOR_TOOLS, toolHandler);
+      }
+    };
+
+    startStream().catch((err: unknown) => {
+      const detail = err instanceof Error ? err.message : String(err);
       setIsStreaming(false);
       setActiveTools([]);
       setCompletedTools([]);
       setStreamingText((prev) =>
-        prev.length > 0
-          ? prev + '\n\n[Stream interrupted]'
-          : '[Failed to connect to AI. Check your API key and try again.]',
+        prev.length > 0 ? prev + `\n\n[Stream interrupted: ${detail}]` : `[AI error: ${detail}]`,
       );
     });
   }, []);

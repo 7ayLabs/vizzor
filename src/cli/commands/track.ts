@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import ora from 'ora';
 import { getAdapter } from '../../chains/registry.js';
+import { getConfig } from '../../config/loader.js';
 import { analyzeWallet } from '../../core/forensics/wallet-analyzer.js';
 
 export async function handleTrack(
@@ -11,7 +12,8 @@ export async function handleTrack(
 
   try {
     const adapter = getAdapter(options.chain);
-    await adapter.connect();
+    const cfg = getConfig();
+    await adapter.connect(undefined, cfg.etherscanApiKey);
 
     const analysis = await analyzeWallet(wallet, adapter);
     await adapter.disconnect();

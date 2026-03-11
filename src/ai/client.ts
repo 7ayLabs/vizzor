@@ -1,22 +1,20 @@
 // ---------------------------------------------------------------------------
-// Anthropic SDK wrapper — lazy singleton with agentic tool-use loop
+// AI client facade — thin wrapper over the active AI provider
 // ---------------------------------------------------------------------------
 
-import Anthropic from '@anthropic-ai/sdk';
 import type { VizzorConfig } from '../config/schema.js';
+import type { AIProvider, ToolHandler, AITool } from './providers/types.js';
+import { initializeProvider } from './providers/registry.js';
+import { buildContextBlock } from './context-injector.js';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-/** Handler that executes a tool call and returns its result. */
-export type ToolHandler = (name: string, input: unknown) => Promise<unknown>;
+// Re-export types so existing consumers don't need to change their import paths.
+export type { ToolHandler, AITool } from './providers/types.js';
 
 // ---------------------------------------------------------------------------
 // Module state
 // ---------------------------------------------------------------------------
 
-let client: Anthropic | undefined;
+let provider: AIProvider | undefined;
 let config: VizzorConfig | undefined;
 let toolHandler: ToolHandler | undefined;
 
@@ -25,19 +23,17 @@ let toolHandler: ToolHandler | undefined;
 // ---------------------------------------------------------------------------
 
 /**
- * Initialise (or re-initialise) the AI client with the given config.
- * The Anthropic instance is created lazily on first use.
+ * Initialise the AI layer with the given config. Creates and initialises the
+ * provider specified by `cfg.ai.provider`.
  */
 export function setConfig(cfg: VizzorConfig): void {
   config = cfg;
-  // Force re-creation on next call so a new API key takes effect.
-  client = undefined;
+  provider = initializeProvider(cfg.ai.provider, cfg);
 }
 
 /**
- * Register the tool executor that the agentic loop invokes when Claude
- * requests a tool call. Commands should call this before starting a chat
- * session that includes tools.
+ * Register the tool executor that the agentic loop invokes when the AI
+ * requests a tool call.
  */
 export function setToolHandler(handler: ToolHandler): void {
   toolHandler = handler;
@@ -45,7 +41,6 @@ export function setToolHandler(handler: ToolHandler): void {
 
 /**
  * Return the current VizzorConfig, or `undefined` if not yet set.
- * Used by sibling modules (e.g. stream.ts) that need access to model params.
  */
 export function getConfig(): VizzorConfig | undefined {
   return config;
@@ -53,151 +48,54 @@ export function getConfig(): VizzorConfig | undefined {
 
 /**
  * Return the registered tool handler, or `undefined` if none is set.
- * Used by sibling modules that run their own agentic loops.
  */
 export function getToolHandler(): ToolHandler | undefined {
   return toolHandler;
 }
 
 /**
- * Return the shared Anthropic client, creating it on first access.
+ * Return the active AI provider.
  *
- * @throws If no config has been set or the API key is missing.
+ * @throws If no provider has been initialised.
  */
-export function getAIClient(): Anthropic {
-  if (client) return client;
-
-  if (!config?.anthropicApiKey) {
-    throw new Error(
-      'Anthropic API key is not configured. Set ANTHROPIC_API_KEY or add anthropicApiKey to ~/.vizzor/config.yaml.',
-    );
+export function getProvider(): AIProvider {
+  if (!provider) {
+    throw new Error('AI provider has not been initialised. Call setConfig first.');
   }
-
-  client = new Anthropic({ apiKey: config.anthropicApiKey });
-  return client;
+  return provider;
 }
 
 /**
- * Send a message to Claude and return the concatenated text response.
+ * Switch to a different provider at runtime (e.g. from the `/provider` TUI
+ * command). Re-initialises the provider with the current config.
+ */
+export function switchProvider(name: string): void {
+  if (!config) {
+    throw new Error('Config has not been set. Call setConfig first.');
+  }
+  provider = initializeProvider(name, config);
+}
+
+/**
+ * Send a message to the active provider and return the full text response.
+ * Includes agentic tool-use loop when tools and a tool handler are available.
  *
- * When `tools` are provided and Claude responds with `tool_use` blocks the
- * function enters an agentic loop: it executes every requested tool via the
- * registered {@link setToolHandler}, feeds the results back to Claude, and
- * repeats until Claude produces a final text response (or hits the built-in
- * iteration limit).
- *
- * @param systemPrompt - The system prompt that sets Claude's persona.
- * @param userMessage  - The user's input message.
- * @param tools        - Optional array of tool definitions to make available.
- * @returns The concatenated text blocks from Claude's final response.
+ * For providers that don't support tool use (e.g. Ollama), real-time data
+ * is automatically fetched and injected into the system prompt.
  */
 export async function analyze(
   systemPrompt: string,
   userMessage: string,
-  tools?: Anthropic.Messages.Tool[],
+  tools?: AITool[],
 ): Promise<string> {
-  const ai = getAIClient();
+  const p = getProvider();
 
-  if (!config) {
-    throw new Error('AI config has not been initialised. Call setConfig first.');
+  if (!p.supportsTools) {
+    // Inject real-time data into the prompt for providers without tool use
+    const context = await buildContextBlock(userMessage);
+    const enrichedPrompt = context ? systemPrompt + '\n' + context : systemPrompt;
+    return p.analyze(enrichedPrompt, userMessage);
   }
 
-  const model = config.ai.model;
-  const maxTokens = config.ai.maxTokens;
-  const maxIterations = 10; // safety cap for the agentic loop
-
-  const messages: Anthropic.Messages.MessageParam[] = [{ role: 'user', content: userMessage }];
-
-  for (let iteration = 0; iteration < maxIterations; iteration++) {
-    const params: Anthropic.Messages.MessageCreateParamsNonStreaming = {
-      model,
-      max_tokens: maxTokens,
-      system: systemPrompt,
-      messages,
-      ...(tools && tools.length > 0 ? { tools } : {}),
-    };
-
-    const response = await ai.messages.create(params);
-
-    // Collect tool_use blocks from the response.
-    const toolUseBlocks = response.content.filter(
-      (block): block is Anthropic.Messages.ToolUseBlock => block.type === 'tool_use',
-    );
-
-    // If there are no tool calls, extract text and return.
-    if (toolUseBlocks.length === 0 || response.stop_reason !== 'tool_use') {
-      return extractText(response.content);
-    }
-
-    // --- Agentic loop: execute tools and continue the conversation ----------
-
-    if (!toolHandler) {
-      throw new Error(
-        'Claude requested tool use but no tool handler is registered. Call setToolHandler first.',
-      );
-    }
-
-    // Capture in a const so TypeScript narrows the type inside the async map.
-    const handler = toolHandler;
-
-    // Append the assistant's response (including tool_use blocks) so Claude
-    // can see what it previously said.
-    messages.push({
-      role: 'assistant',
-      content: response.content.map((block) => {
-        if (block.type === 'text') {
-          return { type: 'text' as const, text: block.text };
-        }
-        if (block.type === 'tool_use') {
-          return {
-            type: 'tool_use' as const,
-            id: block.id,
-            name: block.name,
-            input: block.input,
-          };
-        }
-        // For any other block type, serialise as text so we don't lose info.
-        return { type: 'text' as const, text: JSON.stringify(block) };
-      }),
-    });
-
-    // Execute each tool and build the tool_result blocks.
-    const toolResults: Anthropic.Messages.ToolResultBlockParam[] = await Promise.all(
-      toolUseBlocks.map(async (block) => {
-        try {
-          const result = await handler(block.name, block.input);
-          return {
-            type: 'tool_result' as const,
-            tool_use_id: block.id,
-            content: JSON.stringify(result),
-          };
-        } catch (err: unknown) {
-          const message = err instanceof Error ? err.message : String(err);
-          return {
-            type: 'tool_result' as const,
-            tool_use_id: block.id,
-            content: JSON.stringify({ error: message }),
-            is_error: true,
-          };
-        }
-      }),
-    );
-
-    messages.push({ role: 'user', content: toolResults });
-  }
-
-  // If we exhausted iterations, return whatever text we collected last.
-  return '[Vizzor] The analysis reached the maximum number of tool-use iterations. Partial results may be incomplete.';
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Concatenate all text blocks from a response's content array. */
-function extractText(content: Anthropic.Messages.ContentBlock[]): string {
-  return content
-    .filter((block): block is Anthropic.Messages.TextBlock => block.type === 'text')
-    .map((block) => block.text)
-    .join('\n\n');
+  return p.analyze(systemPrompt, userMessage, tools, toolHandler);
 }

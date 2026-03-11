@@ -6,10 +6,14 @@ import type { RichBlock } from './components/message-list.js';
 import { getAdapter } from '../chains/registry.js';
 import { analyzeProject } from '../core/scanner/project-analyzer.js';
 import { assessRisk } from '../core/scanner/risk-scorer.js';
-import { fetchMarketData } from '../core/trends/market.js';
+import { fetchMarketData, fetchTrendingTokens } from '../core/trends/market.js';
 import { analyzeWallet } from '../core/forensics/wallet-analyzer.js';
 import { auditContract } from '../core/forensics/contract-auditor.js';
 import { getConfig } from '../config/loader.js';
+import { DEFAULT_CHAIN, TREND_SYMBOLS } from '../config/constants.js';
+import { getProvider, switchProvider } from '../ai/client.js';
+import { getAvailableProviders } from '../ai/providers/registry.js';
+import { DEFAULT_MODELS } from '../ai/providers/types.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -59,9 +63,9 @@ export function parseCommand(input: string): { name: string; args: string[] } {
 function extractChainFlag(args: string[]): string {
   const idx = args.indexOf('--chain');
   if (idx !== -1 && idx + 1 < args.length) {
-    return args[idx + 1] ?? 'ethereum';
+    return args[idx + 1] ?? DEFAULT_CHAIN;
   }
-  return 'ethereum';
+  return DEFAULT_CHAIN;
 }
 
 /**
@@ -111,6 +115,8 @@ export async function executeCommand(name: string, args: string[]): Promise<Comm
       return handleAudit(args);
     case 'help':
       return handleHelp();
+    case 'provider':
+      return handleProvider(args);
     case 'config':
       return handleConfig();
     case 'clear':
@@ -207,15 +213,19 @@ async function handleTrack(args: string[]): Promise<CommandResult> {
 }
 
 async function handleTrends(): Promise<CommandResult> {
-  const symbols = ['bitcoin', 'ethereum', 'solana'];
+  const symbols = TREND_SYMBOLS;
 
-  const results = await Promise.allSettled(symbols.map((s) => fetchMarketData(s)));
+  // Fetch CoinGecko market data + DexScreener trending in parallel
+  const [marketResults, trendingResult] = await Promise.all([
+    Promise.allSettled(symbols.map((s) => fetchMarketData(s))),
+    fetchTrendingTokens().catch(() => []),
+  ]);
 
   const blocks: RichBlock[] = [];
   const lines: string[] = ['Market trends:'];
 
-  for (let i = 0; i < results.length; i++) {
-    const result = results[i]!;
+  for (let i = 0; i < marketResults.length; i++) {
+    const result = marketResults[i]!;
     const symbol = symbols[i]!;
     if (result.status === 'fulfilled' && result.value) {
       const data = result.value;
@@ -230,6 +240,21 @@ async function handleTrends(): Promise<CommandResult> {
       });
     } else {
       lines.push(`  ${symbol.toUpperCase()}: data unavailable`);
+    }
+  }
+
+  // Append trending tokens from DexScreener
+  if (trendingResult.length > 0) {
+    lines.push('');
+    lines.push('Trending tokens (DexScreener):');
+    for (const t of trendingResult.slice(0, 5)) {
+      const change =
+        t.priceChange24h > 0
+          ? `+${t.priceChange24h.toFixed(1)}%`
+          : `${t.priceChange24h.toFixed(1)}%`;
+      lines.push(
+        `  ${t.symbol} (${t.chain}): $${t.priceUsd} | 24h: ${change} | Vol: $${t.volume24h.toLocaleString()}`,
+      );
     }
   }
 
@@ -274,20 +299,88 @@ async function handleAudit(args: string[]): Promise<CommandResult> {
   }
 }
 
+function handleProvider(args: string[]): CommandResult {
+  const subcommand = args[0];
+
+  // /provider — show current
+  if (!subcommand) {
+    try {
+      const provider = getProvider();
+      return {
+        blocks: [],
+        text: `Current AI provider: ${provider.name}`,
+      };
+    } catch {
+      return { blocks: [], text: 'No AI provider is currently active.' };
+    }
+  }
+
+  // /provider list — show all with availability
+  if (subcommand === 'list') {
+    try {
+      const cfg = getConfig();
+      const providers = getAvailableProviders(cfg);
+      let current = '';
+      try {
+        current = getProvider().name;
+      } catch {
+        // no active provider
+      }
+
+      const lines = ['Available AI providers:', ''];
+      for (const p of providers) {
+        const active = p.name === current ? ' (active)' : '';
+        const model = DEFAULT_MODELS[p.name] ?? 'unknown';
+        const status = p.available ? 'ready' : (p.reason ?? 'unavailable');
+        lines.push(`  ${p.name}${active} — ${model} [${status}]`);
+      }
+      lines.push('', 'Switch with: /provider <name>');
+      return { blocks: [], text: lines.join('\n') };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { blocks: [], text: `Provider list error: ${message}` };
+    }
+  }
+
+  // /provider <name> — switch provider
+  const validProviders = ['anthropic', 'openai', 'gemini', 'ollama'];
+  if (!validProviders.includes(subcommand)) {
+    return {
+      blocks: [],
+      text: `Unknown provider "${subcommand}". Available: ${validProviders.join(', ')}`,
+    };
+  }
+
+  try {
+    switchProvider(subcommand);
+    const provider = getProvider();
+    return {
+      blocks: [],
+      text: `Switched to ${provider.name}. Ready to chat.`,
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { blocks: [], text: `Failed to switch provider: ${message}` };
+  }
+}
+
 function handleHelp(): CommandResult {
   const text = [
     'Available commands:',
     '',
     '  /scan <address> [--chain <chain>]    Scan a token/project for risk indicators',
     '  /track <wallet> [--chain <chain>]    Analyze a wallet address',
-    '  /trends                              Show market trends for BTC, ETH, SOL',
-    '  /audit <contract> [--chain <chain>]  Audit a smart contract',
+    '  /trends                              Market trends + DexScreener trending tokens',
+    '  /audit <contract> [--chain <chain>]  Audit a smart contract (bytecode scanning)',
+    '  /provider [list|<name>]              Show/switch AI provider',
     '  /config                              Show current configuration (keys masked)',
     '  /clear                               Clear message history',
     '  /exit                                Exit Vizzor',
     '  /help                                Show this help message',
     '',
-    'Or just type a question to chat with the AI assistant.',
+    'AI chat supports: token search (DexScreener), trending, news, raises,',
+    'market data, wallet analysis, rug detection, and Pump.fun launches.',
+    'Just ask a question — Vizzor fetches live data automatically.',
   ].join('\n');
 
   return { blocks: [], text };
@@ -297,16 +390,29 @@ function handleConfig(): CommandResult {
   try {
     const cfg = getConfig();
 
+    let activeModel: string;
+    try {
+      getProvider(); // ensure a provider is active
+      activeModel = cfg.ai.model ?? DEFAULT_MODELS[cfg.ai.provider] ?? '(default)';
+    } catch {
+      activeModel = cfg.ai.model ?? '(default)';
+    }
+
     const text = [
       'Current configuration:',
       '',
+      `  AI Provider:        ${cfg.ai.provider}`,
+      `  AI Model:           ${activeModel}`,
+      `  Max Tokens:         ${cfg.ai.maxTokens}`,
       `  Anthropic API Key:  ${maskKey(cfg.anthropicApiKey)}`,
+      `  OpenAI API Key:     ${maskKey(cfg.openaiApiKey)}`,
+      `  Google API Key:     ${maskKey(cfg.googleApiKey)}`,
       `  Etherscan API Key:  ${maskKey(cfg.etherscanApiKey)}`,
       `  Alchemy API Key:    ${maskKey(cfg.alchemyApiKey)}`,
       `  CoinGecko API Key:  ${maskKey(cfg.coingeckoApiKey)}`,
+      `  CryptoPanic Key:   ${maskKey(cfg.cryptopanicApiKey)}`,
       `  Default Chain:      ${cfg.defaultChain}`,
-      `  AI Model:           ${cfg.ai.model}`,
-      `  Max Tokens:         ${cfg.ai.maxTokens}`,
+      `  Ollama Host:        ${cfg.ai.ollamaHost}`,
       `  Output Format:      ${cfg.output.format}`,
       `  Color:              ${cfg.output.color}`,
       `  Verbose:            ${cfg.output.verbose}`,

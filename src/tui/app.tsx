@@ -13,14 +13,17 @@ import { StreamingText } from './components/streaming-text.js';
 import { useAIStream } from './hooks/use-ai-stream.js';
 import { useCommand } from './hooks/use-command.js';
 import { isSlashCommand, parseCommand } from './commands.js';
-import { loadConfig } from '../config/loader.js';
+import { loadConfig, getConfig } from '../config/loader.js';
+import { DEFAULT_CHAIN } from '../config/constants.js';
 import { setConfig, setToolHandler } from '../ai/client.js';
 import { VIZZOR_TOOLS } from '../ai/tools.js';
 import { getAdapter } from '../chains/registry.js';
 import { analyzeWallet } from '../core/forensics/wallet-analyzer.js';
 import { detectRugIndicators } from '../core/forensics/rug-detector.js';
-import { fetchMarketData } from '../core/trends/market.js';
-import { fetchUpcomingICOs } from '../core/scanner/ico-tracker.js';
+import { fetchMarketData, fetchTokenFromDex, fetchTrendingTokens } from '../core/trends/market.js';
+import { fetchUpcomingICOs, searchICOs } from '../core/scanner/ico-tracker.js';
+import { fetchCryptoNews } from '../data/sources/cryptopanic.js';
+import { fetchRecentRaises } from '../data/sources/defillama.js';
 
 // ---------------------------------------------------------------------------
 // Tool handler — bridges Claude tool-use to Vizzor core modules
@@ -32,8 +35,9 @@ async function handleTool(name: string, input: unknown): Promise<unknown> {
   switch (name) {
     case 'get_token_info': {
       const address = String(params['address'] ?? '');
-      const chain = String(params['chain'] ?? 'ethereum');
+      const chain = String(params['chain'] ?? DEFAULT_CHAIN);
       const adapter = getAdapter(chain);
+      await adapter.connect(undefined, getConfig().etherscanApiKey);
       const info = await adapter.getTokenInfo(address);
       return {
         address: info.address,
@@ -46,8 +50,9 @@ async function handleTool(name: string, input: unknown): Promise<unknown> {
 
     case 'analyze_wallet': {
       const address = String(params['address'] ?? '');
-      const chain = String(params['chain'] ?? 'ethereum');
+      const chain = String(params['chain'] ?? DEFAULT_CHAIN);
       const adapter = getAdapter(chain);
+      await adapter.connect(undefined, getConfig().etherscanApiKey);
       const analysis = await analyzeWallet(address, adapter);
       return {
         address: analysis.address,
@@ -61,8 +66,9 @@ async function handleTool(name: string, input: unknown): Promise<unknown> {
 
     case 'check_rug_indicators': {
       const address = String(params['address'] ?? '');
-      const chain = String(params['chain'] ?? 'ethereum');
+      const chain = String(params['chain'] ?? DEFAULT_CHAIN);
       const adapter = getAdapter(chain);
+      await adapter.connect(undefined, getConfig().etherscanApiKey);
       const indicators = await detectRugIndicators(address, adapter);
       return {
         isHoneypot: indicators.isHoneypot,
@@ -86,8 +92,93 @@ async function handleTool(name: string, input: unknown): Promise<unknown> {
     }
 
     case 'search_upcoming_icos': {
-      const projects = await fetchUpcomingICOs();
+      const category = params['category'] ? String(params['category']) : undefined;
+      const chain = params['chain'] ? String(params['chain']) : undefined;
+      const projects =
+        category || chain
+          ? await searchICOs(undefined, category, chain)
+          : await fetchUpcomingICOs();
       return { projects };
+    }
+
+    case 'search_token_dex': {
+      const query = String(params['query'] ?? '');
+      const pairs = await fetchTokenFromDex(query);
+      return {
+        results: pairs.slice(0, 5).map((p) => ({
+          name: p.baseToken.name,
+          symbol: p.baseToken.symbol,
+          chain: p.chainId,
+          dex: p.dexId,
+          priceUsd: p.priceUsd,
+          volume24h: p.volume?.h24 ?? 0,
+          liquidity: p.liquidity?.usd ?? 0,
+          priceChange24h: p.priceChange?.h24 ?? 0,
+          marketCap: p.marketCap ?? p.fdv ?? null,
+          buys24h: p.txns?.h24?.buys ?? 0,
+          sells24h: p.txns?.h24?.sells ?? 0,
+          pairAddress: p.pairAddress,
+          url: p.url,
+        })),
+      };
+    }
+
+    case 'get_trending': {
+      const trending = await fetchTrendingTokens();
+      return {
+        trending: trending.slice(0, 10).map((t) => ({
+          name: t.name,
+          symbol: t.symbol,
+          chain: t.chain,
+          priceUsd: t.priceUsd,
+          priceChange24h: t.priceChange24h,
+          volume24h: t.volume24h,
+          marketCap: t.marketCap,
+          source: t.source,
+          url: t.url,
+        })),
+      };
+    }
+
+    case 'get_crypto_news': {
+      const symbol = params['symbol'] ? String(params['symbol']) : undefined;
+      const news = await fetchCryptoNews(symbol, getConfig().cryptopanicApiKey);
+      return {
+        news: news.slice(0, 10).map((n) => ({
+          title: n.title,
+          sentiment: n.sentiment,
+          source: n.source.title,
+          publishedAt: n.publishedAt,
+          url: n.url,
+        })),
+      };
+    }
+
+    case 'get_raises': {
+      const raises = await fetchRecentRaises(30);
+      let filtered = raises;
+      if (params['category']) {
+        const cat = String(params['category']).toLowerCase();
+        filtered = filtered.filter(
+          (r) => r.category?.toLowerCase().includes(cat) || r.sector?.toLowerCase().includes(cat),
+        );
+      }
+      if (params['chain']) {
+        const ch = String(params['chain']).toLowerCase();
+        filtered = filtered.filter((r) => r.chains.some((c) => c.toLowerCase().includes(ch)));
+      }
+      return {
+        raises: filtered.slice(0, 10).map((r) => ({
+          name: r.name,
+          round: r.round,
+          amount: r.amount,
+          chains: r.chains,
+          sector: r.sector,
+          category: r.category,
+          leadInvestors: r.leadInvestors,
+          date: new Date(r.date * 1000).toISOString().split('T')[0],
+        })),
+      };
     }
 
     default:

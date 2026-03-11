@@ -1,5 +1,5 @@
 import chalk from 'chalk';
-import { createTable, printTable } from '../../utils/table.js';
+import { createTable } from '../../utils/table.js';
 
 export type OutputFormat = 'table' | 'json' | 'markdown';
 
@@ -53,7 +53,7 @@ function printTableOutput(data: Record<string, unknown>, color: boolean): void {
       } else {
         console.log(key);
       }
-      printTable(table);
+      console.log(table.toString());
     }
     return;
   }
@@ -63,7 +63,7 @@ function printTableOutput(data: Record<string, unknown>, color: boolean): void {
   for (const [key, value] of entries) {
     table.push([key, String(value ?? '')]);
   }
-  printTable(table);
+  console.log(table.toString());
 }
 
 function printMarkdown(data: Record<string, unknown>): void {

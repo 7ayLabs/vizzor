@@ -5,8 +5,10 @@ describe('vizzorConfigSchema', () => {
   it('parses empty object with defaults', () => {
     const result = vizzorConfigSchema.parse({});
     expect(result.defaultChain).toBe('ethereum');
-    expect(result.ai.model).toBe('claude-sonnet-4-20250514');
+    expect(result.ai.provider).toBe('anthropic');
+    expect(result.ai.model).toBeUndefined();
     expect(result.ai.maxTokens).toBe(4096);
+    expect(result.ai.ollamaHost).toBe('http://localhost:11434');
     expect(result.output.format).toBe('table');
     expect(result.output.color).toBe(true);
     expect(result.output.verbose).toBe(false);

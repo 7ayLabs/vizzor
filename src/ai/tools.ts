@@ -1,15 +1,18 @@
 // ---------------------------------------------------------------------------
-// Vizzor tool definitions for Claude tool-use
+// Vizzor tool definitions for AI tool-use (provider-agnostic)
 // ---------------------------------------------------------------------------
 
-import type Anthropic from '@anthropic-ai/sdk';
+import type { AITool } from './providers/types.js';
 
 /**
- * Tool definitions that Vizzor exposes to Claude during chat and analysis
- * sessions. Each tool maps to a concrete handler registered via
+ * Tool definitions that Vizzor exposes to AI providers during chat and
+ * analysis sessions. Each tool maps to a concrete handler registered via
  * {@link setToolHandler} in the AI client.
+ *
+ * Uses the provider-agnostic {@link AITool} type (JSON Schema format).
+ * Provider implementations convert to their SDK-specific format internally.
  */
-export const VIZZOR_TOOLS: Anthropic.Messages.Tool[] = [
+export const VIZZOR_TOOLS: AITool[] = [
   {
     name: 'get_token_info',
     description:
@@ -93,7 +96,7 @@ export const VIZZOR_TOOLS: Anthropic.Messages.Tool[] = [
   {
     name: 'search_upcoming_icos',
     description:
-      'Search for upcoming ICOs and token launches filtered by category and/or blockchain. Returns project name, dates, chain, category, and links.',
+      'Search for upcoming ICOs, token launches, and fundraising rounds filtered by category and/or blockchain. Powered by DeFiLlama raises and Pump.fun launches.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -109,6 +112,66 @@ export const VIZZOR_TOOLS: Anthropic.Messages.Tool[] = [
         limit: {
           type: 'number',
           description: 'Maximum number of results to return. Defaults to 10.',
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'search_token_dex',
+    description:
+      'Search for any token on decentralized exchanges via DexScreener. Returns real-time price, volume, liquidity, buy/sell counts, pair info. Works for all tokens including meme coins and newly launched tokens.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Token name, symbol, or contract address to search for.',
+        },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'get_trending',
+    description:
+      'Get currently trending and hot tokens from DexScreener (boosted tokens) and CoinGecko trending combined. Shows what the market is excited about right now.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: 'get_crypto_news',
+    description:
+      'Get the latest crypto news with sentiment analysis for a specific token or the market in general. Powered by CryptoPanic.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        symbol: {
+          type: 'string',
+          description:
+            'Token symbol to filter news for (e.g. "BTC", "ETH", "SOL"). Omit for general crypto news.',
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'get_raises',
+    description:
+      'Get recent crypto fundraising rounds, venture capital investments, and token launches. Powered by DeFiLlama raises data.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        category: {
+          type: 'string',
+          description: 'Filter by sector/category (e.g. "defi", "infrastructure", "gaming").',
+        },
+        chain: {
+          type: 'string',
+          description: 'Filter by blockchain (e.g. "ethereum", "solana").',
         },
       },
       required: [],

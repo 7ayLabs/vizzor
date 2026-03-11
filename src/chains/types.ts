@@ -115,7 +115,7 @@ export interface ChainAdapter {
   readonly nativeCurrency: { symbol: string; decimals: number };
 
   // Lifecycle
-  connect(rpcUrl?: string): Promise<void>;
+  connect(rpcUrl?: string, explorerApiKey?: string): Promise<void>;
   disconnect(): Promise<void>;
   isConnected(): boolean;
 
