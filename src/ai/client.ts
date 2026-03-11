@@ -10,7 +10,7 @@ import type { VizzorConfig } from '../config/schema.js';
 // ---------------------------------------------------------------------------
 
 /** Handler that executes a tool call and returns its result. */
-type ToolHandler = (name: string, input: unknown) => Promise<unknown>;
+export type ToolHandler = (name: string, input: unknown) => Promise<unknown>;
 
 // ---------------------------------------------------------------------------
 // Module state
@@ -41,6 +41,22 @@ export function setConfig(cfg: VizzorConfig): void {
  */
 export function setToolHandler(handler: ToolHandler): void {
   toolHandler = handler;
+}
+
+/**
+ * Return the current VizzorConfig, or `undefined` if not yet set.
+ * Used by sibling modules (e.g. stream.ts) that need access to model params.
+ */
+export function getConfig(): VizzorConfig | undefined {
+  return config;
+}
+
+/**
+ * Return the registered tool handler, or `undefined` if none is set.
+ * Used by sibling modules that run their own agentic loops.
+ */
+export function getToolHandler(): ToolHandler | undefined {
+  return toolHandler;
 }
 
 /**
