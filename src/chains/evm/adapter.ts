@@ -1,0 +1,242 @@
+// ---------------------------------------------------------------------------
+// EvmAdapter – ChainAdapter implementation for EVM-compatible chains (viem)
+// ---------------------------------------------------------------------------
+
+import {
+  createPublicClient,
+  http,
+  type PublicClient,
+  type Chain,
+  type HttpTransport,
+  type Address,
+  type Abi,
+} from 'viem';
+import { mainnet, polygon, arbitrum, optimism, base } from 'viem/chains';
+
+import type {
+  ChainAdapter,
+  Block,
+  ContractEvent,
+  EventOptions,
+  Holder,
+  TokenInfo,
+  TokenTransfer,
+  Transaction,
+  TransferOptions,
+  TxHistoryOptions,
+} from '../types.js';
+import { erc20Abi } from './abi/erc20.js';
+
+// ---------------------------------------------------------------------------
+// Chain ID → viem Chain object mapping
+// ---------------------------------------------------------------------------
+
+const CHAIN_MAP: Record<string, Chain> = {
+  ethereum: mainnet,
+  polygon: polygon,
+  arbitrum: arbitrum,
+  optimism: optimism,
+  base: base,
+};
+
+// ---------------------------------------------------------------------------
+// EvmAdapter
+// ---------------------------------------------------------------------------
+
+export class EvmAdapter implements ChainAdapter {
+  readonly chainId: string;
+  readonly name: string;
+  readonly nativeCurrency: { symbol: string; decimals: number };
+
+  private client: PublicClient<HttpTransport, Chain> | null = null;
+  private readonly viemChain: Chain;
+
+  constructor(chainId: string) {
+    const chain = CHAIN_MAP[chainId];
+    if (!chain) {
+      throw new Error(
+        `Unsupported EVM chain: "${chainId}". Supported: ${Object.keys(CHAIN_MAP).join(', ')}`,
+      );
+    }
+
+    this.chainId = chainId;
+    this.viemChain = chain;
+    this.name = chain.name;
+    this.nativeCurrency = {
+      symbol: chain.nativeCurrency.symbol,
+      decimals: chain.nativeCurrency.decimals,
+    };
+  }
+
+  // ── Lifecycle ───────────────────────────────────────────────────────────
+
+  async connect(rpcUrl?: string): Promise<void> {
+    this.client = createPublicClient({
+      chain: this.viemChain,
+      transport: http(rpcUrl),
+      batch: { multicall: true },
+    });
+  }
+
+  async disconnect(): Promise<void> {
+    this.client = null;
+  }
+
+  isConnected(): boolean {
+    return this.client !== null;
+  }
+
+  // ── Balances ────────────────────────────────────────────────────────────
+
+  async getBalance(address: string): Promise<bigint> {
+    const client = this.requireClient();
+    return client.getBalance({ address: address as Address });
+  }
+
+  async getTokenBalance(address: string, tokenAddress: string): Promise<bigint> {
+    const client = this.requireClient();
+    const balance = await client.readContract({
+      address: tokenAddress as Address,
+      abi: erc20Abi,
+      functionName: 'balanceOf',
+      args: [address as Address],
+    });
+    return balance as bigint;
+  }
+
+  async getTransactionHistory(
+    _address: string,
+    _options?: TxHistoryOptions,
+  ): Promise<Transaction[]> {
+    // TODO: Implement via Etherscan / block-explorer API.
+    // viem does not provide a transaction-history RPC; an indexed API
+    // (Etherscan, Alchemy Transfers API, etc.) is required.
+    return [];
+  }
+
+  async getTokenTransfers(_address: string, _options?: TransferOptions): Promise<TokenTransfer[]> {
+    // TODO: Implement via Etherscan / block-explorer API.
+    // Requires an indexed API for efficient token transfer lookups.
+    return [];
+  }
+
+  // ── Contracts ───────────────────────────────────────────────────────────
+
+  async getContractCode(address: string): Promise<string> {
+    const client = this.requireClient();
+    const code = await client.getCode({ address: address as Address });
+    return code ?? '0x';
+  }
+
+  async readContract(
+    address: string,
+    abi: readonly unknown[],
+    functionName: string,
+    args?: unknown[],
+  ): Promise<unknown> {
+    const client = this.requireClient();
+    return client.readContract({
+      address: address as Address,
+      abi: abi as Abi,
+      functionName,
+      args: args as readonly unknown[],
+    });
+  }
+
+  async getContractEvents(
+    address: string,
+    abi: readonly unknown[],
+    eventName: string,
+    options?: EventOptions,
+  ): Promise<ContractEvent[]> {
+    const client = this.requireClient();
+
+    const logs = await client.getContractEvents({
+      address: address as Address,
+      abi: abi as Abi,
+      eventName,
+      fromBlock: options?.fromBlock,
+      toBlock: options?.toBlock,
+      args: options?.args as Record<string, unknown> | undefined,
+    });
+
+    return logs.map((log) => ({
+      eventName: log.eventName ?? eventName,
+      blockNumber: log.blockNumber ?? 0n,
+      transactionHash: log.transactionHash ?? '0x',
+      args: (log.args ?? {}) as Record<string, unknown>,
+      logIndex: log.logIndex ?? 0,
+    }));
+  }
+
+  // ── Tokens ──────────────────────────────────────────────────────────────
+
+  async getTokenInfo(address: string): Promise<TokenInfo> {
+    const client = this.requireClient();
+    const tokenAddr = address as Address;
+
+    const [name, symbol, decimals, totalSupply] = await Promise.all([
+      client.readContract({
+        address: tokenAddr,
+        abi: erc20Abi,
+        functionName: 'name',
+      }) as Promise<string>,
+      client.readContract({
+        address: tokenAddr,
+        abi: erc20Abi,
+        functionName: 'symbol',
+      }) as Promise<string>,
+      client.readContract({
+        address: tokenAddr,
+        abi: erc20Abi,
+        functionName: 'decimals',
+      }) as Promise<number>,
+      client.readContract({
+        address: tokenAddr,
+        abi: erc20Abi,
+        functionName: 'totalSupply',
+      }) as Promise<bigint>,
+    ]);
+
+    return { address, name, symbol, decimals, totalSupply };
+  }
+
+  async getTopHolders(_tokenAddress: string, _limit?: number): Promise<Holder[]> {
+    // TODO: Implement via Etherscan / block-explorer API.
+    // There is no standard RPC method to retrieve top holders;
+    // this requires an indexed data source.
+    return [];
+  }
+
+  // ── Blocks ──────────────────────────────────────────────────────────────
+
+  async getBlockNumber(): Promise<bigint> {
+    const client = this.requireClient();
+    return client.getBlockNumber();
+  }
+
+  async getBlock(blockNumber: bigint): Promise<Block> {
+    const client = this.requireClient();
+    const block = await client.getBlock({ blockNumber });
+
+    return {
+      number: block.number ?? 0n,
+      hash: block.hash ?? '0x',
+      parentHash: block.parentHash,
+      timestamp: Number(block.timestamp),
+      gasUsed: block.gasUsed,
+      gasLimit: block.gasLimit,
+      baseFeePerGas: block.baseFeePerGas ?? null,
+      transactionCount: block.transactions.length,
+    };
+  }
+
+  // ── Helpers ─────────────────────────────────────────────────────────────
+
+  private requireClient(): PublicClient<HttpTransport, Chain> {
+    if (!this.client) {
+      throw new Error(`EvmAdapter(${this.chainId}): not connected. Call connect() first.`);
+    }
+    return this.client;
+  }
+}
