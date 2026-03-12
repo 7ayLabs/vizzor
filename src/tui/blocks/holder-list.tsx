@@ -24,17 +24,10 @@ function buildPercentageBar(percentage: number, width = 20): string {
 
 export function HolderList({ holders }: HolderListProps): React.JSX.Element {
   return (
-    <Box
-      flexDirection="column"
-      borderStyle="single"
-      borderLeft
-      borderRight={false}
-      borderTop={false}
-      borderBottom={false}
-      borderColor="gray"
-      paddingLeft={1}
-    >
-      <Text bold>{'👥 Top Holders'}</Text>
+    <Box flexDirection="column" borderStyle="round" borderColor="gray" paddingX={1}>
+      <Text inverse bold>
+        {' TOP HOLDERS '}
+      </Text>
       {holders.map((holder, idx) => (
         <Box key={idx} gap={1}>
           <Text dimColor>{truncateAddress(holder.address)}</Text>

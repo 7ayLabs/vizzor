@@ -1,23 +1,13 @@
 import React from 'react';
-import { Box, Text, Newline } from 'ink';
+import { Box, Text } from 'ink';
 
 export function WelcomeBanner(): React.JSX.Element {
   return (
-    <Box
-      borderStyle="round"
-      borderColor="blue"
-      paddingX={2}
-      paddingY={1}
-      flexDirection="column"
-      alignItems="center"
-    >
+    <Box paddingX={1}>
       <Text bold color="blue">
-        vizzor v0.1.0
+        vizzor
       </Text>
-      <Text dimColor>AI-powered crypto chronovisor</Text>
-      <Newline />
-      <Text>Ask anything or use /commands</Text>
-      <Text dimColor>Type /help for available commands</Text>
+      <Text dimColor> v0.1.0 — crypto chronovisor. Type /help for commands.</Text>
     </Box>
   );
 }

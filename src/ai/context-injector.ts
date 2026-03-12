@@ -28,6 +28,32 @@ const RAISES_KEYWORDS = [
   'new project',
 ];
 const PUMP_KEYWORDS = ['pump', 'meme', 'solana launch', 'pump.fun', 'degen'];
+const BROAD_KEYWORDS = [
+  "what's happening",
+  'whats happening',
+  'market',
+  'overview',
+  'summary',
+  'up to date',
+  'up-to-date',
+  'current',
+  'right now',
+  'today',
+  '2025',
+  '2026',
+  'lately',
+  'recently',
+  'this week',
+  'this month',
+  'general',
+  'everything',
+  'outlook',
+  'sentiment',
+  'macro',
+  'state of',
+  'tell me about crypto',
+  'crypto market',
+];
 
 // Common token symbols to recognize
 const KNOWN_SYMBOLS: Record<string, string> = {
@@ -137,10 +163,61 @@ export async function buildContextBlock(userMessage: string): Promise<string> {
     );
   }
 
+  // 6. Broad / general query — fetch everything for a full picture
+  const isBroadQuery = matchesAny(lower, BROAD_KEYWORDS);
+  if (isBroadQuery) {
+    // Inject trending if not already queued
+    if (!matchesAny(lower, TRENDING_KEYWORDS)) {
+      tasks.push(
+        fetchTrendingData().then((data) => {
+          if (data) sections.push(data);
+        }),
+      );
+    }
+    // Inject news if not already queued
+    if (!matchesAny(lower, NEWS_KEYWORDS)) {
+      tasks.push(
+        fetchNewsData().then((data) => {
+          if (data) sections.push(data);
+        }),
+      );
+    }
+    // Inject raises if not already queued
+    if (!matchesAny(lower, RAISES_KEYWORDS)) {
+      tasks.push(
+        fetchRaisesData().then((data) => {
+          if (data) sections.push(data);
+        }),
+      );
+    }
+    // Inject top 3 market data if not already queued
+    if (!matchesAny(lower, PRICE_KEYWORDS) && mentionedTokens.length === 0 && !addressMatch) {
+      tasks.push(
+        fetchTokenData(['bitcoin', 'ethereum', 'solana']).then((data) => {
+          if (data) sections.push(data);
+        }),
+      );
+    }
+  }
+
   // If no specific intent detected, try to fetch market data for any mentioned tokens
   if (tasks.length === 0 && mentionedTokens.length > 0) {
     tasks.push(
       fetchTokenData(mentionedTokens).then((data) => {
+        if (data) sections.push(data);
+      }),
+    );
+  }
+
+  // If still no tasks, inject baseline context (trending + news) so Ollama never hallucinates
+  if (tasks.length === 0) {
+    tasks.push(
+      fetchTrendingData().then((data) => {
+        if (data) sections.push(data);
+      }),
+    );
+    tasks.push(
+      fetchNewsData().then((data) => {
         if (data) sections.push(data);
       }),
     );
@@ -156,7 +233,11 @@ export async function buildContextBlock(userMessage: string): Promise<string> {
     ...sections,
     '--- END REAL-TIME DATA ---',
     '',
-    'Use the data above to answer the user. Cite specific numbers and note that this is live data.',
+    'CRITICAL INSTRUCTIONS:',
+    '- You MUST use ONLY the real-time data above to answer. Do NOT invent, hallucinate, or fabricate any data, news, events, or prices.',
+    '- If a piece of information is not in the data above, say "I don\'t have data on that right now" — do NOT make something up.',
+    '- Cite specific numbers, sources (CoinGecko, DexScreener, CryptoPanic, DeFiLlama), and mention this is live data.',
+    '- Your training data is STALE and OUTDATED. The ONLY trustworthy information is what appears between the REAL-TIME DATA markers above.',
     '',
   ].join('\n');
 }

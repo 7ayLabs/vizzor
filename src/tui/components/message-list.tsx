@@ -17,13 +17,14 @@ export interface Message {
   role: 'user' | 'assistant';
   content: string;
   blocks?: RichBlock[];
+  timestamp?: Date;
 }
 
 interface MessageListProps {
   messages: Message[];
 }
 
-function RichBlockRenderer({ block }: { block: RichBlock }): React.JSX.Element | null {
+export function RichBlockRenderer({ block }: { block: RichBlock }): React.JSX.Element | null {
   switch (block.type) {
     case 'risk':
       return (

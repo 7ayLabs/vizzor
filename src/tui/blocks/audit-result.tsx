@@ -46,17 +46,10 @@ function getSeverityIcon(severity: string): string {
 
 export function AuditResult({ findings }: AuditResultProps): React.JSX.Element {
   return (
-    <Box
-      flexDirection="column"
-      borderStyle="single"
-      borderLeft
-      borderRight={false}
-      borderTop={false}
-      borderBottom={false}
-      borderColor="yellow"
-      paddingLeft={1}
-    >
-      <Text bold>{'🔍 Audit Results'}</Text>
+    <Box flexDirection="column" borderStyle="round" borderColor="yellow" paddingX={1}>
+      <Text inverse bold color="yellow">
+        {' AUDIT RESULTS '}
+      </Text>
       {findings.length === 0 ? (
         <Text color="green">No findings detected.</Text>
       ) : (

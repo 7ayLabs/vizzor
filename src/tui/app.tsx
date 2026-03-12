@@ -3,19 +3,22 @@
 // ---------------------------------------------------------------------------
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { render, Box, Text } from 'ink';
+import { render, Box, Text, Static } from 'ink';
+import { StatusBar } from './components/status-bar.js';
+import { PriceTicker } from './components/price-ticker.js';
 import { WelcomeBanner } from './components/welcome-banner.js';
-import { MessageList } from './components/message-list.js';
-import type { Message } from './components/message-list.js';
-import { ToolStatus } from './components/tool-status.js';
+import { MessageBubble } from './components/message-bubble.js';
+import { CommandHints } from './components/command-hints.js';
+import { ToolStatusList } from './components/tool-status.js';
 import { InputPrompt } from './components/input-prompt.js';
 import { StreamingText } from './components/streaming-text.js';
+import type { Message } from './components/message-list.js';
 import { useAIStream } from './hooks/use-ai-stream.js';
 import { useCommand } from './hooks/use-command.js';
 import { isSlashCommand, parseCommand } from './commands.js';
 import { loadConfig, getConfig } from '../config/loader.js';
 import { DEFAULT_CHAIN } from '../config/constants.js';
-import { setConfig, setToolHandler } from '../ai/client.js';
+import { setConfig, setToolHandler, getProvider } from '../ai/client.js';
 import { VIZZOR_TOOLS } from '../ai/tools.js';
 import { getAdapter } from '../chains/registry.js';
 import { analyzeWallet } from '../core/forensics/wallet-analyzer.js';
@@ -193,8 +196,12 @@ async function handleTool(name: string, input: unknown): Promise<unknown> {
 function App(): React.JSX.Element {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [_inputHistory, setInputHistory] = useState<string[]>([]);
   const [initError, setInitError] = useState<string | null>(null);
+  const [showBanner, setShowBanner] = useState(true);
+  const [currentInput, setCurrentInput] = useState('');
+  const [clearEpoch, setClearEpoch] = useState(0);
+  const [providerName, setProviderName] = useState('ollama');
+  const [chainName, setChainName] = useState(DEFAULT_CHAIN);
 
   const { streamingText, isStreaming, activeTools, completedTools, sendMessage } = useAIStream();
 
@@ -208,6 +215,8 @@ function App(): React.JSX.Element {
       const cfg = loadConfig();
       setConfig(cfg);
       setToolHandler(handleTool);
+      setProviderName(cfg.ai?.provider ?? 'ollama');
+      setChainName(cfg.defaultChain ?? DEFAULT_CHAIN);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       setInitError(`Initialisation failed: ${message}`);
@@ -221,7 +230,10 @@ function App(): React.JSX.Element {
   // -----------------------------------------------------------------------
   useEffect(() => {
     if (!isStreaming && streamingText.length > 0 && isProcessing) {
-      setMessages((prev) => [...prev, { role: 'assistant', content: streamingText }]);
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: streamingText, timestamp: new Date() },
+      ]);
       setIsProcessing(false);
     }
   }, [isStreaming, streamingText, isProcessing]);
@@ -231,8 +243,8 @@ function App(): React.JSX.Element {
   // -----------------------------------------------------------------------
   const handleSubmit = useCallback(
     (input: string): void => {
-      // Record in history
-      setInputHistory((prev) => [...prev, input]);
+      // Hide banner after first interaction
+      if (showBanner) setShowBanner(false);
 
       if (isSlashCommand(input)) {
         const { name } = parseCommand(input);
@@ -240,6 +252,7 @@ function App(): React.JSX.Element {
         // Special commands handled directly by the app
         if (name === 'clear') {
           setMessages([]);
+          setClearEpoch((prev) => prev + 1);
           return;
         }
         if (name === 'exit') {
@@ -253,14 +266,27 @@ function App(): React.JSX.Element {
             if (result) {
               setMessages((prev) => [
                 ...prev,
-                { role: 'assistant', content: result.text, blocks: result.blocks },
+                {
+                  role: 'assistant',
+                  content: result.text,
+                  blocks: result.blocks,
+                  timestamp: new Date(),
+                },
               ]);
+            }
+            // Update status bar when provider changes
+            if (name === 'provider') {
+              try {
+                setProviderName(getProvider().name);
+              } catch {
+                /* no active provider */
+              }
             }
           })
           .catch(() => {
             setMessages((prev) => [
               ...prev,
-              { role: 'assistant', content: 'Command execution failed.' },
+              { role: 'assistant', content: 'Command execution failed.', timestamp: new Date() },
             ]);
           })
           .finally(() => {
@@ -270,11 +296,11 @@ function App(): React.JSX.Element {
       }
 
       // Regular message — send to AI
-      setMessages((prev) => [...prev, { role: 'user', content: input }]);
+      setMessages((prev) => [...prev, { role: 'user', content: input, timestamp: new Date() }]);
       setIsProcessing(true);
       sendMessage(input);
     },
-    [executeSlashCommand, sendMessage],
+    [executeSlashCommand, sendMessage, showBanner],
   );
 
   // -----------------------------------------------------------------------
@@ -287,7 +313,14 @@ function App(): React.JSX.Element {
   // -----------------------------------------------------------------------
   return (
     <Box flexDirection="column" paddingX={1}>
-      <WelcomeBanner />
+      {/* Status bar */}
+      <StatusBar provider={providerName} chain={chainName} connected />
+
+      {/* Live price ticker */}
+      <PriceTicker />
+
+      {/* Compact banner — hides after first message */}
+      {showBanner && <WelcomeBanner />}
 
       {initError && (
         <Box marginTop={1}>
@@ -297,35 +330,35 @@ function App(): React.JSX.Element {
         </Box>
       )}
 
-      {messages.length > 0 && (
-        <Box marginTop={1}>
-          <MessageList messages={messages} />
-        </Box>
-      )}
+      {/* Message history — uses Static so items render once */}
+      <Static key={clearEpoch} items={messages}>
+        {(msg, idx) => (
+          <Box key={`${clearEpoch}-${idx}`} marginTop={idx === 0 ? 1 : 0}>
+            <MessageBubble message={msg} />
+          </Box>
+        )}
+      </Static>
 
       {/* Show streaming AI text while a response is being generated */}
       {isStreaming && streamingText.length > 0 && (
-        <Box marginTop={1} flexDirection="column">
-          <Box>
-            <StreamingText text={streamingText} isStreaming={isStreaming} />
-          </Box>
+        <Box marginTop={1}>
+          <StreamingText text={streamingText} isStreaming={isStreaming} />
         </Box>
       )}
 
       {/* Show active tool executions */}
-      {(activeTools.length > 0 || completedTools.length > 0) && (
-        <Box marginTop={1} flexDirection="column">
-          {completedTools.map((tool) => (
-            <ToolStatus key={`done-${tool}`} toolName={tool} isActive={false} />
-          ))}
-          {activeTools.map((tool) => (
-            <ToolStatus key={`active-${tool}`} toolName={tool} isActive />
-          ))}
-        </Box>
-      )}
+      <ToolStatusList active={activeTools} completed={completedTools} />
 
+      {/* Command hints when typing / */}
+      {currentInput.startsWith('/') && <CommandHints filter={currentInput} />}
+
+      {/* Input bar */}
       <Box marginTop={1}>
-        <InputPrompt onSubmit={handleSubmit} disabled={inputDisabled} />
+        <InputPrompt
+          onSubmit={handleSubmit}
+          disabled={inputDisabled}
+          onInputChange={setCurrentInput}
+        />
       </Box>
     </Box>
   );

@@ -34,17 +34,10 @@ export function MarketTicker({
   const changePrefix = change24h >= 0 ? '+' : '';
 
   return (
-    <Box
-      flexDirection="column"
-      borderStyle="single"
-      borderLeft
-      borderRight={false}
-      borderTop={false}
-      borderBottom={false}
-      borderColor="magenta"
-      paddingLeft={1}
-    >
-      <Text bold>{'📈 Market'}</Text>
+    <Box flexDirection="column" borderStyle="round" borderColor="magenta" paddingX={1}>
+      <Text inverse bold color="magenta">
+        {' MARKET '}
+      </Text>
       <Text>
         {symbol.toUpperCase()}: <Text bold>{formatCurrency(price)}</Text>
       </Text>

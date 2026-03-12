@@ -34,17 +34,10 @@ export function RiskBar({ score, level, factors }: RiskBarProps): React.JSX.Elem
   const isCritical = level.toLowerCase() === 'critical';
 
   return (
-    <Box
-      flexDirection="column"
-      borderStyle="single"
-      borderLeft
-      borderRight={false}
-      borderTop={false}
-      borderBottom={false}
-      borderColor={color}
-      paddingLeft={1}
-    >
-      <Text bold>{'📊 Risk Assessment'}</Text>
+    <Box flexDirection="column" borderStyle="round" borderColor={color} paddingX={1}>
+      <Text inverse bold color={color}>
+        {' RISK ASSESSMENT '}
+      </Text>
       <Box gap={2}>
         <Text>
           Score:{' '}
