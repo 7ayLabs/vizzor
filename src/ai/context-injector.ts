@@ -31,6 +31,34 @@ const RAISES_KEYWORDS = [
   'new project',
 ];
 const PUMP_KEYWORDS = ['pump', 'meme', 'solana launch', 'pump.fun', 'degen'];
+const COMPLEX_KEYWORDS = [
+  'predict',
+  'prediction',
+  'forecast',
+  'will it',
+  'going to',
+  'should i buy',
+  'should i sell',
+  'compare',
+  'vs',
+  'versus',
+  'portfolio',
+  'allocat',
+  'diversif',
+  'strategy',
+  'risk',
+  'hedge',
+  'long term',
+  'short term',
+  'entry',
+  'exit',
+  'target',
+  'when to',
+  'best time',
+  'opportunity',
+  'undervalued',
+  'overvalued',
+];
 const BROAD_KEYWORDS = [
   "what's happening",
   'whats happening',
@@ -213,19 +241,72 @@ export async function buildContextBlock(userMessage: string): Promise<string> {
 
   if (sections.length === 0) return '';
 
-  return [
+  // Detect complex queries that benefit from structured thinking
+  const isComplexQuery = matchesAny(lower, COMPLEX_KEYWORDS);
+
+  const output: string[] = [
     '',
     '--- REAL-TIME DATA (fetched just now) ---',
     ...sections,
     '--- END REAL-TIME DATA ---',
     '',
+  ];
+
+  // Inject thinking framework for complex queries
+  if (isComplexQuery) {
+    output.push(
+      '--- THINKING FRAMEWORK ---',
+      'This is a complex analytical query. Follow this structured approach:',
+      '',
+      '1. DATA COLLECTION: Identify what data you have and what is missing.',
+      '   List each data point with its source and freshness.',
+      '',
+      '2. SIGNAL IDENTIFICATION: Extract actionable signals from the data.',
+      '   - Technical: price action, volume trends, momentum indicators',
+      '   - Sentiment: news tone, Fear & Greed, social signals',
+      '   - On-chain: funding rates, open interest, whale activity',
+      '   - Fundamental: raises, partnerships, ecosystem growth',
+      '',
+      '3. SIGNAL ALIGNMENT: Check if signals agree or conflict.',
+      '   - Aligned signals (>3 agree) = higher confidence',
+      '   - Conflicting signals = lower confidence, highlight the disagreement',
+      '   - Missing signals = explicitly note gaps in analysis',
+      '',
+      '4. CONFIDENCE ASSESSMENT:',
+      '   - HIGH (>75%): 4+ signals aligned, strong data coverage',
+      '   - MEDIUM (50-75%): 2-3 signals aligned, some gaps',
+      '   - LOW (<50%): conflicting signals or insufficient data',
+      '',
+      '5. RISK IDENTIFICATION: What could invalidate this analysis?',
+      '   - Black swan risks, regulatory changes, technical failures',
+      '   - Contrarian indicators (extreme sentiment = potential reversal)',
+      '',
+      '6. SYNTHESIS: Combine into a clear, structured answer.',
+      '   Lead with the conclusion, support with evidence, end with risks.',
+      '--- END THINKING FRAMEWORK ---',
+      '',
+    );
+  }
+
+  output.push(
     'CRITICAL INSTRUCTIONS:',
     '- You MUST use ONLY the real-time data above to answer. Do NOT invent, hallucinate, or fabricate any data, news, events, or prices.',
     '- If a piece of information is not in the data above, say "I don\'t have data on that right now" — do NOT make something up.',
     '- Cite specific numbers, sources (Binance, CoinGecko, DexScreener, CryptoPanic, DeFiLlama, GoPlus), and mention this is live data.',
     '- Your training data is STALE and OUTDATED. The ONLY trustworthy information is what appears between the REAL-TIME DATA markers above.',
-    '',
-  ].join('\n');
+  );
+
+  // For complex queries, add extended thinking instruction
+  if (isComplexQuery) {
+    output.push(
+      '- COMPLEX QUERY DETECTED: Before answering, gather data from at least 4 tools. Use get_technical_analysis, get_prediction, get_derivatives_data, get_fear_greed, and get_market_data as applicable.',
+      '- Structure your response following the thinking framework above.',
+    );
+  }
+
+  output.push('');
+
+  return output.join('\n');
 }
 
 // ---------------------------------------------------------------------------
