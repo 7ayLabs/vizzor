@@ -38,7 +38,7 @@
     "test:coverage": "vitest run --coverage",
     "test:integration": "VIZZOR_INTEGRATION=true vitest run test/integration/",
     "clean": "rm -rf dist/",
-    "prepare": "husky",
+    "prepare": "husky || true",
     "prepublishOnly": "pnpm build"
   },
   "keywords": [
