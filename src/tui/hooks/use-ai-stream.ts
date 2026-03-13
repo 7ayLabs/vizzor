@@ -4,7 +4,7 @@
 
 import { useState, useCallback } from 'react';
 import { getProvider, getToolHandler } from '../../ai/client.js';
-import { CHAT_SYSTEM_PROMPT, OLLAMA_SYSTEM_PROMPT } from '../../ai/prompts/chat.js';
+import { buildChatSystemPrompt, OLLAMA_SYSTEM_PROMPT } from '../../ai/prompts/chat.js';
 import { VIZZOR_TOOLS } from '../../ai/tools.js';
 import { buildContextBlock } from '../../ai/context-injector.js';
 
@@ -78,7 +78,7 @@ export function useAIStream(): UseAIStreamResult {
         await provider.analyzeStream(systemPrompt, message, callbacks);
       } else {
         await provider.analyzeStream(
-          CHAT_SYSTEM_PROMPT,
+          buildChatSystemPrompt(),
           message,
           callbacks,
           VIZZOR_TOOLS,

@@ -357,6 +357,7 @@ export async function buildContextBlock(userMessage: string): Promise<string> {
   // ---------------------------------------------------------------------------
   const output: string[] = [
     '',
+    `CURRENT DATE: ${new Date().toISOString().split('T')[0]} (data fetched just now)`,
     '--- REAL-TIME DATA (fetched just now) ---',
     ...sections,
     '--- END REAL-TIME DATA ---',

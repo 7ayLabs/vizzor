@@ -77,7 +77,7 @@ export const VIZZOR_TOOLS: AITool[] = [
   {
     name: 'get_market_data',
     description:
-      'Get current market data for a token including price, 24h volume, market cap, price change percentages, and circulating supply.',
+      'Get LIVE current market data for a token including price, 24h volume, market cap, price change percentages, and circulating supply. Returns real-time data — never quote prices from training data.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -96,7 +96,7 @@ export const VIZZOR_TOOLS: AITool[] = [
   {
     name: 'search_upcoming_icos',
     description:
-      'Search for upcoming ICOs, token launches, and fundraising rounds filtered by category, blockchain, or round type. Powered by DeFiLlama raises and Pump.fun launches.',
+      'Search for CURRENT upcoming ICOs, token launches, and fundraising rounds filtered by category, blockchain, or round type. Returns LIVE data from DeFiLlama raises and Pump.fun launches, updated daily. MUST call for any ICO/launch question — training data is stale.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -160,7 +160,7 @@ export const VIZZOR_TOOLS: AITool[] = [
   {
     name: 'get_trending',
     description:
-      'Get currently trending and hot tokens from DexScreener (boosted tokens) and CoinGecko trending combined. Shows what the market is excited about right now.',
+      'Get REAL-TIME trending and hot tokens from DexScreener (boosted tokens) and CoinGecko trending combined. Returns what the market is excited about RIGHT NOW — trends change hourly. Always call for trending/hot token questions.',
     input_schema: {
       type: 'object' as const,
       properties: {},
@@ -170,7 +170,7 @@ export const VIZZOR_TOOLS: AITool[] = [
   {
     name: 'get_crypto_news',
     description:
-      'Get the latest crypto news with sentiment analysis for a specific token or the market in general. Powered by CryptoPanic.',
+      'Get LIVE latest crypto news with sentiment analysis for a specific token or the market in general. Returns current headlines from CryptoPanic — MUST call for news questions, training data is outdated.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -186,7 +186,7 @@ export const VIZZOR_TOOLS: AITool[] = [
   {
     name: 'get_raises',
     description:
-      'Get recent crypto fundraising rounds, venture capital investments, and token launches. Powered by DeFiLlama raises data.',
+      'Get LIVE recent crypto fundraising rounds, venture capital investments, and token launches. Returns CURRENT data updated daily from DeFiLlama — always call this for ICO/funding questions, never use training data.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -224,7 +224,7 @@ export const VIZZOR_TOOLS: AITool[] = [
   {
     name: 'get_fear_greed',
     description:
-      'Get the current Crypto Fear & Greed Index with 7-day history. Values: 0-20 Extreme Fear, 21-40 Fear, 41-60 Neutral, 61-80 Greed, 81-100 Extreme Greed.',
+      'Get the LIVE Crypto Fear & Greed Index with 7-day history (updated daily). Values: 0-20 Extreme Fear, 21-40 Fear, 41-60 Neutral, 61-80 Greed, 81-100 Extreme Greed. Call for any market sentiment question.',
     input_schema: {
       type: 'object' as const,
       properties: {},
@@ -234,7 +234,7 @@ export const VIZZOR_TOOLS: AITool[] = [
   {
     name: 'get_derivatives_data',
     description:
-      'Get derivatives data from Binance Futures: funding rate, open interest, and mark price for a trading pair. Useful for sentiment analysis and market positioning.',
+      'Get LIVE derivatives data from Binance Futures: funding rate (updates every 8h), open interest, and mark price for a trading pair. Essential for current market positioning analysis.',
     input_schema: {
       type: 'object' as const,
       properties: {
