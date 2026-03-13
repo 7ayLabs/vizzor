@@ -280,4 +280,57 @@ export const VIZZOR_TOOLS: AITool[] = [
       required: ['symbol'],
     },
   },
+  {
+    name: 'create_agent',
+    description:
+      'Create an autonomous trading agent that monitors crypto pairs using a strategy (momentum or trend-following). Returns the created agent config.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        name: {
+          type: 'string',
+          description: 'A unique name for the agent (e.g. "btc-momentum-bot").',
+        },
+        strategy: {
+          type: 'string',
+          description:
+            'Trading strategy: "momentum" (RSI+MACD) or "trend-following" (EMA crossover).',
+        },
+        pairs: {
+          type: 'string',
+          description: 'Comma-separated trading pairs (e.g. "BTC,ETH,SOL").',
+        },
+        interval: {
+          type: 'number',
+          description: 'Cycle interval in seconds. Defaults to 60.',
+        },
+      },
+      required: ['name', 'strategy', 'pairs'],
+    },
+  },
+  {
+    name: 'list_agents',
+    description:
+      'List all created trading agents with their status, strategy, and monitored pairs.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: 'get_agent_status',
+    description:
+      'Get detailed status of a trading agent including cycle count, last decision, and recent trade signals.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        name: {
+          type: 'string',
+          description: 'The agent name.',
+        },
+      },
+      required: ['name'],
+    },
+  },
 ];
