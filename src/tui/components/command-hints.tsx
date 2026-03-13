@@ -14,7 +14,7 @@ const COMMANDS = [
   { name: 'add', args: '<symbol>', desc: 'Add crypto to ticker' },
   { name: 'remove', args: '<symbol>', desc: 'Remove from ticker' },
   { name: 'provider', args: '[list|<name>]', desc: 'Switch AI provider' },
-  { name: 'config', args: '', desc: 'Show config' },
+  { name: 'config', args: '[set <key> <value>]', desc: 'Show/set config' },
   { name: 'clear', args: '', desc: 'Clear messages' },
   { name: 'help', args: '', desc: 'Show help' },
   { name: 'exit', args: '', desc: 'Exit Vizzor' },
