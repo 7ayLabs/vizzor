@@ -36,6 +36,8 @@ import { fetchMarketData, fetchTokenFromDex, fetchTrendingTokens } from '../core
 import { fetchUpcomingICOs, searchICOs } from '../core/scanner/ico-tracker.js';
 import { fetchCryptoNews } from '../data/sources/cryptopanic.js';
 import { fetchRecentRaises } from '../data/sources/defillama.js';
+import { analyzeTechnicals } from '../core/technical-analysis/index.js';
+import { generatePrediction } from '../core/trends/predictor.js';
 
 // ---------------------------------------------------------------------------
 // Tool handler — bridges Claude tool-use to Vizzor core modules
@@ -273,6 +275,46 @@ async function handleTool(name: string, input: unknown): Promise<unknown> {
         result['openInterestNotional'] = oiResult.value.notionalValue;
       }
       return result;
+    }
+
+    case 'get_technical_analysis': {
+      const symbol = String(params['symbol'] ?? 'BTC');
+      const timeframe = String(params['timeframe'] ?? '4h');
+      const ta = await analyzeTechnicals(symbol, timeframe);
+      return {
+        symbol: ta.symbol,
+        timeframe: ta.timeframe,
+        composite: ta.composite,
+        signals: ta.signals.map((s) => ({
+          name: s.name,
+          signal: s.signal,
+          strength: s.strength,
+          description: s.description,
+        })),
+        indicators: {
+          rsi: ta.indicators.rsi ? Math.round(ta.indicators.rsi * 100) / 100 : null,
+          macd: ta.indicators.macd,
+          bollingerBands: ta.indicators.bollingerBands,
+          ema12: ta.indicators.ema12,
+          ema26: ta.indicators.ema26,
+          atr: ta.indicators.atr,
+        },
+      };
+    }
+
+    case 'get_prediction': {
+      const symbol = String(params['symbol'] ?? 'BTC');
+      const prediction = await generatePrediction(symbol);
+      return {
+        symbol: prediction.symbol,
+        direction: prediction.direction,
+        confidence: prediction.confidence,
+        composite: prediction.composite,
+        timeframe: prediction.timeframe,
+        signals: prediction.signals,
+        reasoning: prediction.reasoning,
+        disclaimer: prediction.disclaimer,
+      };
     }
 
     default:
