@@ -1,15 +1,18 @@
 // ---------------------------------------------------------------------------
-// Vizzor tool definitions for Claude tool-use
+// Vizzor tool definitions for AI tool-use (provider-agnostic)
 // ---------------------------------------------------------------------------
 
-import type Anthropic from '@anthropic-ai/sdk';
+import type { AITool } from './providers/types.js';
 
 /**
- * Tool definitions that Vizzor exposes to Claude during chat and analysis
- * sessions. Each tool maps to a concrete handler registered via
+ * Tool definitions that Vizzor exposes to AI providers during chat and
+ * analysis sessions. Each tool maps to a concrete handler registered via
  * {@link setToolHandler} in the AI client.
+ *
+ * Uses the provider-agnostic {@link AITool} type (JSON Schema format).
+ * Provider implementations convert to their SDK-specific format internally.
  */
-export const VIZZOR_TOOLS: Anthropic.Messages.Tool[] = [
+export const VIZZOR_TOOLS: AITool[] = [
   {
     name: 'get_token_info',
     description:
@@ -93,7 +96,7 @@ export const VIZZOR_TOOLS: Anthropic.Messages.Tool[] = [
   {
     name: 'search_upcoming_icos',
     description:
-      'Search for upcoming ICOs and token launches filtered by category and/or blockchain. Returns project name, dates, chain, category, and links.',
+      'Search for upcoming ICOs, token launches, and fundraising rounds filtered by category and/or blockchain. Powered by DeFiLlama raises and Pump.fun launches.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -112,6 +115,110 @@ export const VIZZOR_TOOLS: Anthropic.Messages.Tool[] = [
         },
       },
       required: [],
+    },
+  },
+  {
+    name: 'search_token_dex',
+    description:
+      'Search for any token on decentralized exchanges via DexScreener. Returns real-time price, volume, liquidity, buy/sell counts, pair info. Works for all tokens including meme coins and newly launched tokens.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Token name, symbol, or contract address to search for.',
+        },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'get_trending',
+    description:
+      'Get currently trending and hot tokens from DexScreener (boosted tokens) and CoinGecko trending combined. Shows what the market is excited about right now.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: 'get_crypto_news',
+    description:
+      'Get the latest crypto news with sentiment analysis for a specific token or the market in general. Powered by CryptoPanic.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        symbol: {
+          type: 'string',
+          description:
+            'Token symbol to filter news for (e.g. "BTC", "ETH", "SOL"). Omit for general crypto news.',
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'get_raises',
+    description:
+      'Get recent crypto fundraising rounds, venture capital investments, and token launches. Powered by DeFiLlama raises data.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        category: {
+          type: 'string',
+          description: 'Filter by sector/category (e.g. "defi", "infrastructure", "gaming").',
+        },
+        chain: {
+          type: 'string',
+          description: 'Filter by blockchain (e.g. "ethereum", "solana").',
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'get_token_security',
+    description:
+      'Check token security via GoPlus API. Returns honeypot detection, tax analysis, mint/pause/blacklist capabilities, holder stats, and overall risk level. No API key required.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        address: {
+          type: 'string',
+          description: 'The token contract address.',
+        },
+        chain: {
+          type: 'string',
+          description: 'The blockchain (e.g. "ethereum", "bsc", "polygon", "arbitrum", "base").',
+        },
+      },
+      required: ['address', 'chain'],
+    },
+  },
+  {
+    name: 'get_fear_greed',
+    description:
+      'Get the current Crypto Fear & Greed Index with 7-day history. Values: 0-20 Extreme Fear, 21-40 Fear, 41-60 Neutral, 61-80 Greed, 81-100 Extreme Greed.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: 'get_derivatives_data',
+    description:
+      'Get derivatives data from Binance Futures: funding rate, open interest, and mark price for a trading pair. Useful for sentiment analysis and market positioning.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        symbol: {
+          type: 'string',
+          description: 'The token symbol (e.g. "BTC", "ETH", "SOL").',
+        },
+      },
+      required: ['symbol'],
     },
   },
 ];

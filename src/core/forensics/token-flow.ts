@@ -20,7 +20,7 @@ export interface FlowAnalysis {
 
 export async function analyzeTokenFlows(
   tokenAddress: string,
-  _address: string,
+  address: string,
   adapter: ChainAdapter,
 ): Promise<FlowAnalysis> {
   const transfers = await adapter.getTokenTransfers(tokenAddress, { limit: 100 });
@@ -31,7 +31,7 @@ export async function analyzeTokenFlows(
     amount: t.value,
     tokenAddress: t.tokenAddress,
     blockNumber: t.blockNumber,
-    timestamp: null,
+    timestamp: t.timestamp ?? null,
   }));
 
   const senders = new Set(flows.map((f) => f.from));
@@ -40,13 +40,15 @@ export async function analyzeTokenFlows(
   let largest: TokenFlow | null = null;
   let totalIn = 0n;
   let totalOut = 0n;
+  const normalizedAddress = address.toLowerCase();
 
   for (const flow of flows) {
     if (!largest || flow.amount > largest.amount) {
       largest = flow;
     }
-    totalIn += flow.amount;
-    totalOut += flow.amount;
+    // Track inflow vs outflow relative to the target address
+    if (flow.to.toLowerCase() === normalizedAddress) totalIn += flow.amount;
+    if (flow.from.toLowerCase() === normalizedAddress) totalOut += flow.amount;
   }
 
   return {

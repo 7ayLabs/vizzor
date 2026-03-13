@@ -2,17 +2,26 @@ import { z } from 'zod/v4';
 
 export const vizzorConfigSchema = z.object({
   anthropicApiKey: z.string().optional(),
+  openaiApiKey: z.string().optional(),
+  googleApiKey: z.string().optional(),
   etherscanApiKey: z.string().optional(),
   alchemyApiKey: z.string().optional(),
   coingeckoApiKey: z.string().optional(),
+  cryptopanicApiKey: z.string().optional(),
   defaultChain: z.string().default('ethereum'),
   rpc: z.record(z.string(), z.string()).default({}),
   ai: z
     .object({
-      model: z.string().default('claude-sonnet-4-20250514'),
+      provider: z.enum(['anthropic', 'openai', 'gemini', 'ollama']).default('anthropic'),
+      model: z.string().optional(),
       maxTokens: z.number().default(4096),
+      ollamaHost: z.string().default('http://localhost:11434'),
     })
-    .default(() => ({ model: 'claude-sonnet-4-20250514', maxTokens: 4096 })),
+    .default(() => ({
+      provider: 'anthropic' as const,
+      maxTokens: 4096,
+      ollamaHost: 'http://localhost:11434',
+    })),
   output: z
     .object({
       format: z.enum(['table', 'json', 'markdown']).default('table'),

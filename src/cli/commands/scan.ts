@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import ora from 'ora';
 import { getAdapter } from '../../chains/registry.js';
+import { getConfig } from '../../config/loader.js';
 import { analyzeProject } from '../../core/scanner/project-analyzer.js';
 import { assessRisk } from '../../core/scanner/risk-scorer.js';
 
@@ -12,7 +13,8 @@ export async function handleScan(
 
   try {
     const adapter = getAdapter(options.chain);
-    await adapter.connect();
+    const cfg = getConfig();
+    await adapter.connect(undefined, cfg.etherscanApiKey);
 
     spinner.text = 'Fetching on-chain data...';
     const analysis = await analyzeProject(project, adapter);

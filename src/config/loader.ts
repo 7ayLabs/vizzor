@@ -58,6 +58,21 @@ export function loadConfig(): VizzorConfig {
   if (process.env['TELEGRAM_BOT_TOKEN']) {
     raw['telegramToken'] = process.env['TELEGRAM_BOT_TOKEN'];
   }
+  if (process.env['OPENAI_API_KEY']) {
+    raw['openaiApiKey'] = process.env['OPENAI_API_KEY'];
+  }
+  if (process.env['GOOGLE_API_KEY']) {
+    raw['googleApiKey'] = process.env['GOOGLE_API_KEY'];
+  }
+  if (process.env['CRYPTOPANIC_API_KEY']) {
+    raw['cryptopanicApiKey'] = process.env['CRYPTOPANIC_API_KEY'];
+  }
+  if (process.env['VIZZOR_AI_PROVIDER']) {
+    if (!raw['ai'] || typeof raw['ai'] !== 'object') {
+      raw['ai'] = {};
+    }
+    (raw['ai'] as Record<string, unknown>)['provider'] = process.env['VIZZOR_AI_PROVIDER'];
+  }
 
   const config = vizzorConfigSchema.parse(raw);
   cachedConfig = config;

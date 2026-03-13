@@ -26,6 +26,8 @@ import type {
   TxHistoryOptions,
 } from '../types.js';
 import { erc20Abi } from './abi/erc20.js';
+import { EtherscanClient } from './etherscan.js';
+import { ETHERSCAN_BASE_URLS } from '../../config/constants.js';
 
 // ---------------------------------------------------------------------------
 // Chain ID → viem Chain object mapping
@@ -49,6 +51,7 @@ export class EvmAdapter implements ChainAdapter {
   readonly nativeCurrency: { symbol: string; decimals: number };
 
   private client: PublicClient<HttpTransport, Chain> | null = null;
+  private etherscan: EtherscanClient | null = null;
   private readonly viemChain: Chain;
 
   constructor(chainId: string) {
@@ -70,16 +73,23 @@ export class EvmAdapter implements ChainAdapter {
 
   // ── Lifecycle ───────────────────────────────────────────────────────────
 
-  async connect(rpcUrl?: string): Promise<void> {
+  async connect(rpcUrl?: string, etherscanApiKey?: string): Promise<void> {
     this.client = createPublicClient({
       chain: this.viemChain,
       transport: http(rpcUrl),
       batch: { multicall: true },
     });
+
+    // Create Etherscan client if a base URL is known for this chain
+    const explorerUrl = ETHERSCAN_BASE_URLS[this.chainId];
+    if (explorerUrl) {
+      this.etherscan = new EtherscanClient(explorerUrl, etherscanApiKey);
+    }
   }
 
   async disconnect(): Promise<void> {
     this.client = null;
+    this.etherscan = null;
   }
 
   isConnected(): boolean {
@@ -104,20 +114,24 @@ export class EvmAdapter implements ChainAdapter {
     return balance as bigint;
   }
 
-  async getTransactionHistory(
-    _address: string,
-    _options?: TxHistoryOptions,
-  ): Promise<Transaction[]> {
-    // TODO: Implement via Etherscan / block-explorer API.
-    // viem does not provide a transaction-history RPC; an indexed API
-    // (Etherscan, Alchemy Transfers API, etc.) is required.
-    return [];
+  async getTransactionHistory(address: string, options?: TxHistoryOptions): Promise<Transaction[]> {
+    if (!this.etherscan) return [];
+    return this.etherscan.getTransactions(address, {
+      limit: options?.limit,
+      offset: options?.offset,
+      fromBlock: options?.fromBlock,
+      toBlock: options?.toBlock,
+    });
   }
 
-  async getTokenTransfers(_address: string, _options?: TransferOptions): Promise<TokenTransfer[]> {
-    // TODO: Implement via Etherscan / block-explorer API.
-    // Requires an indexed API for efficient token transfer lookups.
-    return [];
+  async getTokenTransfers(address: string, options?: TransferOptions): Promise<TokenTransfer[]> {
+    if (!this.etherscan) return [];
+    return this.etherscan.getTokenTransfers(address, {
+      tokenAddress: options?.tokenAddress,
+      limit: options?.limit,
+      fromBlock: options?.fromBlock,
+      toBlock: options?.toBlock,
+    });
   }
 
   // ── Contracts ───────────────────────────────────────────────────────────
@@ -201,11 +215,9 @@ export class EvmAdapter implements ChainAdapter {
     return { address, name, symbol, decimals, totalSupply };
   }
 
-  async getTopHolders(_tokenAddress: string, _limit?: number): Promise<Holder[]> {
-    // TODO: Implement via Etherscan / block-explorer API.
-    // There is no standard RPC method to retrieve top holders;
-    // this requires an indexed data source.
-    return [];
+  async getTopHolders(tokenAddress: string, limit?: number): Promise<Holder[]> {
+    if (!this.etherscan) return [];
+    return this.etherscan.getTopHolders(tokenAddress, limit);
   }
 
   // ── Blocks ──────────────────────────────────────────────────────────────

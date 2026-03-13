@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import ora from 'ora';
 import { getAdapter } from '../../chains/registry.js';
+import { getConfig } from '../../config/loader.js';
 import { auditContract } from '../../core/forensics/contract-auditor.js';
 
 export async function handleAudit(
@@ -11,7 +12,8 @@ export async function handleAudit(
 
   try {
     const adapter = getAdapter(options.chain);
-    await adapter.connect();
+    const cfg = getConfig();
+    await adapter.connect(undefined, cfg.etherscanApiKey);
 
     const result = await auditContract(contract, adapter);
     await adapter.disconnect();

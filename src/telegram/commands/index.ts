@@ -1,5 +1,6 @@
 import type { Bot, Context } from 'grammy';
 import { getAdapter } from '../../chains/registry.js';
+import { getConfig } from '../../config/loader.js';
 import { analyzeProject } from '../../core/scanner/project-analyzer.js';
 import { assessRisk } from '../../core/scanner/risk-scorer.js';
 
@@ -37,7 +38,7 @@ async function handleScan(ctx: Context): Promise<void> {
 
   try {
     const adapter = getAdapter('ethereum');
-    await adapter.connect();
+    await adapter.connect(undefined, getConfig().etherscanApiKey);
     const analysis = await analyzeProject(project, adapter);
     const risk = assessRisk(analysis);
     await adapter.disconnect();

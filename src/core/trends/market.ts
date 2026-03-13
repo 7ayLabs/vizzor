@@ -1,3 +1,9 @@
+import {
+  searchTokens as dexSearch,
+  getTopBoostedTokens,
+  type DexPair,
+} from '../../data/sources/dexscreener.js';
+
 export interface MarketData {
   symbol: string;
   name: string;
@@ -15,6 +21,22 @@ export interface MarketTrend {
   signals: string[];
 }
 
+export interface TrendingToken {
+  name: string;
+  symbol: string;
+  chain: string;
+  priceUsd: string;
+  priceChange24h: number;
+  volume24h: number;
+  liquidity: number;
+  marketCap: number | null;
+  url: string;
+  source: 'dexscreener' | 'coingecko';
+}
+
+/**
+ * Fetch market data for established coins from CoinGecko.
+ */
 export async function fetchMarketData(symbol: string): Promise<MarketData | null> {
   try {
     const url = `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${encodeURIComponent(symbol.toLowerCase())}&order=market_cap_desc&per_page=1&page=1&sparkline=false&price_change_percentage=24h,7d`;
@@ -41,6 +63,93 @@ export async function fetchMarketData(symbol: string): Promise<MarketData | null
   } catch {
     return null;
   }
+}
+
+/**
+ * Search for any token on DEXes via DexScreener.
+ * Works for all tokens — including meme coins and newly launched tokens.
+ */
+export async function fetchTokenFromDex(query: string): Promise<DexPair[]> {
+  try {
+    return await dexSearch(query);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Get currently trending/hot tokens from DexScreener (boosted tokens)
+ * and CoinGecko trending combined.
+ */
+export async function fetchTrendingTokens(): Promise<TrendingToken[]> {
+  const results: TrendingToken[] = [];
+
+  // DexScreener: top boosted tokens
+  try {
+    const boosted = await getTopBoostedTokens();
+    // Boosted tokens don't have pair data, so search for the top ones
+    const seen = new Set<string>();
+    for (const token of boosted.slice(0, 10)) {
+      const key = `${token.chainId}:${token.tokenAddress}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      try {
+        const pairs = await dexSearch(token.tokenAddress);
+        const pair = pairs[0];
+        if (pair) {
+          results.push(dexPairToTrending(pair));
+        }
+      } catch {
+        // skip individual failures
+      }
+    }
+  } catch {
+    // DexScreener unavailable
+  }
+
+  // CoinGecko: trending coins
+  try {
+    const response = await fetch('https://api.coingecko.com/api/v3/search/trending');
+    if (response.ok) {
+      const data = (await response.json()) as {
+        coins: { item: { id: string; name: string; symbol: string; market_cap_rank: number } }[];
+      };
+      for (const { item } of (data.coins ?? []).slice(0, 7)) {
+        results.push({
+          name: item.name,
+          symbol: item.symbol.toUpperCase(),
+          chain: 'multi',
+          priceUsd: '(see CoinGecko)',
+          priceChange24h: 0,
+          volume24h: 0,
+          liquidity: 0,
+          marketCap: null,
+          url: `https://www.coingecko.com/en/coins/${item.id}`,
+          source: 'coingecko',
+        });
+      }
+    }
+  } catch {
+    // CoinGecko unavailable
+  }
+
+  return results;
+}
+
+function dexPairToTrending(pair: DexPair): TrendingToken {
+  return {
+    name: pair.baseToken.name,
+    symbol: pair.baseToken.symbol,
+    chain: pair.chainId,
+    priceUsd: pair.priceUsd ?? '0',
+    priceChange24h: pair.priceChange?.h24 ?? 0,
+    volume24h: pair.volume?.h24 ?? 0,
+    liquidity: pair.liquidity?.usd ?? 0,
+    marketCap: pair.marketCap ?? pair.fdv ?? null,
+    url: pair.url,
+    source: 'dexscreener',
+  };
 }
 
 export function analyzeTrend(data: MarketData): MarketTrend {
