@@ -102,8 +102,9 @@ function positionalArgs(args: string[]): string[] {
 
 function maskKey(value: string | undefined): string {
   if (!value) return '(not set)';
-  if (value.length <= 8) return '****';
-  return value.slice(0, 4) + '****' + value.slice(-4);
+  if (value.length <= 4) return '****';
+  if (value.length <= 8) return value.slice(0, 1) + '****' + value.slice(-1);
+  return value.slice(0, 2) + '*'.repeat(Math.min(value.length - 4, 12)) + value.slice(-2);
 }
 
 // ---------------------------------------------------------------------------
@@ -568,7 +569,7 @@ function handleHelp(): CommandResult {
   return { blocks: [], text };
 }
 
-function handleConfig(args: string[]): CommandResult {
+async function handleConfig(args: string[]): Promise<CommandResult> {
   // /config set <key> <value>
   if (args[0] === 'set') {
     const key = args[1];
@@ -580,6 +581,15 @@ function handleConfig(args: string[]): CommandResult {
           'Usage: /config set <key> <value>\n\nValid keys: ' +
           Object.keys(getSettableKeys()).join(', '),
       };
+    }
+    // Validate sensitive keys for security
+    const isSensitive = key.toLowerCase().includes('key') || key.toLowerCase().includes('token');
+    if (isSensitive) {
+      const { validateKey } = await import('../config/keys.js');
+      const error = validateKey(key, value);
+      if (error && !error.startsWith('Warning:')) {
+        return { blocks: [], text: `Rejected: ${error}` };
+      }
     }
     try {
       saveConfigValue(key, value);

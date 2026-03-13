@@ -123,8 +123,8 @@ pnpm link --global
 
 ```bash
 # 1. Set your API key
-vizzor config set anthropicApiKey sk-ant-xxx
-# or: export ANTHROPIC_API_KEY=sk-ant-xxx
+vizzor config set anthropicApiKey <your-key>
+# or: export ANTHROPIC_API_KEY=<your-key>
 
 # 2. Launch
 vizzor
@@ -367,13 +367,13 @@ Config at `~/.vizzor/config.yaml`. Environment variables override file values.
 ### Full Config
 
 ```yaml
-anthropicApiKey: sk-ant-v0-xxx
-etherscanApiKey: xxx
+anthropicApiKey: <your-key>
+etherscanApiKey: <your-key>
 defaultChain: ethereum
 
 rpc:
-  ethereum: https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY
-  polygon: https://polygon-mainnet.g.alchemy.com/v2/YOUR_KEY
+  ethereum: https://eth-mainnet.g.alchemy.com/v2/<your-key>
+  polygon: https://polygon-mainnet.g.alchemy.com/v2/<your-key>
 
 ai:
   provider: anthropic        # anthropic | openai | gemini | ollama
