@@ -104,7 +104,7 @@ npm install -g @vizzor/cli
 
 ```bash
 # Or run directly
-npx @vizzor/cli chat
+npx @vizzor/cli
 ```
 
 ### From Source
@@ -201,7 +201,6 @@ vizzor trends [options]             # Market trends + top movers
 vizzor track <wallet> [options]     # Wallet forensics
 vizzor audit <contract> [options]   # Contract security audit
 vizzor ico list [options]           # ICO/IDO tracker
-vizzor chat                         # AI conversation mode
 vizzor config init                  # Initialize config
 vizzor config set <key> <value>     # Set config value
 vizzor config show                  # Show config
@@ -214,17 +213,23 @@ vizzor bot start [options]          # Start Discord/Telegram bots
 |---------|-------------|
 | `/scan <address> [--chain <chain>]` | Token security + risk scan |
 | `/track <wallet> [--chain <chain>]` | Wallet forensics |
-| `/trends` | Trending tokens + market movers |
+| `/trends` | Trending tokens + top gainers/losers |
 | `/audit <contract> [--chain <chain>]` | Smart contract audit |
+| `/add <symbol>` | Add a token to the live price ticker |
+| `/remove <symbol>` | Remove a token from the price ticker |
+| `/chain [<id>]` | Show available chains or switch chain |
 | `/config` | Show config with setup guidance |
 | `/config set <key> <value>` | Update a config value |
-| `/provider` | Show/switch AI provider |
+| `/provider` | Show current AI provider |
+| `/provider list` | List all providers with availability |
 | `/provider <name>` | Switch to `anthropic`, `openai`, `gemini`, `ollama` |
 | `/agent create <name> [options]` | Create autonomous prediction agent |
 | `/agent list` | List all agents |
 | `/agent start <name>` | Start agent cycle |
 | `/agent stop <name>` | Stop agent |
 | `/agent status <name>` | View status + recent decisions |
+| `/agent delete <name>` | Delete an agent |
+| `/agent strategies` | List available strategies |
 | `/help` | Command reference |
 | `/clear` | Clear messages |
 | `/exit` | Quit |

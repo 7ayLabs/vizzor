@@ -76,14 +76,6 @@ program
     await handleAudit(contract, options);
   });
 
-program
-  .command('chat')
-  .description('Conversational AI mode')
-  .action(async () => {
-    const { handleChat } = await import('./cli/commands/chat.js');
-    await handleChat();
-  });
-
 const configCmd = program.command('config').description('Configuration management');
 
 configCmd
