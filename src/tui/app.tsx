@@ -33,7 +33,12 @@ import { fetchFearGreedIndex } from '../data/sources/fear-greed.js';
 import { analyzeWallet } from '../core/forensics/wallet-analyzer.js';
 import { detectRugIndicators } from '../core/forensics/rug-detector.js';
 import { fetchMarketData, fetchTokenFromDex, fetchTrendingTokens } from '../core/trends/market.js';
-import { fetchUpcomingICOs, searchICOs } from '../core/scanner/ico-tracker.js';
+import {
+  fetchUpcomingICOs,
+  searchICOs,
+  getProjectFundingHistory,
+  getInvestorPortfolio,
+} from '../core/scanner/ico-tracker.js';
 import { fetchCryptoNews } from '../data/sources/cryptopanic.js';
 import { fetchRecentRaises } from '../data/sources/defillama.js';
 
@@ -124,11 +129,56 @@ async function handleTool(name: string, input: unknown): Promise<unknown> {
     case 'search_upcoming_icos': {
       const category = params['category'] ? String(params['category']) : undefined;
       const chain = params['chain'] ? String(params['chain']) : undefined;
+      const roundType = params['roundType'] ? String(params['roundType']) : undefined;
       const projects =
-        category || chain
-          ? await searchICOs(undefined, category, chain)
+        category || chain || roundType
+          ? await searchICOs(undefined, category, chain, roundType)
           : await fetchUpcomingICOs();
-      return { projects };
+      return {
+        projects: projects.map((p) => ({
+          name: p.name,
+          category: p.category,
+          chain: p.chain,
+          roundType: p.roundType,
+          raisedAmount: p.raisedAmount,
+          valuation: p.valuation,
+          investors: p.investors.slice(0, 5),
+          startDate: p.startDate,
+          description: p.description,
+          website: p.website,
+        })),
+      };
+    }
+
+    case 'get_funding_history': {
+      const name = String(params['name'] ?? '');
+      const type = String(params['type'] ?? 'project');
+      if (type === 'investor') {
+        const portfolio = await getInvestorPortfolio(name);
+        return {
+          investor: name,
+          investments: portfolio.map((p) => ({
+            name: p.name,
+            round: p.roundType,
+            amount: p.raisedAmount,
+            chain: p.chain,
+            category: p.category,
+            date: p.startDate,
+          })),
+        };
+      }
+      const history = await getProjectFundingHistory(name);
+      return {
+        project: history.name,
+        rounds: history.rounds.map((r) => ({
+          round: r.roundType,
+          amount: r.raisedAmount,
+          valuation: r.valuation,
+          investors: r.investors.slice(0, 5),
+          date: r.startDate,
+          previousRounds: r.previousRounds,
+        })),
+      };
     }
 
     case 'search_token_dex': {
