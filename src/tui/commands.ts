@@ -6,11 +6,12 @@ import type { RichBlock } from './components/message-list.js';
 import { getAdapter } from '../chains/registry.js';
 import { analyzeProject } from '../core/scanner/project-analyzer.js';
 import { assessRisk } from '../core/scanner/risk-scorer.js';
-import { fetchMarketData, fetchTrendingTokens } from '../core/trends/market.js';
+import { fetchTrendingTokens } from '../core/trends/market.js';
 import { analyzeWallet } from '../core/forensics/wallet-analyzer.js';
 import { auditContract } from '../core/forensics/contract-auditor.js';
 import { getConfig } from '../config/loader.js';
-import { DEFAULT_CHAIN, TREND_SYMBOLS } from '../config/constants.js';
+import { DEFAULT_CHAIN } from '../config/constants.js';
+import { fetchTopGainersLosers } from '../data/sources/binance.js';
 import { getProvider, switchProvider } from '../ai/client.js';
 import { getAvailableProviders } from '../ai/providers/registry.js';
 import { DEFAULT_MODELS } from '../ai/providers/types.js';
@@ -78,7 +79,8 @@ function positionalArgs(args: string[]): string[] {
       i++; // skip the next arg (chain value)
       continue;
     }
-    result.push(args[i]!);
+    const arg = args[i];
+    if (arg !== undefined) result.push(arg);
   }
   return result;
 }
@@ -213,55 +215,74 @@ async function handleTrack(args: string[]): Promise<CommandResult> {
 }
 
 async function handleTrends(): Promise<CommandResult> {
-  const symbols = TREND_SYMBOLS;
-
-  // Fetch CoinGecko market data + DexScreener trending in parallel
-  const [marketResults, trendingResult] = await Promise.all([
-    Promise.allSettled(symbols.map((s) => fetchMarketData(s))),
-    fetchTrendingTokens().catch(() => []),
+  // Fetch trending tokens + top gainers/losers in parallel (no hardcoded symbols)
+  const [trendingResult, gainersLosersResult] = await Promise.allSettled([
+    fetchTrendingTokens(),
+    fetchTopGainersLosers(5),
   ]);
 
   const blocks: RichBlock[] = [];
-  const lines: string[] = ['Market trends:'];
+  const lines: string[] = [];
 
-  for (let i = 0; i < marketResults.length; i++) {
-    const result = marketResults[i]!;
-    const symbol = symbols[i]!;
-    if (result.status === 'fulfilled' && result.value) {
-      const data = result.value;
-      blocks.push({
-        type: 'market',
-        data: {
-          symbol: data.symbol,
-          price: data.price,
-          change24h: data.priceChange24h,
-          volume: data.volume24h,
-        },
-      });
-    } else {
-      lines.push(`  ${symbol.toUpperCase()}: data unavailable`);
-    }
-  }
+  // Merge and deduplicate trending tokens
+  const trending = trendingResult.status === 'fulfilled' ? trendingResult.value : [];
+  const seen = new Set<string>();
 
-  // Append trending tokens from DexScreener
-  if (trendingResult.length > 0) {
-    lines.push('');
-    lines.push('Trending tokens (DexScreener):');
-    for (const t of trendingResult.slice(0, 5)) {
+  if (trending.length > 0) {
+    lines.push('Trending tokens:');
+    for (const t of trending.slice(0, 10)) {
+      const key = t.symbol.toUpperCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
       const change =
         t.priceChange24h > 0
           ? `+${t.priceChange24h.toFixed(1)}%`
           : `${t.priceChange24h.toFixed(1)}%`;
+      blocks.push({
+        type: 'market',
+        data: {
+          symbol: t.symbol,
+          price: parseFloat(t.priceUsd) || 0,
+          change24h: t.priceChange24h,
+          volume: t.volume24h,
+        },
+      });
       lines.push(
-        `  ${t.symbol} (${t.chain}): $${t.priceUsd} | 24h: ${change} | Vol: $${t.volume24h.toLocaleString()}`,
+        `  ${t.symbol} (${t.chain}): $${t.priceUsd} | 24h: ${change} | Vol: $${t.volume24h.toLocaleString()} [${t.source}]`,
       );
     }
   }
 
-  return {
-    blocks,
-    text: lines.length > 1 ? lines.join('\n') : 'Market data loaded.',
-  };
+  // Top gainers and losers from Binance
+  if (gainersLosersResult.status === 'fulfilled') {
+    const { gainers, losers } = gainersLosersResult.value;
+    if (gainers.length > 0) {
+      lines.push('');
+      lines.push('Top gainers (24h):');
+      for (const g of gainers) {
+        if (seen.has(g.symbol)) continue;
+        lines.push(
+          `  ${g.symbol}: $${g.price.toLocaleString()} | +${g.change24h.toFixed(1)}% | Vol: $${g.quoteVolume.toLocaleString()}`,
+        );
+      }
+    }
+    if (losers.length > 0) {
+      lines.push('');
+      lines.push('Top losers (24h):');
+      for (const l of losers) {
+        if (seen.has(l.symbol)) continue;
+        lines.push(
+          `  ${l.symbol}: $${l.price.toLocaleString()} | ${l.change24h.toFixed(1)}% | Vol: $${l.quoteVolume.toLocaleString()}`,
+        );
+      }
+    }
+  }
+
+  if (lines.length === 0) {
+    return { blocks: [], text: 'Could not fetch market trends. Try again later.' };
+  }
+
+  return { blocks, text: lines.join('\n') };
 }
 
 async function handleAudit(args: string[]): Promise<CommandResult> {
@@ -370,7 +391,7 @@ function handleHelp(): CommandResult {
     '',
     '  /scan <address> [--chain <chain>]    Scan a token/project for risk indicators',
     '  /track <wallet> [--chain <chain>]    Analyze a wallet address',
-    '  /trends                              Market trends + DexScreener trending tokens',
+    '  /trends                              Live trending tokens + top gainers/losers',
     '  /audit <contract> [--chain <chain>]  Audit a smart contract (bytecode scanning)',
     '  /provider [list|<name>]              Show/switch AI provider',
     '  /config                              Show current configuration (keys masked)',
