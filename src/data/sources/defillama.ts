@@ -112,6 +112,34 @@ export async function fetchRecentRaises(days = 30): Promise<FundraisingRound[]> 
 }
 
 /**
+ * Fetch raises filtered by round type (e.g. "Seed", "Series A", "Pre-Seed").
+ */
+export async function fetchRaisesByRound(
+  roundType: string,
+  days = 90,
+): Promise<FundraisingRound[]> {
+  const raises = await fetchRecentRaises(days);
+  const lower = roundType.toLowerCase();
+  return raises.filter((r) => r.round.toLowerCase().includes(lower));
+}
+
+/**
+ * Fetch raises where a specific investor participated.
+ */
+export async function fetchRaisesByInvestor(
+  investor: string,
+  days = 180,
+): Promise<FundraisingRound[]> {
+  const raises = await fetchRecentRaises(days);
+  const lower = investor.toLowerCase();
+  return raises.filter(
+    (r) =>
+      r.leadInvestors.some((i) => i.toLowerCase().includes(lower)) ||
+      r.otherInvestors.some((i) => i.toLowerCase().includes(lower)),
+  );
+}
+
+/**
  * Fetch all DeFi protocols with TVL.
  */
 export async function fetchProtocols(): Promise<Protocol[]> {

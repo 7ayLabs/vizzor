@@ -96,7 +96,7 @@ export const VIZZOR_TOOLS: AITool[] = [
   {
     name: 'search_upcoming_icos',
     description:
-      'Search for upcoming ICOs, token launches, and fundraising rounds filtered by category and/or blockchain. Powered by DeFiLlama raises and Pump.fun launches.',
+      'Search for upcoming ICOs, token launches, and fundraising rounds filtered by category, blockchain, or round type. Powered by DeFiLlama raises and Pump.fun launches.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -109,12 +109,37 @@ export const VIZZOR_TOOLS: AITool[] = [
           type: 'string',
           description: 'Filter by blockchain (e.g. "ethereum", "solana", "bsc").',
         },
+        roundType: {
+          type: 'string',
+          description:
+            'Filter by funding round type (e.g. "Seed", "Pre-Seed", "Series A", "Series B", "Token Launch").',
+        },
         limit: {
           type: 'number',
           description: 'Maximum number of results to return. Defaults to 10.',
         },
       },
       required: [],
+    },
+  },
+  {
+    name: 'get_funding_history',
+    description:
+      'Get complete funding history for a project by name. Returns all known fundraising rounds with amounts, investors, valuations, and dates. Also works for looking up an investor portfolio.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        name: {
+          type: 'string',
+          description: 'Project name or investor name to look up.',
+        },
+        type: {
+          type: 'string',
+          description:
+            'Type of lookup: "project" for project funding history, "investor" for investor portfolio. Defaults to "project".',
+        },
+      },
+      required: ['name'],
     },
   },
   {
