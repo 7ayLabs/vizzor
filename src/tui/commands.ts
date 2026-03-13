@@ -14,6 +14,17 @@ import { DEFAULT_CHAIN, TREND_SYMBOLS } from '../config/constants.js';
 import { getProvider, switchProvider } from '../ai/client.js';
 import { getAvailableProviders } from '../ai/providers/registry.js';
 import { DEFAULT_MODELS } from '../ai/providers/types.js';
+import {
+  createAgent,
+  listAgents,
+  deleteAgent,
+  startAgent,
+  stopAgent,
+  getAgentStatus,
+  getRecentDecisions,
+  listStrategies,
+  getAgentByName,
+} from '../core/agent/index.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -119,6 +130,8 @@ export async function executeCommand(name: string, args: string[]): Promise<Comm
       return handleProvider(args);
     case 'config':
       return handleConfig();
+    case 'agent':
+      return handleAgent(args);
     case 'clear':
       return { blocks: [], text: '' };
     case 'exit':
@@ -364,6 +377,153 @@ function handleProvider(args: string[]): CommandResult {
   }
 }
 
+function handleAgent(args: string[]): CommandResult {
+  const sub = args[0];
+
+  if (!sub) {
+    return {
+      blocks: [],
+      text: [
+        'Usage: /agent <subcommand>',
+        '',
+        '  create <name> --strategy <name> --pairs <SYM1,SYM2> [--interval <sec>]',
+        '  list                    List all agents',
+        '  start <name>            Start an agent',
+        '  stop <name>             Stop a running agent',
+        '  status <name>           View agent status and recent decisions',
+        '  delete <name>           Delete an agent',
+        '  strategies              List available strategies',
+      ].join('\n'),
+    };
+  }
+
+  try {
+    switch (sub) {
+      case 'create': {
+        const nameArg = args[1];
+        if (!nameArg)
+          return {
+            blocks: [],
+            text: 'Usage: /agent create <name> --strategy <name> --pairs <SYM1,SYM2>',
+          };
+
+        const stratIdx = args.indexOf('--strategy');
+        const pairsIdx = args.indexOf('--pairs');
+        const intervalIdx = args.indexOf('--interval');
+
+        const strategy =
+          stratIdx !== -1 && stratIdx + 1 < args.length ? args[stratIdx + 1]! : 'momentum';
+        const pairsRaw =
+          pairsIdx !== -1 && pairsIdx + 1 < args.length ? args[pairsIdx + 1]! : 'BTC,ETH';
+        const interval =
+          intervalIdx !== -1 && intervalIdx + 1 < args.length
+            ? parseInt(args[intervalIdx + 1]!, 10)
+            : 60;
+
+        const pairs = pairsRaw.split(',').map((p) => p.trim().toUpperCase());
+        const agent = createAgent(nameArg, strategy, pairs, interval);
+        return {
+          blocks: [],
+          text: `Agent "${agent.name}" created (${agent.strategy}, pairs: ${agent.pairs.join(', ')}, interval: ${agent.interval}s)`,
+        };
+      }
+
+      case 'list': {
+        const agents = listAgents();
+        if (agents.length === 0)
+          return { blocks: [], text: 'No agents created. Use /agent create to create one.' };
+
+        const lines = ['Agents:', ''];
+        for (const a of agents) {
+          const status = getAgentStatus(a.id);
+          const statusTag = status?.status ?? 'idle';
+          lines.push(
+            `  ${a.name} [${statusTag}] — ${a.strategy} | ${a.pairs.join(', ')} | ${a.interval}s`,
+          );
+        }
+        return { blocks: [], text: lines.join('\n') };
+      }
+
+      case 'start': {
+        const name = args[1];
+        if (!name) return { blocks: [], text: 'Usage: /agent start <name>' };
+        const agent = getAgentByName(name);
+        if (!agent) return { blocks: [], text: `Agent "${name}" not found.` };
+        const state = startAgent(agent.id);
+        return {
+          blocks: [],
+          text: `Agent "${name}" started (${state.config.strategy}). Monitoring ${state.config.pairs.join(', ')}.`,
+        };
+      }
+
+      case 'stop': {
+        const name = args[1];
+        if (!name) return { blocks: [], text: 'Usage: /agent stop <name>' };
+        const agent = getAgentByName(name);
+        if (!agent) return { blocks: [], text: `Agent "${name}" not found.` };
+        const state = stopAgent(agent.id);
+        return { blocks: [], text: `Agent "${name}" stopped after ${state.cycleCount} cycles.` };
+      }
+
+      case 'status': {
+        const name = args[1];
+        if (!name) return { blocks: [], text: 'Usage: /agent status <name>' };
+        const agent = getAgentByName(name);
+        if (!agent) return { blocks: [], text: `Agent "${name}" not found.` };
+        const state = getAgentStatus(agent.id);
+        if (!state) return { blocks: [], text: `Agent "${name}" not found.` };
+
+        const lines = [
+          `Agent: ${state.config.name}`,
+          `  Status: ${state.status}`,
+          `  Strategy: ${state.config.strategy}`,
+          `  Pairs: ${state.config.pairs.join(', ')}`,
+          `  Interval: ${state.config.interval}s`,
+          `  Cycles: ${state.cycleCount}`,
+        ];
+
+        if (state.error) lines.push(`  Error: ${state.error}`);
+
+        const decisions = getRecentDecisions(agent.id, 5);
+        if (decisions.length > 0) {
+          lines.push('', '  Recent decisions:');
+          for (const d of decisions) {
+            const time = new Date(d.timestamp).toLocaleTimeString();
+            lines.push(
+              `    [${time}] ${d.symbol}: ${d.decision.action.toUpperCase()} (${d.decision.confidence}%)`,
+            );
+            for (const r of d.decision.reasoning.slice(0, 2)) {
+              lines.push(`      - ${r}`);
+            }
+          }
+        }
+
+        return { blocks: [], text: lines.join('\n') };
+      }
+
+      case 'delete': {
+        const name = args[1];
+        if (!name) return { blocks: [], text: 'Usage: /agent delete <name>' };
+        const agent = getAgentByName(name);
+        if (!agent) return { blocks: [], text: `Agent "${name}" not found.` };
+        deleteAgent(agent.id);
+        return { blocks: [], text: `Agent "${name}" deleted.` };
+      }
+
+      case 'strategies': {
+        const strats = listStrategies();
+        return { blocks: [], text: `Available strategies: ${strats.join(', ')}` };
+      }
+
+      default:
+        return { blocks: [], text: `Unknown agent subcommand: ${sub}. Type /agent for help.` };
+    }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { blocks: [], text: `Agent error: ${message}` };
+  }
+}
+
 function handleHelp(): CommandResult {
   const text = [
     'Available commands:',
@@ -372,6 +532,7 @@ function handleHelp(): CommandResult {
     '  /track <wallet> [--chain <chain>]    Analyze a wallet address',
     '  /trends                              Market trends + DexScreener trending tokens',
     '  /audit <contract> [--chain <chain>]  Audit a smart contract (bytecode scanning)',
+    '  /agent <sub>                         Manage autonomous trading agents',
     '  /provider [list|<name>]              Show/switch AI provider',
     '  /config                              Show current configuration (keys masked)',
     '  /clear                               Clear message history',

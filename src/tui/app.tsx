@@ -36,6 +36,13 @@ import { fetchMarketData, fetchTokenFromDex, fetchTrendingTokens } from '../core
 import { fetchUpcomingICOs, searchICOs } from '../core/scanner/ico-tracker.js';
 import { fetchCryptoNews } from '../data/sources/cryptopanic.js';
 import { fetchRecentRaises } from '../data/sources/defillama.js';
+import {
+  createAgent,
+  listAgents,
+  getAgentByName,
+  getAgentStatus,
+  getRecentDecisions,
+} from '../core/agent/index.js';
 
 // ---------------------------------------------------------------------------
 // Tool handler — bridges Claude tool-use to Vizzor core modules
@@ -273,6 +280,64 @@ async function handleTool(name: string, input: unknown): Promise<unknown> {
         result['openInterestNotional'] = oiResult.value.notionalValue;
       }
       return result;
+    }
+
+    case 'create_agent': {
+      const agentName = String(params['name'] ?? '');
+      const strategy = String(params['strategy'] ?? 'momentum');
+      const pairsRaw = String(params['pairs'] ?? 'BTC,ETH');
+      const interval = params['interval'] ? Number(params['interval']) : 60;
+      const pairs = pairsRaw.split(',').map((p) => p.trim().toUpperCase());
+      const agent = createAgent(agentName, strategy, pairs, interval);
+      return {
+        id: agent.id,
+        name: agent.name,
+        strategy: agent.strategy,
+        pairs: agent.pairs,
+        interval: agent.interval,
+        message: `Agent "${agent.name}" created. Use /agent start ${agent.name} to activate.`,
+      };
+    }
+
+    case 'list_agents': {
+      const agents = listAgents();
+      return {
+        agents: agents.map((a) => {
+          const status = getAgentStatus(a.id);
+          return {
+            name: a.name,
+            strategy: a.strategy,
+            pairs: a.pairs,
+            interval: a.interval,
+            status: status?.status ?? 'idle',
+            cycleCount: status?.cycleCount ?? 0,
+          };
+        }),
+      };
+    }
+
+    case 'get_agent_status': {
+      const agentName = String(params['name'] ?? '');
+      const agent = getAgentByName(agentName);
+      if (!agent) return { error: `Agent "${agentName}" not found` };
+      const state = getAgentStatus(agent.id);
+      if (!state) return { error: `Agent "${agentName}" not found` };
+      const decisions = getRecentDecisions(agent.id, 5);
+      return {
+        name: state.config.name,
+        status: state.status,
+        strategy: state.config.strategy,
+        pairs: state.config.pairs,
+        cycleCount: state.cycleCount,
+        error: state.error,
+        recentDecisions: decisions.map((d) => ({
+          symbol: d.symbol,
+          action: d.decision.action,
+          confidence: d.decision.confidence,
+          reasoning: d.decision.reasoning,
+          timestamp: new Date(d.timestamp).toISOString(),
+        })),
+      };
     }
 
     default:

@@ -13,6 +13,7 @@ const COMMANDS = [
   { name: 'chain', args: '[chainId]', desc: 'Switch or list chains' },
   { name: 'add', args: '<symbol>', desc: 'Add crypto to ticker' },
   { name: 'remove', args: '<symbol>', desc: 'Remove from ticker' },
+  { name: 'agent', args: '<create|list|start|stop|status|delete>', desc: 'Manage agents' },
   { name: 'provider', args: '[list|<name>]', desc: 'Switch AI provider' },
   { name: 'config', args: '', desc: 'Show config' },
   { name: 'clear', args: '', desc: 'Clear messages' },
