@@ -9,7 +9,7 @@ import { assessRisk } from '../core/scanner/risk-scorer.js';
 import { fetchTrendingTokens } from '../core/trends/market.js';
 import { analyzeWallet } from '../core/forensics/wallet-analyzer.js';
 import { auditContract } from '../core/forensics/contract-auditor.js';
-import { getConfig } from '../config/loader.js';
+import { getConfig, saveConfigValue, getSettableKeys } from '../config/loader.js';
 import { DEFAULT_CHAIN } from '../config/constants.js';
 import { fetchTopGainersLosers } from '../data/sources/binance.js';
 import { getProvider, switchProvider } from '../ai/client.js';
@@ -120,7 +120,7 @@ export async function executeCommand(name: string, args: string[]): Promise<Comm
     case 'provider':
       return handleProvider(args);
     case 'config':
-      return handleConfig();
+      return handleConfig(args);
     case 'clear':
       return { blocks: [], text: '' };
     case 'exit':
@@ -394,7 +394,7 @@ function handleHelp(): CommandResult {
     '  /trends                              Live trending tokens + top gainers/losers',
     '  /audit <contract> [--chain <chain>]  Audit a smart contract (bytecode scanning)',
     '  /provider [list|<name>]              Show/switch AI provider',
-    '  /config                              Show current configuration (keys masked)',
+    '  /config [set <key> <value>]           Show or update configuration',
     '  /clear                               Clear message history',
     '  /exit                                Exit Vizzor',
     '  /help                                Show this help message',
@@ -407,36 +407,115 @@ function handleHelp(): CommandResult {
   return { blocks: [], text };
 }
 
-function handleConfig(): CommandResult {
+function handleConfig(args: string[]): CommandResult {
+  // /config set <key> <value>
+  if (args[0] === 'set') {
+    const key = args[1];
+    const value = args.slice(2).join(' ');
+    if (!key || !value) {
+      return {
+        blocks: [],
+        text:
+          'Usage: /config set <key> <value>\n\nValid keys: ' +
+          Object.keys(getSettableKeys()).join(', '),
+      };
+    }
+    try {
+      saveConfigValue(key, value);
+      return { blocks: [], text: `Saved ${key}. Config reloaded.` };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { blocks: [], text: `Config set failed: ${message}` };
+    }
+  }
+
   try {
     const cfg = getConfig();
+    const settable = getSettableKeys();
 
     let activeModel: string;
     try {
-      getProvider(); // ensure a provider is active
+      getProvider();
       activeModel = cfg.ai.model ?? DEFAULT_MODELS[cfg.ai.provider] ?? '(default)';
     } catch {
       activeModel = cfg.ai.model ?? '(default)';
     }
 
+    const apiKeys: { label: string; key: string; value: string | undefined; env: string }[] = [
+      {
+        label: 'Anthropic API Key',
+        key: 'anthropicApiKey',
+        value: cfg.anthropicApiKey,
+        env: settable['anthropicApiKey']?.env ?? '',
+      },
+      {
+        label: 'OpenAI API Key',
+        key: 'openaiApiKey',
+        value: cfg.openaiApiKey,
+        env: settable['openaiApiKey']?.env ?? '',
+      },
+      {
+        label: 'Google API Key',
+        key: 'googleApiKey',
+        value: cfg.googleApiKey,
+        env: settable['googleApiKey']?.env ?? '',
+      },
+      {
+        label: 'Etherscan API Key',
+        key: 'etherscanApiKey',
+        value: cfg.etherscanApiKey,
+        env: settable['etherscanApiKey']?.env ?? '',
+      },
+      {
+        label: 'Alchemy API Key',
+        key: 'alchemyApiKey',
+        value: cfg.alchemyApiKey,
+        env: settable['alchemyApiKey']?.env ?? '',
+      },
+      {
+        label: 'CoinGecko API Key',
+        key: 'coingeckoApiKey',
+        value: cfg.coingeckoApiKey,
+        env: settable['coingeckoApiKey']?.env ?? '',
+      },
+      {
+        label: 'CryptoPanic Key',
+        key: 'cryptopanicApiKey',
+        value: cfg.cryptopanicApiKey,
+        env: settable['cryptopanicApiKey']?.env ?? '',
+      },
+    ];
+
+    let configured = 0;
+    const keyLines: string[] = [];
+    for (const k of apiKeys) {
+      const masked = maskKey(k.value);
+      if (k.value) configured++;
+      const hint = k.value ? '' : `  -> /config set ${k.key} <value> or ${k.env}=xxx`;
+      keyLines.push(`  ${k.label.padEnd(20)} ${masked}${hint}`);
+    }
+
     const text = [
-      'Current configuration:',
+      'Configuration:',
       '',
-      `  AI Provider:        ${cfg.ai.provider}`,
-      `  AI Model:           ${activeModel}`,
+      '  [AI Provider]',
+      `  Provider:           ${cfg.ai.provider}`,
+      `  Model:              ${activeModel}`,
       `  Max Tokens:         ${cfg.ai.maxTokens}`,
-      `  Anthropic API Key:  ${maskKey(cfg.anthropicApiKey)}`,
-      `  OpenAI API Key:     ${maskKey(cfg.openaiApiKey)}`,
-      `  Google API Key:     ${maskKey(cfg.googleApiKey)}`,
-      `  Etherscan API Key:  ${maskKey(cfg.etherscanApiKey)}`,
-      `  Alchemy API Key:    ${maskKey(cfg.alchemyApiKey)}`,
-      `  CoinGecko API Key:  ${maskKey(cfg.coingeckoApiKey)}`,
-      `  CryptoPanic Key:   ${maskKey(cfg.cryptopanicApiKey)}`,
-      `  Default Chain:      ${cfg.defaultChain}`,
       `  Ollama Host:        ${cfg.ai.ollamaHost}`,
-      `  Output Format:      ${cfg.output.format}`,
+      '',
+      `  [API Keys] (${configured}/${apiKeys.length} configured)`,
+      ...keyLines,
+      '',
+      '  [Chain]',
+      `  Default Chain:      ${cfg.defaultChain}`,
+      '',
+      '  [Output]',
+      `  Format:             ${cfg.output.format}`,
       `  Color:              ${cfg.output.color}`,
       `  Verbose:            ${cfg.output.verbose}`,
+      '',
+      'Set a value: /config set <key> <value>',
     ].join('\n');
 
     return { blocks: [], text };

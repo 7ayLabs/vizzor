@@ -1,4 +1,4 @@
-import { readFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import yaml from 'yaml';
@@ -87,4 +87,80 @@ export function getConfig(): VizzorConfig {
     throw new Error('Configuration not loaded. Call loadConfig() before getConfig().');
   }
   return cachedConfig;
+}
+
+/** Valid top-level config keys that can be set via /config set. */
+const SETTABLE_KEYS: Record<string, { env: string; nested?: string }> = {
+  anthropicApiKey: { env: 'ANTHROPIC_API_KEY' },
+  openaiApiKey: { env: 'OPENAI_API_KEY' },
+  googleApiKey: { env: 'GOOGLE_API_KEY' },
+  etherscanApiKey: { env: 'ETHERSCAN_API_KEY' },
+  alchemyApiKey: { env: 'ALCHEMY_API_KEY' },
+  coingeckoApiKey: { env: 'COINGECKO_API_KEY' },
+  cryptopanicApiKey: { env: 'CRYPTOPANIC_API_KEY' },
+  defaultChain: { env: 'VIZZOR_DEFAULT_CHAIN' },
+  telegramToken: { env: 'TELEGRAM_BOT_TOKEN' },
+  discordToken: { env: 'DISCORD_TOKEN' },
+  discordGuildId: { env: 'DISCORD_GUILD_ID' },
+  'ai.provider': { env: 'VIZZOR_AI_PROVIDER', nested: 'ai' },
+  'ai.model': { env: 'VIZZOR_AI_MODEL', nested: 'ai' },
+  'ai.maxTokens': { env: 'VIZZOR_AI_MAX_TOKENS', nested: 'ai' },
+  'ai.ollamaHost': { env: 'OLLAMA_HOST', nested: 'ai' },
+};
+
+/**
+ * Returns the list of settable config keys with their env var names.
+ */
+export function getSettableKeys(): Record<string, { env: string; nested?: string }> {
+  return SETTABLE_KEYS;
+}
+
+/**
+ * Persists a single config key=value to ~/.vizzor/config.yaml and reloads the cache.
+ * Supports dot-notation for nested keys (e.g. "ai.provider").
+ */
+export function saveConfigValue(key: string, value: string): void {
+  if (!(key in SETTABLE_KEYS)) {
+    throw new Error(
+      `Unknown config key: "${key}". Valid keys: ${Object.keys(SETTABLE_KEYS).join(', ')}`,
+    );
+  }
+
+  const configDir = getConfigDir();
+  const configPath = join(configDir, 'config.yaml');
+
+  if (!existsSync(configDir)) {
+    mkdirSync(configDir, { recursive: true });
+  }
+
+  let raw: Record<string, unknown> = {};
+  if (existsSync(configPath)) {
+    const contents = readFileSync(configPath, 'utf-8');
+    const parsed: unknown = yaml.parse(contents);
+    if (parsed && typeof parsed === 'object') {
+      raw = parsed as Record<string, unknown>;
+    }
+  }
+
+  // Handle dot-notation (e.g. "ai.provider" -> raw.ai.provider)
+  if (key.includes('.')) {
+    const [section, field] = key.split('.') as [string, string];
+    if (!raw[section] || typeof raw[section] !== 'object') {
+      raw[section] = {};
+    }
+    // Parse numeric values for number fields
+    const parsed = field === 'maxTokens' ? Number(value) : value;
+    (raw[section] as Record<string, unknown>)[field] = parsed;
+  } else {
+    raw[key] = value;
+  }
+
+  // Validate before saving
+  vizzorConfigSchema.parse(raw);
+
+  writeFileSync(configPath, yaml.stringify(raw), 'utf-8');
+
+  // Invalidate cache so next getConfig() returns fresh data
+  cachedConfig = null;
+  loadConfig();
 }
