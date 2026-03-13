@@ -246,4 +246,38 @@ export const VIZZOR_TOOLS: AITool[] = [
       required: ['symbol'],
     },
   },
+  {
+    name: 'get_technical_analysis',
+    description:
+      'Run technical analysis on a token: RSI, MACD, Bollinger Bands, EMA crossovers, ATR, OBV. Returns individual indicator signals and a composite direction with confidence.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        symbol: {
+          type: 'string',
+          description: 'The token symbol (e.g. "BTC", "ETH", "SOL").',
+        },
+        timeframe: {
+          type: 'string',
+          description: 'Kline interval: "1h", "4h", "1d". Defaults to "4h".',
+        },
+      },
+      required: ['symbol'],
+    },
+  },
+  {
+    name: 'get_prediction',
+    description:
+      'Generate a multi-signal composite prediction combining technical analysis (40%), sentiment (20%), derivatives (20%), trend (15%), and macro (5%). Returns direction, confidence, composite score, and reasoning.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        symbol: {
+          type: 'string',
+          description: 'The token symbol (e.g. "BTC", "ETH", "SOL").',
+        },
+      },
+      required: ['symbol'],
+    },
+  },
 ];
