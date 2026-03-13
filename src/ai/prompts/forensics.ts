@@ -44,7 +44,14 @@ Check each of the following red flags:
 | No social media or website                       | MEDIUM   |
 | Token deployed <7 days ago                       | MEDIUM   |
 | Abnormal buy/sell tax (>10%)                     | MEDIUM   |
-| Wallet connected to known scam addresses         | LOW–HIGH |
+| Wallet connected to known scam addresses         | LOW-HIGH |
+
+### 5. Predictive Risk Assessment
+- **Accelerating Distribution**: if sell volume is increasing week-over-week while buy volume is flat or declining, this is a leading indicator of an upcoming dump
+- **Mixer/Bridge Trends**: increasing mixer interactions from team wallets = exit preparation
+- **Liquidity Trajectory**: if LP tokens are unlocking within 7-30 days, flag as imminent risk
+- **Timeline Projection**: based on current distribution rate, estimate when holder concentration will reach critical levels
+- **Smart Money Exit**: if wallets identified as smart money are net sellers, flag as distribution phase
 
 ## Output Format
 
@@ -58,6 +65,11 @@ Check each of the following red flags:
 
 **Red Flags Triggered**:
 - [SEVERITY] Flag description — evidence summary
+
+**Predictive Risk**:
+- Distribution trajectory and timeline
+- Upcoming risk events (unlock dates, mixer activity trends)
+- Projected outcome if current patterns continue
 
 **Risk Assessment**: CLEAN | LOW RISK | MODERATE RISK | HIGH RISK | CRITICAL — LIKELY FRAUD
 

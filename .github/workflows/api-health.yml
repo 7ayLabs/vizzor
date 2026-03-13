@@ -1,0 +1,74 @@
+name: API Health
+
+on:
+  schedule:
+    - cron: '0 */6 * * *' # Every 6 hours
+  workflow_dispatch:
+
+jobs:
+  check-apis:
+    name: External API Health
+    runs-on: ubuntu-latest
+    steps:
+      - name: Binance API
+        run: |
+          STATUS=$(curl -sf -o /dev/null -w "%{http_code}" "https://api.binance.com/api/v3/ping")
+          if [ "$STATUS" != "200" ]; then
+            echo "::warning::Binance API returned $STATUS"
+          else
+            echo "Binance API healthy"
+          fi
+
+      - name: CoinGecko API
+        run: |
+          STATUS=$(curl -sf -o /dev/null -w "%{http_code}" "https://api.coingecko.com/api/v3/ping")
+          if [ "$STATUS" != "200" ]; then
+            echo "::warning::CoinGecko API returned $STATUS"
+          else
+            echo "CoinGecko API healthy"
+          fi
+
+      - name: DexScreener API
+        run: |
+          STATUS=$(curl -sf -o /dev/null -w "%{http_code}" "https://api.dexscreener.com/token-profiles/latest/v1")
+          if [ "$STATUS" != "200" ]; then
+            echo "::warning::DexScreener API returned $STATUS"
+          else
+            echo "DexScreener API healthy"
+          fi
+
+      - name: DeFiLlama API
+        run: |
+          STATUS=$(curl -sf -o /dev/null -w "%{http_code}" "https://api.llama.fi/protocols")
+          if [ "$STATUS" != "200" ]; then
+            echo "::warning::DeFiLlama API returned $STATUS"
+          else
+            echo "DeFiLlama API healthy"
+          fi
+
+      - name: GoPlus API
+        run: |
+          STATUS=$(curl -sf -o /dev/null -w "%{http_code}" "https://api.gopluslabs.io/api/v1/token_security/1?contract_addresses=0xdac17f958d2ee523a2206206994597c13d831ec7")
+          if [ "$STATUS" != "200" ]; then
+            echo "::warning::GoPlus API returned $STATUS"
+          else
+            echo "GoPlus API healthy"
+          fi
+
+      - name: Fear and Greed API
+        run: |
+          STATUS=$(curl -sf -o /dev/null -w "%{http_code}" "https://api.alternative.me/fng/?limit=1")
+          if [ "$STATUS" != "200" ]; then
+            echo "::warning::Fear and Greed API returned $STATUS"
+          else
+            echo "Fear and Greed API healthy"
+          fi
+
+      - name: Pump.fun API
+        run: |
+          STATUS=$(curl -sf -o /dev/null -w "%{http_code}" "https://client-api-2-74b1891ee9f9.herokuapp.com/coins/latest")
+          if [ "$STATUS" != "200" ]; then
+            echo "::warning::Pump.fun API returned $STATUS"
+          else
+            echo "Pump.fun API healthy"
+          fi

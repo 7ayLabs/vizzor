@@ -3,6 +3,7 @@ import ora from 'ora';
 import { fetchMarketData, analyzeTrend } from '../../core/trends/market.js';
 import { analyzeSentiment } from '../../core/trends/sentiment.js';
 import { generatePrediction } from '../../core/trends/predictor.js';
+import { TREND_SYMBOLS } from '../../config/constants.js';
 
 export async function handleTrends(options: {
   sentiment: boolean;
@@ -12,7 +13,7 @@ export async function handleTrends(options: {
   const spinner = ora('Fetching market trends...').start();
 
   try {
-    const symbols = ['bitcoin', 'ethereum', 'solana'];
+    const symbols = TREND_SYMBOLS;
     const results = await Promise.all(symbols.map((s) => fetchMarketData(s)));
 
     spinner.stop();
@@ -25,12 +26,13 @@ export async function handleTrends(options: {
     }
 
     if (options.json) {
-      const output = marketData.map((data) => {
-        const trend = analyzeTrend(data);
-        const sentiment = { overall: 0, sources: [], consensus: 'neutral' as const };
-        const prediction = generatePrediction(trend, sentiment, data);
-        return { data, trend, prediction };
-      });
+      const output = await Promise.all(
+        marketData.map(async (data) => {
+          const trend = analyzeTrend(data);
+          const prediction = await generatePrediction(data.symbol);
+          return { data, trend, prediction };
+        }),
+      );
       console.log(JSON.stringify(output, null, 2));
       return;
     }

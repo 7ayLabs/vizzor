@@ -123,4 +123,12 @@ botCmd
     await handleBotStart(options);
   });
 
-program.parse();
+// If no arguments provided, launch interactive TUI
+const args = process.argv.slice(2);
+if (args.length === 0) {
+  await loadConfig();
+  const { startTUI } = await import('./tui/app.js');
+  startTUI();
+} else {
+  program.parse();
+}

@@ -1,4 +1,10 @@
 import type { ChainAdapter } from '../../chains/types.js';
+import {
+  hasMintFunction,
+  hasPauseFunction,
+  hasBlacklistFunction,
+  scanBytecode,
+} from './bytecode-scanner.js';
 
 export interface RugIndicators {
   isHoneypot: boolean;
@@ -24,14 +30,14 @@ export async function detectRugIndicators(
 ): Promise<RugIndicators> {
   const details: RugDetail[] = [];
 
-  // Check if contract has source code
+  // Get contract bytecode for analysis
   const code = await adapter.getContractCode(tokenAddress).catch(() => '');
   const hasCode = code.length > 2;
 
   details.push({
     check: 'Contract Verified',
     passed: hasCode,
-    description: hasCode ? 'Contract source code is available' : 'Contract is not verified',
+    description: hasCode ? 'Contract bytecode is available' : 'No contract code found',
     severity: hasCode ? 'info' : 'warning',
   });
 
@@ -56,48 +62,75 @@ export async function detectRugIndicators(
     });
   }
 
-  // Check owner functions (mint, pause, blacklist)
-  const ownerChecks = await checkOwnerFunctions(tokenAddress, adapter);
+  // Bytecode scanning for dangerous functions
+  const canMint = hasCode && hasMintFunction(code);
+  const canPause = hasCode && hasPauseFunction(code);
+  const hasBlacklist_ = hasCode && hasBlacklistFunction(code);
 
   details.push({
     check: 'No Mint Function',
-    passed: !ownerChecks.canMint,
-    description: ownerChecks.canMint
+    passed: !canMint,
+    description: canMint
       ? 'Owner can mint new tokens (inflation risk)'
       : 'No owner mint capability detected',
-    severity: ownerChecks.canMint ? 'critical' : 'info',
+    severity: canMint ? 'critical' : 'info',
   });
 
   details.push({
     check: 'No Pause Function',
-    passed: !ownerChecks.canPause,
-    description: ownerChecks.canPause
+    passed: !canPause,
+    description: canPause
       ? 'Owner can pause transfers (honeypot risk)'
       : 'No pause capability detected',
-    severity: ownerChecks.canPause ? 'warning' : 'info',
+    severity: canPause ? 'warning' : 'info',
   });
+
+  details.push({
+    check: 'No Blacklist Function',
+    passed: !hasBlacklist_,
+    description: hasBlacklist_
+      ? 'Owner can blacklist addresses (honeypot risk)'
+      : 'No blacklist capability detected',
+    severity: hasBlacklist_ ? 'critical' : 'info',
+  });
+
+  // Add all bytecode findings as details
+  if (hasCode) {
+    const findings = scanBytecode(code);
+    for (const finding of findings) {
+      // Skip duplicates we already added above
+      if (
+        finding.name.includes('mint') ||
+        finding.name.includes('pause') ||
+        finding.name.includes('blacklist') ||
+        finding.name.includes('Blacklist')
+      ) {
+        continue;
+      }
+
+      if (finding.severity !== 'info') {
+        details.push({
+          check: finding.name,
+          passed: false,
+          description: finding.description,
+          severity: finding.severity,
+        });
+      }
+    }
+  }
 
   const riskScore = calculateRugRisk(details);
 
   return {
-    isHoneypot: ownerChecks.canPause,
-    hasLiquidityLock: false, // TODO: Check liquidity locks
-    ownerCanMint: ownerChecks.canMint,
-    ownerCanPause: ownerChecks.canPause,
-    hasBlacklist: false, // TODO: Detect blacklist functions
-    highSellTax: false, // TODO: Simulate sell to check tax
+    isHoneypot: canPause || hasBlacklist_,
+    hasLiquidityLock: false,
+    ownerCanMint: canMint,
+    ownerCanPause: canPause,
+    hasBlacklist: hasBlacklist_,
+    highSellTax: false,
     riskScore,
     details,
   };
-}
-
-async function checkOwnerFunctions(
-  _address: string,
-  _adapter: ChainAdapter,
-): Promise<{ canMint: boolean; canPause: boolean }> {
-  // TODO: Use contract ABI analysis or bytecode scanning
-  // to detect owner-only mint/pause/blacklist functions
-  return { canMint: false, canPause: false };
 }
 
 function calculateRugRisk(details: RugDetail[]): number {

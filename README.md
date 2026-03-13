@@ -1,28 +1,100 @@
-# Vizzor
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="vizzor_lighticon.png">
+    <source media="(prefers-color-scheme: light)" srcset="vizzor_icon.png">
+    <img alt="Vizzor" src="vizzor_icon.png" width="120">
+  </picture>
+</p>
 
-**AI-powered crypto chronovisor — on-chain intelligence for the future**
+<h1 align="center">Vizzor</h1>
 
-[![CI](https://github.com/7ayLabs/vizzor/actions/workflows/ci.yml/badge.svg)](https://github.com/7ayLabs/vizzor/actions/workflows/ci.yml)
-[![npm version](https://img.shields.io/npm/v/@vizzor/cli)](https://www.npmjs.com/package/@vizzor/cli)
-[![License: BUSL-1.1](https://img.shields.io/badge/License-BUSL--1.1-blue.svg)](LICENSE.md)
+<p align="center">
+  <strong>See the future of crypto before it happens.</strong><br>
+  <em>AI-powered price predictions for coins, tokens, and currencies across every chain and DEX.</em>
+</p>
 
-Vizzor is a multi-platform crypto intelligence tool that combines direct on-chain data with AI-powered analysis to help you see the future of blockchain. Available as a CLI tool, Discord bot, and Telegram bot.
+<p align="center">
+  <a href="https://github.com/7ayLabs/vizzor/actions/workflows/ci.yml"><img src="https://github.com/7ayLabs/vizzor/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://www.npmjs.com/package/@vizzor/cli"><img src="https://img.shields.io/npm/v/@vizzor/cli" alt="npm"></a>
+  <a href="LICENSE.md"><img src="https://img.shields.io/badge/License-BUSL--1.1-blue.svg" alt="License"></a>
+</p>
 
-## Features
+<p align="center">
+  <a href="#what-vizzor-predicts">Predictions</a> &bull;
+  <a href="#installation">Install</a> &bull;
+  <a href="#quick-start">Quick Start</a> &bull;
+  <a href="#prediction-engine">Engine</a> &bull;
+  <a href="#command-reference">Commands</a> &bull;
+  <a href="#ai-tools">AI Tools</a> &bull;
+  <a href="#data-sources">Data Sources</a> &bull;
+  <a href="#agents">Agents</a> &bull;
+  <a href="#configuration">Config</a>
+</p>
 
-### Project Scanner & ICO Tracker
-Analyze crypto projects with AI-enhanced evaluation: tokenomics, team assessment, contract analysis, and risk scoring. Track upcoming ICOs/IDOs with automated risk evaluation.
+---
 
-### Trend Predictor
-Market trend analysis powered by AI. Sentiment analysis across social media, price/momentum predictions, and market intelligence.
+Vizzor is a crypto market prediction engine. It pulls live data from 7 APIs, runs technical analysis on raw candles, reads derivatives positioning and market sentiment, then synthesizes price predictions with actual dollar targets across multiple timeframes -- from 5 minutes to 3 months.
 
-### On-Chain Forensics
-Deep wallet analysis, token flow tracking, whale movement detection, smart contract auditing, and rug pull detection.
+Ask about any coin, token, or currency. Vizzor fetches real-time data, computes signals, and gives you a prediction with numbers, not opinions.
 
-### Multi-Platform
-- **CLI** — Full-featured terminal interface for developers and power users
-- **Discord Bot** — Community-facing crypto intelligence with rich embeds
-- **Telegram Bot** — Mobile-first alerts and conversational analysis
+```
+vizzor
+> predict ETH at 16:00 today
+
+ETH at $2,112 | Bullish | Confidence: Medium-High
+  At 4:00 PM:  $2,128 (+0.8%) bull / $2,104 (-0.4%) bear
+  1 day:       $2,156 (+2.1%) bull / $2,068 (-2.1%) bear
+  7 days:      $2,295 (+8.7%) bull / $1,985 (-6.0%) bear
+  1 month:     $2,560 (+21%) bull  / $1,840 (-13%) bear
+  Support: $2,005 / $1,900  |  Resistance: $2,220 / $2,340
+```
+
+---
+
+## What Vizzor Predicts
+
+**Any tradable crypto asset.** BTC, ETH, SOL, meme coins, new DEX launches, tokens by contract address -- if it has a price, Vizzor can analyze it.
+
+### Price Predictions
+
+Every prediction includes dollar-value targets across all timeframes:
+
+| Timeframe | Use Case |
+|-----------|----------|
+| **5 min / 15 min** | Scalping, quick entries |
+| **1 hour / 4 hours** | Intraday trading |
+| **1 day / 7 days** | Swing trades |
+| **2 weeks / 1 month** | Position trades |
+| **3 months** | Macro outlook |
+| **Custom time** | "predict BTC at 16:00 today" |
+
+Each timeframe shows bullish, most likely, and bearish scenarios with percentage moves. Predictions include support/resistance levels, signal confidence, and what would invalidate the forecast.
+
+### Market Intelligence
+
+Beyond price targets, Vizzor provides:
+
+- **Token security audits** -- honeypot detection, tax analysis, mint/blacklist flags, rug pull indicators
+- **On-chain forensics** -- wallet analysis, whale tracking, holder concentration, token flow patterns
+- **Derivatives positioning** -- funding rates, open interest, long/short ratios from Binance Futures
+- **Sentiment analysis** -- Fear & Greed Index, news sentiment, buy/sell transaction ratios
+- **Trending discovery** -- what tokens are moving right now across DexScreener and CoinGecko
+- **ICO tracking** -- upcoming launches, fundraising rounds, investor data from DeFiLlama
+
+---
+
+## Requirements
+
+| Dependency | Version | Notes |
+|------------|---------|-------|
+| **Node.js** | >= 20.0.0 | ES2022 target, ESM modules |
+| **pnpm** | >= 8.0 | Recommended (npm/yarn also work) |
+| **Python** | 3.x | Required by `better-sqlite3` native build |
+| **C++ compiler** | GCC / Clang / MSVC | Required by `better-sqlite3` native build |
+
+Works on **macOS**, **Linux**, and **Windows**. No GPU required.
+
+---
 
 ## Installation
 
@@ -30,193 +102,336 @@ Deep wallet analysis, token flow tracking, whale movement detection, smart contr
 npm install -g @vizzor/cli
 ```
 
-Or run directly:
+```bash
+# Or run directly
+npx @vizzor/cli chat
+```
+
+### From Source
 
 ```bash
-npx @vizzor/cli scan ethereum
+git clone https://github.com/7ayLabs/vizzor.git
+cd vizzor
+pnpm install
+pnpm build
+pnpm link --global
 ```
+
+---
 
 ## Quick Start
 
 ```bash
-# Initialize configuration
-vizzor config init
+# 1. Set your API key
+vizzor config set anthropicApiKey sk-ant-xxx
+# or: export ANTHROPIC_API_KEY=sk-ant-xxx
 
-# Scan a crypto project
-vizzor scan ethereum
-
-# Deep scan with contract audit
-vizzor scan uniswap --deep
-
-# Check market trends
-vizzor trends
-
-# Track a wallet
-vizzor track 0x1234...abcd
-
-# List upcoming ICOs
-vizzor ico list
-
-# Audit a smart contract
-vizzor audit 0x1234...abcd --chain ethereum
-
-# Conversational AI mode
-vizzor chat
-
-# Start bots
-vizzor bot start --discord
-vizzor bot start --telegram
-vizzor bot start --all
+# 2. Launch
+vizzor
 ```
 
-## Configuration
+Then just ask:
 
-Vizzor stores configuration at `~/.vizzor/config.yaml`:
-
-```yaml
-# Required
-anthropicApiKey: "sk-ant-..."
-etherscanApiKey: "..."
-
-# Optional
-alchemyApiKey: "..."
-coingeckoApiKey: "..."
-
-# Bot tokens (required for bot mode)
-discordToken: "..."
-discordGuildId: "..."
-telegramToken: "..."
-
-# Defaults
-defaultChain: ethereum
-
-# Custom RPC endpoints
-rpc:
-  ethereum: "https://eth-mainnet.g.alchemy.com/v2/..."
-  polygon: "https://polygon-mainnet.g.alchemy.com/v2/..."
-
-# AI settings
-ai:
-  model: "claude-sonnet-4-20250514"
-  maxTokens: 4096
-
-# Output preferences
-output:
-  format: table  # table | json | markdown
-  color: true
-  verbose: false
+```
+> predict BTC price next week
+> analyze $PEPE security and price outlook
+> what's trending in crypto right now
+> track wallet 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045
+> audit contract 0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984
 ```
 
-Environment variables override config file values:
+---
 
-| Variable | Purpose |
-|----------|---------|
-| `ANTHROPIC_API_KEY` | Claude AI analysis |
-| `ETHERSCAN_API_KEY` | Transaction history, contract source |
-| `ALCHEMY_API_KEY` | Premium RPC endpoints |
-| `COINGECKO_API_KEY` | Market data |
-| `DISCORD_TOKEN` | Discord bot |
-| `DISCORD_GUILD_ID` | Discord dev server |
-| `TELEGRAM_BOT_TOKEN` | Telegram bot |
+## Prediction Engine
+
+### Multi-Signal Composite
+
+Vizzor builds predictions from 5 weighted signal dimensions:
+
+```
+Technical Analysis ........... 40%    RSI, MACD, Bollinger, EMA, ATR, OBV
+Market Sentiment ............. 20%    Fear & Greed, news sentiment, buy/sell ratio
+Derivatives Positioning ...... 20%    Funding rate, open interest, long/short
+Trend Momentum ............... 15%    24h/7d price action, volume trends
+Macro Cycle ................... 5%    Fear & Greed extremes as contrarian signals
+                              ----
+Composite Score        -100 to +100
+```
+
+Signals are computed from raw data before the AI sees them. The AI presents and contextualizes the pre-computed analysis -- it doesn't invent numbers.
+
+### Technical Analysis
+
+Computed from Binance kline data. No third-party TA APIs -- pure math on raw candles.
+
+| Indicator | Signal |
+|-----------|--------|
+| **RSI** (14) | Overbought > 70, Oversold < 30 |
+| **MACD** (12, 26, 9) | Crossover direction + histogram momentum |
+| **Bollinger Bands** (20, 2) | %B position for squeeze/breakout |
+| **EMA Crossover** (12/26) | Golden cross / death cross |
+| **ATR** (14) | Volatility regime |
+| **OBV** | Volume-price confirmation |
+
+### Volatility-Scaled Projections
+
+Price targets use `hourlyVol * sqrt(hours)` scaling -- wider ranges for longer timeframes, amplified for micro-cap/meme tokens. The engine automatically detects meme coins (Pump.fun, sub-$1M market cap) and applies higher volatility multipliers.
+
+### Time-Aware Predictions
+
+Ask for any specific time and Vizzor computes a targeted projection:
+
+```
+> predict SOL at 3:00pm          # specific clock time
+> predict ETH in 30 minutes      # relative time
+> predict BTC tomorrow            # next day
+> predict DOGE end of week        # end of week
+```
+
+---
+
+## Command Reference
+
+### CLI Commands
+
+```
+vizzor                              # Launch interactive TUI
+vizzor scan <token> [options]       # Token risk analysis
+vizzor trends [options]             # Market trends + top movers
+vizzor track <wallet> [options]     # Wallet forensics
+vizzor audit <contract> [options]   # Contract security audit
+vizzor ico list [options]           # ICO/IDO tracker
+vizzor chat                         # AI conversation mode
+vizzor config init                  # Initialize config
+vizzor config set <key> <value>     # Set config value
+vizzor config show                  # Show config
+vizzor bot start [options]          # Start Discord/Telegram bots
+```
+
+### TUI Slash Commands
+
+| Command | Description |
+|---------|-------------|
+| `/scan <address> [--chain <chain>]` | Token security + risk scan |
+| `/track <wallet> [--chain <chain>]` | Wallet forensics |
+| `/trends` | Trending tokens + market movers |
+| `/audit <contract> [--chain <chain>]` | Smart contract audit |
+| `/config` | Show config with setup guidance |
+| `/config set <key> <value>` | Update a config value |
+| `/provider` | Show/switch AI provider |
+| `/provider <name>` | Switch to `anthropic`, `openai`, `gemini`, `ollama` |
+| `/agent create <name> [options]` | Create autonomous prediction agent |
+| `/agent list` | List all agents |
+| `/agent start <name>` | Start agent cycle |
+| `/agent stop <name>` | Stop agent |
+| `/agent status <name>` | View status + recent decisions |
+| `/help` | Command reference |
+| `/clear` | Clear messages |
+| `/exit` | Quit |
+
+**Price Ticker:** Arrow keys to navigate, **Enter** to trigger full AI prediction for any token, **Tab** to toggle focus.
+
+### Telegram Bot
+
+| Command | Description |
+|---------|-------------|
+| `/scan <address>` | Token security scan |
+| `/trends` | Trending tokens + gainers/losers |
+| `/track <wallet>` | Wallet forensics |
+| `/ico` | Upcoming launches and rounds |
+| `/audit <contract>` | Contract audit |
+| *Any text* | AI-powered prediction and analysis |
+
+---
+
+## AI Tools
+
+Vizzor exposes **17+ tools** to the AI. During conversation, the AI autonomously calls whichever tools it needs to build a complete prediction.
+
+| Tool | What It Provides |
+|------|------------------|
+| `get_market_data` | Price, volume, market cap (CoinGecko) |
+| `search_token_dex` | Real-time DEX pair data (DexScreener) |
+| `get_technical_analysis` | RSI, MACD, Bollinger, EMA, ATR, OBV |
+| `get_prediction` | Multi-signal composite prediction |
+| `get_derivatives_data` | Funding rate, open interest (Binance Futures) |
+| `get_fear_greed` | Fear & Greed Index + 7-day history |
+| `get_crypto_news` | News headlines with sentiment scoring |
+| `get_trending` | Hot tokens across DexScreener + CoinGecko |
+| `get_token_info` | On-chain token data (name, supply, holders) |
+| `get_token_security` | GoPlus security scan (honeypot, taxes, flags) |
+| `analyze_wallet` | Wallet forensics (patterns, holdings, risk) |
+| `check_rug_indicators` | Rug pull detection suite |
+| `search_upcoming_icos` | ICO/IDO tracker with filters |
+| `get_raises` | Recent fundraising rounds |
+| `get_funding_history` | Project/investor funding history |
+| `create_agent` | Deploy autonomous prediction agent |
+| `list_agents` | List active agents |
+| `get_agent_status` | Agent status and decisions |
+
+### AI Providers
+
+| Provider | Model | Tool Support | Notes |
+|----------|-------|--------------|-------|
+| **Anthropic** | Claude Opus / Sonnet | Full tool-use | Default. Best prediction quality |
+| **OpenAI** | GPT-4 Turbo | Full tool-use | Function calling |
+| **Google** | Gemini Pro | Full tool-use | Tool-use support |
+| **Ollama** | Any local model | Context injection | Pre-computed signals injected into context |
+
+For providers without tool support (Ollama), Vizzor pre-fetches all relevant data, runs signal computation, and injects pre-written analysis directly into the context. The model presents the pre-computed predictions rather than generating them from scratch.
+
+```bash
+/provider openai
+/provider ollama llama3
+```
+
+---
+
+## Data Sources
+
+| Source | Data | Auth |
+|--------|------|------|
+| **Binance** | Klines, tickers, funding rates, open interest, gainers/losers | Public |
+| **DexScreener** | DEX pairs, trending tokens, real-time pricing | Public |
+| **GoPlus** | Token security, honeypot detection, holder analysis | Public |
+| **DeFiLlama** | TVL, fundraising rounds, protocol metrics | Public |
+| **CryptoPanic** | News aggregation with sentiment | Free tier |
+| **Fear & Greed** | Crypto Fear & Greed Index | Public |
+| **Pump.fun** | Solana meme coin launches | Public |
+
+All responses cached in SQLite with configurable TTL (5 min for market data, 1 hour for token info, 24 hours for contract code).
+
+---
+
+## Agents
+
+Autonomous prediction agents that run a continuous **think -> analyze -> decide -> act** cycle.
+
+```bash
+/agent create alpha --strategy momentum --pairs BTC,ETH,SOL --interval 60
+/agent start alpha
+/agent status alpha
+```
+
+### Strategies
+
+| Strategy | Signals | Entry | Exit |
+|----------|---------|-------|------|
+| **Momentum** | RSI + MACD + Bollinger + Funding | RSI crosses above 30 + bullish MACD | RSI > 70 + bearish divergence |
+| **Trend-Following** | EMA Crossover + OBV + Fear & Greed | Golden cross + rising volume | Death cross |
+
+> v0.3.0: Agents operate in **alert-only mode** -- they log decisions and emit signals but do not execute on-chain transactions.
+
+---
 
 ## Supported Chains
 
-| Chain | Status | Adapter |
-|-------|--------|---------|
-| Ethereum | Supported | EVM |
-| Polygon | Supported | EVM |
-| Arbitrum | Supported | EVM |
-| Optimism | Supported | EVM |
-| Base | Supported | EVM |
-| Solana | Planned | — |
-| Bitcoin | Planned | — |
-| 7aychain | Planned | — |
+| Chain | Status | Security Scan |
+|-------|--------|---------------|
+| Ethereum | Live | GoPlus |
+| Polygon | Live | GoPlus |
+| Arbitrum | Live | GoPlus |
+| Optimism | Live | GoPlus |
+| Base | Live | GoPlus |
+| BSC | Live | GoPlus |
+| Avalanche | Live | GoPlus |
+| Solana | Live (DEX + GoPlus) | GoPlus |
 
-Vizzor uses a plugin-based chain adapter system. New chains can be added by implementing the `ChainAdapter` interface.
+New chains are added by implementing the `ChainAdapter` interface.
 
-## Architecture
+---
 
+## Configuration
+
+Config at `~/.vizzor/config.yaml`. Environment variables override file values.
+
+### Required
+
+| Variable | Purpose |
+|----------|---------|
+| `ANTHROPIC_API_KEY` | Claude AI -- primary prediction engine |
+| `ETHERSCAN_API_KEY` | Transaction history, contract source |
+
+### Optional
+
+| Variable | Purpose |
+|----------|---------|
+| `OPENAI_API_KEY` | GPT-4 as alternative provider |
+| `GOOGLE_API_KEY` | Gemini as alternative provider |
+| `ALCHEMY_API_KEY` | Premium RPC endpoints |
+| `COINGECKO_API_KEY` | Extended market data |
+| `CRYPTOPANIC_API_KEY` | News with sentiment |
+| `DISCORD_TOKEN` | Discord bot |
+| `TELEGRAM_BOT_TOKEN` | Telegram bot |
+
+### Full Config
+
+```yaml
+anthropicApiKey: sk-ant-v0-xxx
+etherscanApiKey: xxx
+defaultChain: ethereum
+
+rpc:
+  ethereum: https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY
+  polygon: https://polygon-mainnet.g.alchemy.com/v2/YOUR_KEY
+
+ai:
+  provider: anthropic        # anthropic | openai | gemini | ollama
+  model: claude-sonnet-4-20250514
+  maxTokens: 4096
+  ollamaHost: http://localhost:11434
+
+output:
+  format: table
+  color: true
+  verbose: false
+
+cacheTtl:
+  tokenInfo: 3600
+  marketData: 300
+  walletData: 600
+  contractCode: 86400
 ```
-                    +-------------------+
-                    |    Interfaces      |
-                    |  CLI | Discord |   |
-                    |      Telegram     |
-                    +--------+----------+
-                             |
-                    +--------v----------+
-                    |  Response Adapters |
-                    |  (platform format) |
-                    +--------+----------+
-                             |
-              +--------------+--------------+
-              |              |              |
-     +--------v---+  +------v------+  +----v--------+
-     |  Scanner   |  |   Trends    |  |  Forensics  |
-     |  Module    |  |   Module    |  |   Module    |
-     +--------+---+  +------+------+  +----+--------+
-              |              |              |
-     +--------v--------------v--------------v--------+
-     |              AI Integration (Claude)           |
-     +--------+--------------------------------------+
-              |
-     +--------v--------------------------------------+
-     |         Chain Adapters (EVM, Solana, ...)      |
-     +--------+--------------------------------------+
-              |
-     +--------v----------+
-     |  Data Layer        |
-     |  SQLite | Cache    |
-     +-------------------+
-```
 
-## Bot Setup
-
-### Discord
-
-1. Create a bot at [Discord Developer Portal](https://discord.com/developers/applications)
-2. Enable the `applications.commands` scope
-3. Add the bot token to your config: `vizzor config set discordToken YOUR_TOKEN`
-4. Start: `vizzor bot start --discord`
-
-### Telegram
-
-1. Create a bot via [@BotFather](https://t.me/BotFather)
-2. Add the token to your config: `vizzor config set telegramToken YOUR_TOKEN`
-3. Start: `vizzor bot start --telegram`
+---
 
 ## Development
 
 ```bash
-# Clone
 git clone https://github.com/7ayLabs/vizzor.git
 cd vizzor
-
-# Install dependencies
 pnpm install
 
-# Run in development
-pnpm dev scan ethereum
-
-# Build
-pnpm build
-
-# Test
-pnpm test
-
-# Lint & format
-pnpm lint
-pnpm format:check
-pnpm typecheck
+pnpm dev              # Dev mode (tsx)
+pnpm build            # Build (tsup)
+pnpm lint             # ESLint
+pnpm typecheck        # TypeScript strict
+pnpm test             # Vitest (164 tests, 19 suites)
+pnpm test:coverage    # With coverage
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines.
+### Tech Stack
 
-## Contributing
+| Layer | Tech |
+|-------|------|
+| Runtime | Node.js >= 20, TypeScript (strict ESM) |
+| CLI | Commander.js |
+| TUI | Ink (React for terminals) |
+| AI | Anthropic SDK, OpenAI SDK, Google GenAI, Ollama |
+| Blockchain | viem (EVM), plugin adapter system |
+| Database | better-sqlite3 with TTL cache |
+| Bots | discord.js, grammY |
+| Build | tsup |
+| Test | Vitest |
 
-We welcome contributions. Please read our [Contributing Guide](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md) before submitting a pull request.
+---
 
 ## License
 
-[BUSL-1.1](LICENSE.md) — Business Source License 1.1
+[BUSL-1.1](LICENSE.md) -- Business Source License 1.1
 
-## Built by [7ayLabs](https://7aylabs.com)
+---
+
+<p align="center">
+  <strong>Built by <a href="https://7aylabs.com">7ayLabs</a></strong>
+</p>

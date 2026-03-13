@@ -3,6 +3,8 @@ import { writeFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { stringify as yamlStringify } from 'yaml';
 import { getConfigDir, loadConfig, getConfig } from '../../config/loader.js';
+import { DEFAULT_CHAIN } from '../../config/constants.js';
+import { DEFAULT_MODELS } from '../../ai/providers/types.js';
 import { maskKey } from '../../config/keys.js';
 
 export async function handleConfigInit(): Promise<void> {
@@ -18,9 +20,9 @@ export async function handleConfigInit(): Promise<void> {
   const defaultConfig = {
     anthropicApiKey: '',
     etherscanApiKey: '',
-    defaultChain: 'ethereum',
+    defaultChain: DEFAULT_CHAIN,
     ai: {
-      model: 'claude-sonnet-4-20250514',
+      model: DEFAULT_MODELS['anthropic'],
       maxTokens: 4096,
     },
     output: {
