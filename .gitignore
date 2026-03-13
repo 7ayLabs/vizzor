@@ -9,10 +9,36 @@ dist/
 .env.local
 .env.*.local
 
-# Database
+# Secrets & Credentials
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.jks
+*.keystore
+**/secrets/
+**/credentials/
+config.yaml
+config.yml
+
+# Claude Code
+.claude/
+
+# Database & Data
 *.db
 *.db-wal
 *.db-shm
+*.sqlite
+*.sqlite3
+~/.vizzor/
+
+# Security
+.npm-token
+.npmrc
+!.npmrc.example
+*.secret
+*.secrets
 
 # IDE
 .vscode/
@@ -37,3 +63,6 @@ logs/
 *.pid
 *.seed
 *.pid.lock
+
+# Docker
+docker-compose.override.yml
