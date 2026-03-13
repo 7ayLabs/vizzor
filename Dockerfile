@@ -1,0 +1,31 @@
+FROM node:20-alpine AS base
+RUN corepack enable && corepack prepare pnpm@10.30.2 --activate
+WORKDIR /app
+
+# --- Dependencies ---
+FROM base AS deps
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile --prod
+
+# --- Build ---
+FROM base AS build
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+COPY tsconfig.json tsup.config.ts ./
+COPY src/ src/
+RUN pnpm build
+
+# --- Runtime ---
+FROM node:20-alpine AS runtime
+RUN addgroup -S vizzor && adduser -S vizzor -G vizzor
+WORKDIR /app
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=build /app/dist ./dist
+COPY package.json ./
+
+USER vizzor
+ENV NODE_ENV=production
+
+ENTRYPOINT ["node", "dist/index.js"]
+CMD ["bot", "start"]

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "baseBranches": ["develop"],
+  "labels": ["deps"],
+  "schedule": ["before 8am on Monday"],
+  "packageRules": [
+    {
+      "groupName": "AI SDKs",
+      "matchPackageNames": ["@anthropic-ai/sdk", "openai", "@google/generative-ai", "ollama"]
+    },
+    {
+      "groupName": "Bot frameworks",
+      "matchPackageNames": ["discord.js", "grammy"]
+    },
+    {
+      "groupName": "Lint and format",
+      "matchPackageNames": ["eslint", "typescript-eslint", "prettier", "@eslint/js"]
+    },
+    {
+      "groupName": "Test tooling",
+      "matchPackageNames": ["vitest", "@vitest/coverage-v8"]
+    }
+  ]
+}
