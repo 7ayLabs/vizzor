@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, Text, Spacer } from 'ink';
 
 interface StatusBarProps {
@@ -7,12 +7,28 @@ interface StatusBarProps {
   connected: boolean;
 }
 
-export function StatusBar({ provider, chain, connected }: StatusBarProps): React.JSX.Element {
-  const time = new Date().toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
+export const StatusBar = React.memo(function StatusBar({
+  provider,
+  chain,
+  connected,
+}: StatusBarProps): React.JSX.Element {
+  const [time, setTime] = useState(() =>
+    new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
+  );
+
+  // Update time once per minute instead of every re-render
+  useEffect(() => {
+    const id = setInterval(() => {
+      setTime(
+        new Date().toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+        }),
+      );
+    }, 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   return (
     <Box paddingX={1}>
@@ -28,4 +44,4 @@ export function StatusBar({ provider, chain, connected }: StatusBarProps): React
       <Text dimColor>{time}</Text>
     </Box>
   );
-}
+});

@@ -4,7 +4,7 @@
 
 import { useState, useCallback } from 'react';
 import { getProvider, getToolHandler } from '../../ai/client.js';
-import { CHAT_SYSTEM_PROMPT } from '../../ai/prompts/chat.js';
+import { CHAT_SYSTEM_PROMPT, OLLAMA_SYSTEM_PROMPT } from '../../ai/prompts/chat.js';
 import { VIZZOR_TOOLS } from '../../ai/tools.js';
 import { buildContextBlock } from '../../ai/context-injector.js';
 
@@ -72,14 +72,18 @@ export function useAIStream(): UseAIStreamResult {
 
     // For providers without tool support, inject real-time data into prompt
     const startStream = async (): Promise<void> => {
-      let systemPrompt = CHAT_SYSTEM_PROMPT;
-
       if (!provider.supportsTools) {
         const context = await buildContextBlock(message);
-        if (context) systemPrompt = systemPrompt + '\n' + context;
+        const systemPrompt = OLLAMA_SYSTEM_PROMPT + (context ? '\n' + context : '');
         await provider.analyzeStream(systemPrompt, message, callbacks);
       } else {
-        await provider.analyzeStream(systemPrompt, message, callbacks, VIZZOR_TOOLS, toolHandler);
+        await provider.analyzeStream(
+          CHAT_SYSTEM_PROMPT,
+          message,
+          callbacks,
+          VIZZOR_TOOLS,
+          toolHandler,
+        );
       }
     };
 

@@ -26,17 +26,6 @@ import {
 import { getProvider, switchProvider } from '../ai/client.js';
 import { getAvailableProviders } from '../ai/providers/registry.js';
 import { DEFAULT_MODELS } from '../ai/providers/types.js';
-import {
-  createAgent,
-  listAgents,
-  deleteAgent,
-  startAgent,
-  stopAgent,
-  getAgentStatus,
-  getRecentDecisions,
-  listStrategies,
-  getAgentByName,
-} from '../core/agent/index.js';
 
 // ---------------------------------------------------------------------------
 // Types
