@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import Spinner from 'ink-spinner';
-import { usePriceTicker } from '../hooks/use-price-ticker.js';
+import type { UsePriceTickerResult } from '../hooks/use-price-ticker.js';
 
 function formatPrice(price: number): string {
   if (price >= 1000) return `$${price.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
@@ -9,8 +9,13 @@ function formatPrice(price: number): string {
   return `$${price.toFixed(4)}`;
 }
 
-export function PriceTicker(): React.JSX.Element {
-  const { entries, isRefreshing } = usePriceTicker();
+interface PriceTickerProps {
+  ticker: UsePriceTickerResult;
+  onAddPress?: () => void;
+}
+
+export function PriceTicker({ ticker, onAddPress }: PriceTickerProps): React.JSX.Element {
+  const { entries, isRefreshing } = ticker;
 
   return (
     <Box
@@ -25,7 +30,7 @@ export function PriceTicker(): React.JSX.Element {
       {entries.map((entry) => {
         if (entry.loading) {
           return (
-            <Box key={entry.symbol} gap={1}>
+            <Box key={entry.geckoId} gap={1}>
               <Text dimColor>{entry.symbol}</Text>
               <Text color="cyan">
                 <Spinner type="dots" />
@@ -35,7 +40,7 @@ export function PriceTicker(): React.JSX.Element {
         }
         if (entry.error) {
           return (
-            <Box key={entry.symbol} gap={1}>
+            <Box key={entry.geckoId} gap={1}>
               <Text dimColor>{entry.symbol}</Text>
               <Text color="red">--</Text>
             </Box>
@@ -45,7 +50,7 @@ export function PriceTicker(): React.JSX.Element {
         const arrow = entry.change24h >= 0 ? '\u25B2' : '\u25BC';
         const prefix = entry.change24h >= 0 ? '+' : '';
         return (
-          <Box key={entry.symbol} gap={1}>
+          <Box key={entry.geckoId} gap={1}>
             <Text bold>{entry.symbol}</Text>
             <Text>{formatPrice(entry.price)}</Text>
             <Text color={color}>
@@ -59,6 +64,11 @@ export function PriceTicker(): React.JSX.Element {
       {isRefreshing && (
         <Text dimColor>
           <Spinner type="dots" />
+        </Text>
+      )}
+      {onAddPress && (
+        <Text color="cyan" dimColor>
+          [+]
         </Text>
       )}
     </Box>

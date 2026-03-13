@@ -1,24 +1,30 @@
-import { useState, useEffect, useRef } from 'react';
-import { fetchMarketData } from '../../core/trends/market.js';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { fetchTickerPrice } from '../../data/sources/binance.js';
+import { TICKER_DEFAULTS } from '../../config/constants.js';
 
-const TICKER_SYMBOLS = ['bitcoin', 'ethereum', 'solana'];
-const REFRESH_INTERVAL = 60_000;
+const REFRESH_INTERVAL = 30_000;
 
 export interface TickerEntry {
   symbol: string;
+  geckoId: string;
   price: number;
   change24h: number;
   loading: boolean;
   error: boolean;
 }
 
-export function usePriceTicker(): {
+export interface UsePriceTickerResult {
   entries: TickerEntry[];
   isRefreshing: boolean;
-} {
+  addSymbol: (geckoId: string, symbol: string) => void;
+  removeSymbol: (geckoId: string) => void;
+}
+
+export function usePriceTicker(): UsePriceTickerResult {
   const [entries, setEntries] = useState<TickerEntry[]>(
-    TICKER_SYMBOLS.map((s) => ({
-      symbol: s === 'bitcoin' ? 'BTC' : s === 'ethereum' ? 'ETH' : 'SOL',
+    TICKER_DEFAULTS.map((t) => ({
+      symbol: t.symbol,
+      geckoId: t.geckoId,
       price: 0,
       change24h: 0,
       loading: true,
@@ -27,47 +33,85 @@ export function usePriceTicker(): {
   );
   const [isRefreshing, setIsRefreshing] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastGoodRef = useRef<Map<string, { price: number; change24h: number }>>(new Map());
+
+  const fetchAll = useCallback(async (current: TickerEntry[]): Promise<void> => {
+    setIsRefreshing(true);
+    const symbols = current.map((e) => e.symbol);
+    const results = await Promise.allSettled(symbols.map((s) => fetchTickerPrice(s)));
+
+    setEntries((prev) =>
+      prev.map((entry, i) => {
+        const result = results[i];
+        if (result && result.status === 'fulfilled' && result.value) {
+          const data = result.value;
+          lastGoodRef.current.set(entry.geckoId, {
+            price: data.price,
+            change24h: data.change24h,
+          });
+          return {
+            ...entry,
+            price: data.price,
+            change24h: data.change24h,
+            loading: false,
+            error: false,
+          };
+        }
+        // Preserve last known good values instead of showing error
+        const cached = lastGoodRef.current.get(entry.geckoId);
+        if (cached) {
+          return {
+            ...entry,
+            price: cached.price,
+            change24h: cached.change24h,
+            loading: false,
+            error: false,
+          };
+        }
+        // Only show error if we never had data
+        return { ...entry, loading: false, error: true };
+      }),
+    );
+    setIsRefreshing(false);
+  }, []);
 
   useEffect(() => {
-    const fetchAll = async (): Promise<void> => {
-      setIsRefreshing(true);
-      const results = await Promise.allSettled(TICKER_SYMBOLS.map((s) => fetchMarketData(s)));
-
-      setEntries(
-        results.map((result, i) => {
-          const fallbackSym =
-            TICKER_SYMBOLS[i] === 'bitcoin'
-              ? 'BTC'
-              : TICKER_SYMBOLS[i] === 'ethereum'
-                ? 'ETH'
-                : 'SOL';
-          if (result.status === 'fulfilled' && result.value) {
-            return {
-              symbol: result.value.symbol,
-              price: result.value.price,
-              change24h: result.value.priceChange24h,
-              loading: false,
-              error: false,
-            };
-          }
-          return {
-            symbol: fallbackSym,
-            price: 0,
-            change24h: 0,
-            loading: false,
-            error: true,
-          };
-        }),
-      );
-      setIsRefreshing(false);
-    };
-
-    void fetchAll();
-    intervalRef.current = setInterval(() => void fetchAll(), REFRESH_INTERVAL);
+    void fetchAll(entries);
+    intervalRef.current = setInterval(() => {
+      setEntries((current) => {
+        void fetchAll(current);
+        return current;
+      });
+    }, REFRESH_INTERVAL);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
+  }, [fetchAll]);
+
+  const addSymbol = useCallback(
+    (geckoId: string, symbol: string): void => {
+      setEntries((prev) => {
+        if (prev.some((e) => e.geckoId === geckoId)) return prev;
+        const newEntry: TickerEntry = {
+          symbol: symbol.toUpperCase(),
+          geckoId,
+          price: 0,
+          change24h: 0,
+          loading: true,
+          error: false,
+        };
+        const updated = [...prev, newEntry];
+        void fetchAll(updated);
+        return updated;
+      });
+    },
+    [fetchAll],
+  );
+
+  const removeSymbol = useCallback((geckoId: string): void => {
+    setEntries((prev) => prev.filter((e) => e.geckoId !== geckoId));
+    lastGoodRef.current.delete(geckoId);
   }, []);
 
-  return { entries, isRefreshing };
+  return { entries, isRefreshing, addSymbol, removeSymbol };
 }

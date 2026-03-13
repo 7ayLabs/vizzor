@@ -8,7 +8,10 @@ import { fetchMarketData, fetchTokenFromDex, fetchTrendingTokens } from '../core
 import { fetchCryptoNews } from '../data/sources/cryptopanic.js';
 import { fetchRecentRaises } from '../data/sources/defillama.js';
 import { fetchLatestCoins } from '../data/sources/pumpfun.js';
+import { fetchTickerPrice, fetchFundingRate, fetchOpenInterest } from '../data/sources/binance.js';
+import { fetchFearGreedIndex } from '../data/sources/fear-greed.js';
 import { getConfig } from '../config/loader.js';
+import { KNOWN_SYMBOLS } from '../config/constants.js';
 
 // ---------------------------------------------------------------------------
 // Keyword patterns for detecting user intent
@@ -55,45 +58,7 @@ const BROAD_KEYWORDS = [
   'crypto market',
 ];
 
-// Common token symbols to recognize
-const KNOWN_SYMBOLS: Record<string, string> = {
-  btc: 'bitcoin',
-  bitcoin: 'bitcoin',
-  eth: 'ethereum',
-  ethereum: 'ethereum',
-  sol: 'solana',
-  solana: 'solana',
-  bnb: 'binancecoin',
-  bsc: 'binancecoin',
-  xrp: 'ripple',
-  ripple: 'ripple',
-  ada: 'cardano',
-  cardano: 'cardano',
-  doge: 'dogecoin',
-  dogecoin: 'dogecoin',
-  dot: 'polkadot',
-  polkadot: 'polkadot',
-  avax: 'avalanche-2',
-  avalanche: 'avalanche-2',
-  matic: 'matic-network',
-  polygon: 'matic-network',
-  link: 'chainlink',
-  chainlink: 'chainlink',
-  uni: 'uniswap',
-  uniswap: 'uniswap',
-  atom: 'cosmos',
-  cosmos: 'cosmos',
-  near: 'near',
-  arb: 'arbitrum',
-  op: 'optimism',
-  sui: 'sui',
-  apt: 'aptos',
-  pepe: 'pepe',
-  shib: 'shiba-inu',
-  floki: 'floki',
-  bonk: 'bonk',
-  wif: 'dogwifcoin',
-};
+// KNOWN_SYMBOLS is now imported from config/constants.ts
 
 // ---------------------------------------------------------------------------
 // Main function
@@ -223,6 +188,27 @@ export async function buildContextBlock(userMessage: string): Promise<string> {
     );
   }
 
+  // Always inject market sentiment (Fear & Greed) + top-3 Binance prices for baseline accuracy
+  tasks.push(
+    fetchFearGreedData().then((data) => {
+      if (data) sections.push(data);
+    }),
+  );
+  tasks.push(
+    fetchBinancePriceData(['BTC', 'ETH', 'SOL']).then((data) => {
+      if (data) sections.push(data);
+    }),
+  );
+
+  // Inject derivatives data for broad or price queries
+  if (isBroadQuery || matchesAny(lower, PRICE_KEYWORDS) || mentionedTokens.length > 0) {
+    tasks.push(
+      fetchDerivativesData(mentionedTokens).then((data) => {
+        if (data) sections.push(data);
+      }),
+    );
+  }
+
   await Promise.allSettled(tasks);
 
   if (sections.length === 0) return '';
@@ -236,7 +222,7 @@ export async function buildContextBlock(userMessage: string): Promise<string> {
     'CRITICAL INSTRUCTIONS:',
     '- You MUST use ONLY the real-time data above to answer. Do NOT invent, hallucinate, or fabricate any data, news, events, or prices.',
     '- If a piece of information is not in the data above, say "I don\'t have data on that right now" — do NOT make something up.',
-    '- Cite specific numbers, sources (CoinGecko, DexScreener, CryptoPanic, DeFiLlama), and mention this is live data.',
+    '- Cite specific numbers, sources (Binance, CoinGecko, DexScreener, CryptoPanic, DeFiLlama, GoPlus), and mention this is live data.',
     '- Your training data is STALE and OUTDATED. The ONLY trustworthy information is what appears between the REAL-TIME DATA markers above.',
     '',
   ].join('\n');
@@ -272,8 +258,51 @@ async function fetchTokenData(tokens: string[], address?: string): Promise<strin
     }
   }
 
-  // Fetch named tokens from CoinGecko + DexScreener
+  // Fetch named tokens: Binance (primary) -> CoinGecko (fallback) -> DexScreener (fallback)
   for (const token of tokens.slice(0, 3)) {
+    const sym =
+      token === 'bitcoin'
+        ? 'BTC'
+        : token === 'ethereum'
+          ? 'ETH'
+          : token === 'solana'
+            ? 'SOL'
+            : token.toUpperCase();
+
+    // Try Binance first (most reliable, no rate limits)
+    try {
+      const binanceData = await fetchTickerPrice(sym);
+      if (binanceData) {
+        lines.push(
+          `${sym} (via Binance):`,
+          `  Price: $${binanceData.price.toLocaleString()}`,
+          `  24h Change: ${binanceData.change24h > 0 ? '+' : ''}${binanceData.change24h.toFixed(2)}%`,
+        );
+        // Also try CoinGecko for extended data (market cap, rank, 7d)
+        const geckoId = KNOWN_SYMBOLS[token];
+        if (geckoId) {
+          try {
+            const gecko = await fetchMarketData(geckoId);
+            if (gecko) {
+              lines.push(
+                `  7d Change: ${gecko.priceChange7d > 0 ? '+' : ''}${gecko.priceChange7d.toFixed(2)}%`,
+                `  24h Volume: $${gecko.volume24h.toLocaleString()}`,
+                `  Market Cap: $${gecko.marketCap.toLocaleString()}`,
+                `  Rank: #${gecko.rank ?? '?'}`,
+              );
+            }
+          } catch {
+            // CoinGecko unavailable, continue with Binance data only
+          }
+        }
+        lines.push('');
+        continue;
+      }
+    } catch {
+      // Binance unavailable, fall through
+    }
+
+    // Fallback to CoinGecko
     const geckoId = KNOWN_SYMBOLS[token];
     if (geckoId) {
       try {
@@ -296,7 +325,7 @@ async function fetchTokenData(tokens: string[], address?: string): Promise<strin
       }
     }
 
-    // Try DexScreener for tokens not on CoinGecko
+    // Final fallback: DexScreener for tokens not on Binance/CoinGecko
     try {
       const pairs = await fetchTokenFromDex(token);
       const pair = pairs[0];
@@ -381,6 +410,108 @@ async function fetchPumpData(): Promise<string | null> {
       lines.push(`- ${c.name} (${c.symbol}) — MC: ${mcap} | Replies: ${c.reply_count}`);
     }
     return lines.join('\n');
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// New data fetchers (Binance, Fear & Greed, Derivatives)
+// ---------------------------------------------------------------------------
+
+async function fetchBinancePriceData(symbols: string[]): Promise<string | null> {
+  try {
+    const results = await Promise.allSettled(symbols.map((s) => fetchTickerPrice(s)));
+    const lines: string[] = ['## Live Prices (Binance, real-time)'];
+    let hasData = false;
+
+    for (let i = 0; i < symbols.length; i++) {
+      const result = results[i];
+      if (result && result.status === 'fulfilled') {
+        const d = result.value;
+        lines.push(
+          `${d.symbol}: $${d.price.toLocaleString()} | 24h: ${d.change24h > 0 ? '+' : ''}${d.change24h.toFixed(2)}%`,
+        );
+        hasData = true;
+      }
+    }
+
+    return hasData ? lines.join('\n') : null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchFearGreedData(): Promise<string | null> {
+  try {
+    const data = await fetchFearGreedIndex(7);
+    const c = data.current;
+    const lines = [
+      `## Market Sentiment (Fear & Greed Index)`,
+      `Current: ${c.value}/100 (${c.classification})`,
+    ];
+    if (data.previous) {
+      lines.push(`Previous: ${data.previous.value}/100 (${data.previous.classification})`);
+    }
+    if (data.history.length > 2) {
+      const weekAgo = data.history[data.history.length - 1];
+      if (weekAgo) {
+        lines.push(`7d ago: ${weekAgo.value}/100 (${weekAgo.classification})`);
+      }
+    }
+    return lines.join('\n');
+  } catch {
+    return null;
+  }
+}
+
+async function fetchDerivativesData(tokens: string[]): Promise<string | null> {
+  const symbols =
+    tokens.length > 0
+      ? tokens.slice(0, 3).map((t) => {
+          // Convert geckoId-style names to ticker symbols
+          if (t === 'bitcoin' || t === 'btc') return 'BTC';
+          if (t === 'ethereum' || t === 'eth') return 'ETH';
+          if (t === 'solana' || t === 'sol') return 'SOL';
+          return t.toUpperCase();
+        })
+      : ['BTC', 'ETH'];
+
+  try {
+    const lines: string[] = ['## Derivatives Data (Binance Futures)'];
+    let hasData = false;
+
+    const results = await Promise.allSettled(
+      symbols.map(async (sym) => {
+        const [funding, oi] = await Promise.allSettled([
+          fetchFundingRate(sym),
+          fetchOpenInterest(sym),
+        ]);
+        return { sym, funding, oi };
+      }),
+    );
+
+    for (const result of results) {
+      if (result.status !== 'fulfilled') continue;
+      const { sym, funding, oi } = result.value;
+
+      const parts: string[] = [`${sym}:`];
+      if (funding.status === 'fulfilled') {
+        const f = funding.value;
+        parts.push(`Funding: ${(f.fundingRate * 100).toFixed(4)}%`);
+        parts.push(`Mark: $${f.markPrice.toLocaleString()}`);
+      }
+      if (oi.status === 'fulfilled') {
+        const o = oi.value;
+        parts.push(`OI: $${(o.notionalValue / 1e9).toFixed(2)}B`);
+      }
+      if (parts.length > 1) {
+        lines.push(`  ${parts.join(' | ')}`);
+        hasData = true;
+      }
+    }
+
+    return hasData ? lines.join('\n') : null;
   } catch {
     return null;
   }

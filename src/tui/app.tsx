@@ -15,12 +15,21 @@ import { StreamingText } from './components/streaming-text.js';
 import type { Message } from './components/message-list.js';
 import { useAIStream } from './hooks/use-ai-stream.js';
 import { useCommand } from './hooks/use-command.js';
+import { usePriceTicker } from './hooks/use-price-ticker.js';
 import { isSlashCommand, parseCommand } from './commands.js';
 import { loadConfig, getConfig } from '../config/loader.js';
-import { DEFAULT_CHAIN } from '../config/constants.js';
+import { DEFAULT_CHAIN, CHAIN_REGISTRY, KNOWN_SYMBOLS } from '../config/constants.js';
 import { setConfig, setToolHandler, getProvider } from '../ai/client.js';
 import { VIZZOR_TOOLS } from '../ai/tools.js';
 import { getAdapter } from '../chains/registry.js';
+import {
+  isValidSymbol,
+  fetchTickerPrice,
+  fetchFundingRate,
+  fetchOpenInterest,
+} from '../data/sources/binance.js';
+import { checkTokenSecurity } from '../data/sources/goplus.js';
+import { fetchFearGreedIndex } from '../data/sources/fear-greed.js';
 import { analyzeWallet } from '../core/forensics/wallet-analyzer.js';
 import { detectRugIndicators } from '../core/forensics/rug-detector.js';
 import { fetchMarketData, fetchTokenFromDex, fetchTrendingTokens } from '../core/trends/market.js';
@@ -87,11 +96,29 @@ async function handleTool(name: string, input: unknown): Promise<unknown> {
 
     case 'get_market_data': {
       const symbol = String(params['symbol'] ?? '');
-      const data = await fetchMarketData(symbol);
-      if (!data) {
-        return { error: `No market data found for "${symbol}"` };
+      // Try Binance first (reliable, no rate limits), enrich with CoinGecko
+      try {
+        const binance = await fetchTickerPrice(symbol);
+        const gecko = await fetchMarketData(symbol).catch(() => null);
+        return {
+          symbol: binance.symbol,
+          name: gecko?.name ?? binance.symbol,
+          price: binance.price,
+          priceChange24h: binance.change24h,
+          priceChange7d: gecko?.priceChange7d ?? null,
+          volume24h: gecko?.volume24h ?? null,
+          marketCap: gecko?.marketCap ?? null,
+          rank: gecko?.rank ?? null,
+          source: 'binance+coingecko',
+        };
+      } catch {
+        // Fallback to CoinGecko only
+        const data = await fetchMarketData(symbol);
+        if (!data) {
+          return { error: `No market data found for "${symbol}"` };
+        }
+        return data;
       }
-      return data;
     }
 
     case 'search_upcoming_icos': {
@@ -184,6 +211,70 @@ async function handleTool(name: string, input: unknown): Promise<unknown> {
       };
     }
 
+    case 'get_token_security': {
+      const address = String(params['address'] ?? '');
+      const chain = String(params['chain'] ?? 'ethereum');
+      const security = await checkTokenSecurity(address, chain);
+      if (!security) {
+        return { error: `No security data for ${address} on ${chain}` };
+      }
+      return {
+        contractAddress: security.contractAddress,
+        chain: security.chain,
+        riskLevel: security.riskLevel,
+        isHoneypot: security.isHoneypot,
+        isMintable: security.isMintable,
+        buyTax: security.buyTax,
+        sellTax: security.sellTax,
+        isOpenSource: security.isOpenSource,
+        isProxy: security.isProxy,
+        hiddenOwner: security.hiddenOwner,
+        cannotBuy: security.cannotBuy,
+        cannotSellAll: security.cannotSellAll,
+        isBlacklisted: security.isBlacklisted,
+        holderCount: security.holderCount,
+        lpHolderCount: security.lpHolderCount,
+        creatorPercent: security.creatorPercent,
+        ownerPercent: security.ownerPercent,
+        trustList: security.trustList,
+      };
+    }
+
+    case 'get_fear_greed': {
+      const data = await fetchFearGreedIndex(7);
+      return {
+        current: { value: data.current.value, classification: data.current.classification },
+        previous: data.previous
+          ? { value: data.previous.value, classification: data.previous.classification }
+          : null,
+        history: data.history.map((h) => ({
+          value: h.value,
+          classification: h.classification,
+          date: new Date(h.timestamp * 1000).toISOString().split('T')[0],
+        })),
+      };
+    }
+
+    case 'get_derivatives_data': {
+      const symbol = String(params['symbol'] ?? 'BTC');
+      const [fundingResult, oiResult] = await Promise.allSettled([
+        fetchFundingRate(symbol),
+        fetchOpenInterest(symbol),
+      ]);
+
+      const result: Record<string, unknown> = { symbol: symbol.toUpperCase() };
+      if (fundingResult.status === 'fulfilled') {
+        result['fundingRate'] = fundingResult.value.fundingRate;
+        result['fundingRatePct'] = `${(fundingResult.value.fundingRate * 100).toFixed(4)}%`;
+        result['markPrice'] = fundingResult.value.markPrice;
+      }
+      if (oiResult.status === 'fulfilled') {
+        result['openInterest'] = oiResult.value.openInterest;
+        result['openInterestNotional'] = oiResult.value.notionalValue;
+      }
+      return result;
+    }
+
     default:
       return { error: `Unknown tool: ${name}` };
   }
@@ -204,8 +295,8 @@ function App(): React.JSX.Element {
   const [chainName, setChainName] = useState(DEFAULT_CHAIN);
 
   const { streamingText, isStreaming, activeTools, completedTools, sendMessage } = useAIStream();
-
   const { isExecuting, executeSlashCommand } = useCommand();
+  const ticker = usePriceTicker();
 
   // -----------------------------------------------------------------------
   // Initialisation: load config, set up AI client and tool handler
@@ -247,7 +338,7 @@ function App(): React.JSX.Element {
       if (showBanner) setShowBanner(false);
 
       if (isSlashCommand(input)) {
-        const { name } = parseCommand(input);
+        const { name, args } = parseCommand(input);
 
         // Special commands handled directly by the app
         if (name === 'clear') {
@@ -257,6 +348,123 @@ function App(): React.JSX.Element {
         }
         if (name === 'exit') {
           process.exit(0);
+        }
+
+        // /add <symbol> — add a crypto to the price ticker
+        if (name === 'add') {
+          const sym = args[0]?.toUpperCase();
+          if (!sym) {
+            setMessages((prev) => [
+              ...prev,
+              {
+                role: 'assistant',
+                content: 'Usage: /add <symbol>  (e.g. /add DOGE)',
+                timestamp: new Date(),
+              },
+            ]);
+            return;
+          }
+          const geckoId = KNOWN_SYMBOLS[sym.toLowerCase()] ?? sym.toLowerCase();
+          setIsProcessing(true);
+          isValidSymbol(sym)
+            .then((valid) => {
+              if (valid) {
+                ticker.addSymbol(geckoId, sym);
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    role: 'assistant',
+                    content: `Added ${sym} to price ticker.`,
+                    timestamp: new Date(),
+                  },
+                ]);
+              } else {
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    role: 'assistant',
+                    content: `Symbol "${sym}" not found on Binance.`,
+                    timestamp: new Date(),
+                  },
+                ]);
+              }
+            })
+            .catch(() => {
+              setMessages((prev) => [
+                ...prev,
+                {
+                  role: 'assistant',
+                  content: `Failed to validate symbol "${sym}".`,
+                  timestamp: new Date(),
+                },
+              ]);
+            })
+            .finally(() => setIsProcessing(false));
+          return;
+        }
+
+        // /remove <symbol> — remove a crypto from the price ticker
+        if (name === 'remove') {
+          const sym = args[0]?.toUpperCase();
+          if (!sym) {
+            setMessages((prev) => [
+              ...prev,
+              { role: 'assistant', content: 'Usage: /remove <symbol>', timestamp: new Date() },
+            ]);
+            return;
+          }
+          const geckoId = KNOWN_SYMBOLS[sym.toLowerCase()] ?? sym.toLowerCase();
+          ticker.removeSymbol(geckoId);
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: 'assistant',
+              content: `Removed ${sym} from price ticker.`,
+              timestamp: new Date(),
+            },
+          ]);
+          return;
+        }
+
+        // /chain [chainId] — switch or list chains
+        if (name === 'chain') {
+          const target = args[0]?.toLowerCase();
+          if (!target) {
+            const lines = CHAIN_REGISTRY.map(
+              (c) => `  ${c.icon} ${c.name} (${c.id})${c.id === chainName ? ' *' : ''}`,
+            );
+            setMessages((prev) => [
+              ...prev,
+              {
+                role: 'assistant',
+                content: `Available chains:\n${lines.join('\n')}\n\nUsage: /chain <id>`,
+                timestamp: new Date(),
+              },
+            ]);
+            return;
+          }
+          const meta = CHAIN_REGISTRY.find((c) => c.id === target);
+          if (!meta) {
+            setMessages((prev) => [
+              ...prev,
+              {
+                role: 'assistant',
+                content: `Unknown chain "${target}". Available: ${CHAIN_REGISTRY.map((c) => c.id).join(', ')}`,
+                timestamp: new Date(),
+              },
+            ]);
+            return;
+          }
+          setChainName(meta.id);
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: 'assistant',
+              content: `${meta.icon} Switched to ${meta.name}.`,
+              timestamp: new Date(),
+            },
+          ]);
+          return;
         }
 
         // All other slash commands — fire-and-forget the async work
@@ -317,7 +525,7 @@ function App(): React.JSX.Element {
       <StatusBar provider={providerName} chain={chainName} connected />
 
       {/* Live price ticker */}
-      <PriceTicker />
+      <PriceTicker ticker={ticker} onAddPress={undefined} />
 
       {/* Compact banner — hides after first message */}
       {showBanner && <WelcomeBanner />}

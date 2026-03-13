@@ -177,4 +177,48 @@ export const VIZZOR_TOOLS: AITool[] = [
       required: [],
     },
   },
+  {
+    name: 'get_token_security',
+    description:
+      'Check token security via GoPlus API. Returns honeypot detection, tax analysis, mint/pause/blacklist capabilities, holder stats, and overall risk level. No API key required.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        address: {
+          type: 'string',
+          description: 'The token contract address.',
+        },
+        chain: {
+          type: 'string',
+          description: 'The blockchain (e.g. "ethereum", "bsc", "polygon", "arbitrum", "base").',
+        },
+      },
+      required: ['address', 'chain'],
+    },
+  },
+  {
+    name: 'get_fear_greed',
+    description:
+      'Get the current Crypto Fear & Greed Index with 7-day history. Values: 0-20 Extreme Fear, 21-40 Fear, 41-60 Neutral, 61-80 Greed, 81-100 Extreme Greed.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: 'get_derivatives_data',
+    description:
+      'Get derivatives data from Binance Futures: funding rate, open interest, and mark price for a trading pair. Useful for sentiment analysis and market positioning.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        symbol: {
+          type: 'string',
+          description: 'The token symbol (e.g. "BTC", "ETH", "SOL").',
+        },
+      },
+      required: ['symbol'],
+    },
+  },
 ];
