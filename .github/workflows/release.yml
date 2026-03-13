@@ -51,7 +51,9 @@ jobs:
       - name: Set version from tag
         run: npm version ${{ github.ref_name }} --no-git-tag-version --allow-same-version
       - run: pnpm build
-      - run: pnpm publish --access public --no-git-checks
+      - name: Publish to npm
+        run: pnpm publish --access public --no-git-checks
+        continue-on-error: true
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
