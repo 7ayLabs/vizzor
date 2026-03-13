@@ -205,6 +205,7 @@ vizzor config init                  # Initialize config
 vizzor config set <key> <value>     # Set config value
 vizzor config show                  # Show config
 vizzor bot start [options]          # Start Discord/Telegram bots
+vizzor bot validate                 # Check bot token configuration
 ```
 
 ### TUI Slash Commands
@@ -235,6 +236,20 @@ vizzor bot start [options]          # Start Discord/Telegram bots
 | `/exit` | Quit |
 
 **Price Ticker:** Arrow keys to navigate, **Enter** to trigger full AI prediction for any token, **Tab** to toggle focus.
+
+### Discord Bot
+
+| Command | Description |
+|---------|-------------|
+| `/scan <address>` | Token security + risk scan |
+| `/trends` | Trending tokens + market data |
+| `/track <wallet>` | Wallet forensics |
+| `/ico` | Upcoming launches and rounds |
+| `/audit <contract>` | Contract audit |
+| `/help` | Show all commands |
+| *@mention* | AI chat guidance |
+
+**Setup**: Enable the `MESSAGE_CONTENT` privileged intent in the [Discord Developer Portal](https://discord.com/developers/applications) for @mention responses.
 
 ### Telegram Bot
 

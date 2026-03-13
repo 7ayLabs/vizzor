@@ -115,6 +115,14 @@ botCmd
     await handleBotStart(options);
   });
 
+botCmd
+  .command('validate')
+  .description('Check bot token configuration')
+  .action(async () => {
+    const { handleBotValidate } = await import('./cli/commands/bot.js');
+    handleBotValidate();
+  });
+
 // If no arguments provided, launch interactive TUI
 const args = process.argv.slice(2);
 if (args.length === 0) {

@@ -1,9 +1,10 @@
 import { Client, GatewayIntentBits, REST, Routes, type Interaction } from 'discord.js';
-import { getConfig } from '../config/loader.js';
+import { loadConfig } from '../config/loader.js';
 import { registerSlashCommands, handleSlashCommand } from './commands/index.js';
+import { startRateLimitCleanup } from './middleware/rate-limit.js';
 
 export async function startDiscordBot(): Promise<void> {
-  const config = getConfig();
+  const config = loadConfig();
   const token = config.discordToken;
 
   if (!token) {
@@ -11,8 +12,15 @@ export async function startDiscordBot(): Promise<void> {
   }
 
   const client = new Client({
-    intents: [GatewayIntentBits.Guilds],
+    intents: [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMessages,
+      GatewayIntentBits.MessageContent,
+    ],
   });
+
+  // Start periodic rate-limit cleanup
+  startRateLimitCleanup();
 
   client.once('ready', async (readyClient) => {
     console.log(`Discord bot logged in as ${readyClient.user.tag}`);
@@ -37,6 +45,18 @@ export async function startDiscordBot(): Promise<void> {
   client.on('interactionCreate', async (interaction: Interaction) => {
     if (!interaction.isChatInputCommand()) return;
     await handleSlashCommand(interaction);
+  });
+
+  // Freetext handler — respond to @mentions with guidance
+  client.on('messageCreate', async (message) => {
+    if (message.author.bot) return;
+    if (!client.user || !message.mentions.has(client.user)) return;
+
+    await message.reply(
+      'Use slash commands for on-chain intelligence:\n' +
+        '`/scan` `/trends` `/track` `/ico` `/audit` `/help`\n\n' +
+        'For full AI-powered predictions, run `vizzor` in your terminal.',
+    );
   });
 
   await client.login(token);
