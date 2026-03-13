@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { render, Box, Text, Static } from 'ink';
+import { render, Box, Text, Static, useInput } from 'ink';
 import { StatusBar } from './components/status-bar.js';
 import { PriceTicker } from './components/price-ticker.js';
 import { WelcomeBanner } from './components/welcome-banner.js';
@@ -293,10 +293,48 @@ function App(): React.JSX.Element {
   const [clearEpoch, setClearEpoch] = useState(0);
   const [providerName, setProviderName] = useState('ollama');
   const [chainName, setChainName] = useState(DEFAULT_CHAIN);
+  const [tickerFocused, setTickerFocused] = useState(false);
 
   const { streamingText, isStreaming, activeTools, completedTools, sendMessage } = useAIStream();
   const { isExecuting, executeSlashCommand } = useCommand();
   const ticker = usePriceTicker();
+
+  // -----------------------------------------------------------------------
+  // Ticker keyboard navigation (Tab to focus, arrows to navigate, Enter to analyze)
+  // -----------------------------------------------------------------------
+  useInput(
+    (input, key) => {
+      if (key.tab) {
+        if (tickerFocused) {
+          setTickerFocused(false);
+          ticker.clearSelection();
+        } else {
+          setTickerFocused(true);
+        }
+        return;
+      }
+      if (!tickerFocused) return;
+      if (key.rightArrow) {
+        ticker.selectNext();
+      } else if (key.leftArrow) {
+        ticker.selectPrev();
+      } else if (key.return) {
+        const selected = ticker.getSelected();
+        if (selected && !isProcessing && !isStreaming) {
+          setTickerFocused(false);
+          ticker.clearSelection();
+          const msg = `Analyze ${selected.symbol} with full prediction`;
+          setMessages((prev) => [...prev, { role: 'user', content: msg, timestamp: new Date() }]);
+          setIsProcessing(true);
+          sendMessage(msg);
+        }
+      } else if (key.escape || input === 'q') {
+        setTickerFocused(false);
+        ticker.clearSelection();
+      }
+    },
+    { isActive: true },
+  );
 
   // -----------------------------------------------------------------------
   // Initialisation: load config, set up AI client and tool handler
@@ -514,7 +552,7 @@ function App(): React.JSX.Element {
   // -----------------------------------------------------------------------
   // Determine whether the input should be disabled
   // -----------------------------------------------------------------------
-  const inputDisabled = isProcessing || isStreaming || isExecuting;
+  const inputDisabled = isProcessing || isStreaming || isExecuting || tickerFocused;
 
   // -----------------------------------------------------------------------
   // Render
@@ -524,8 +562,8 @@ function App(): React.JSX.Element {
       {/* Status bar */}
       <StatusBar provider={providerName} chain={chainName} connected />
 
-      {/* Live price ticker */}
-      <PriceTicker ticker={ticker} onAddPress={undefined} />
+      {/* Live price ticker — Tab to focus, arrows to navigate, Enter to analyze */}
+      <PriceTicker ticker={ticker} focused={tickerFocused} onAddPress={undefined} />
 
       {/* Compact banner — hides after first message */}
       {showBanner && <WelcomeBanner />}
