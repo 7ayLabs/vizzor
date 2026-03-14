@@ -1,0 +1,297 @@
+{
+  "name": "06 — Anomaly Analysis (Webhook)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "anomaly-analysis",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "f1b2c3d4-0006-4000-8000-000000000001",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "anomaly-analysis-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst address = body.address || body.token || body.contract;\nconst chain = body.chain || 'ethereum';\n\nif (!address) {\n  throw new Error('Missing address/token/contract in request body');\n}\n\nreturn [{ json: { address, chain } }];"
+      },
+      "id": "f1b2c3d4-0006-4000-8000-000000000002",
+      "name": "Parse Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://vizzor-api:3000/v1/scanner/rug-check",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "address",
+              "value": "={{ $json.address }}"
+            },
+            {
+              "name": "chain",
+              "value": "={{ $json.chain }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "f1b2c3d4-0006-4000-8000-000000000003",
+      "name": "Rug Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 100]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://vizzor-api:3000/v1/forensics/wallet",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "address",
+              "value": "={{ $json.address }}"
+            },
+            {
+              "name": "chain",
+              "value": "={{ $json.chain }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "f1b2c3d4-0006-4000-8000-000000000004",
+      "name": "Wallet Analysis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 260]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ml-sidecar:8000/analyze",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "address",
+              "value": "={{ $json.address }}"
+            },
+            {
+              "name": "chain",
+              "value": "={{ $json.chain }}"
+            },
+            {
+              "name": "type",
+              "value": "anomaly"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "f1b2c3d4-0006-4000-8000-000000000005",
+      "name": "ML Analysis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 420]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://vizzor-api:3000/v1/market/dex-search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "address",
+              "value": "={{ $json.address }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "f1b2c3d4-0006-4000-8000-000000000006",
+      "name": "DEX Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 580]
+    },
+    {
+      "parameters": {
+        "jsCode": "const rugCheck = $('Rug Check').first().json;\nconst wallet = $('Wallet Analysis').first().json;\nconst ml = $('ML Analysis').first().json;\nconst dex = $('DEX Search').first().json;\nconst address = $('Parse Request').first().json.address;\nconst chain = $('Parse Request').first().json.chain;\n\nconst riskScore = rugCheck.riskScore || rugCheck.risk_score || 0;\nconst riskLevel = riskScore >= 80 ? 'CRITICAL' : riskScore >= 60 ? 'HIGH' : riskScore >= 40 ? 'MEDIUM' : 'LOW';\n\nlet report = `ANOMALY ANALYSIS REPORT\\n`;\nreport += `${'='.repeat(35)}\\n\\n`;\nreport += `Address: ${address}\\n`;\nreport += `Chain: ${chain}\\n`;\nreport += `Risk Level: ${riskLevel} (${riskScore}/100)\\n\\n`;\n\n// Rug check findings\nreport += `RUG CHECK\\n`;\nconst flags = rugCheck.flags || rugCheck.warnings || [];\nif (flags.length > 0) {\n  for (const f of flags) report += `  ! ${typeof f === 'string' ? f : f.message || f.flag}\\n`;\n} else {\n  report += `  No rug indicators found.\\n`;\n}\n\n// Wallet analysis\nreport += `\\nWALLET FORENSICS\\n`;\nreport += `  Top holders concentrated: ${wallet.topHoldersConcentrated ? 'YES' : 'No'}\\n`;\nreport += `  Suspicious transfers: ${wallet.suspiciousTransfers || 0}\\n`;\nreport += `  Related wallets: ${(wallet.relatedWallets || []).length}\\n`;\n\n// ML analysis\nreport += `\\nML ANALYSIS\\n`;\nreport += `  Anomaly score: ${(ml.anomalyScore || ml.score || 0).toFixed(3)}\\n`;\nreport += `  Classification: ${ml.classification || ml.label || 'N/A'}\\n`;\nreport += `  Confidence: ${((ml.confidence || 0) * 100).toFixed(1)}%\\n`;\n\n// DEX info\nconst pair = dex.pair || dex.pairs?.[0] || {};\nreport += `\\nDEX INFO\\n`;\nreport += `  Pair: ${pair.baseToken?.symbol || 'N/A'}/${pair.quoteToken?.symbol || 'N/A'}\\n`;\nreport += `  Liquidity: $${Number(pair.liquidity?.usd || 0).toLocaleString()}\\n`;\nreport += `  24h Volume: $${Number(pair.volume?.h24 || 0).toLocaleString()}\\n`;\n\nreturn [{\n  json: {\n    report,\n    riskLevel,\n    riskScore,\n    address,\n    chain,\n    chatId: process.env.TELEGRAM_ALERT_CHAT_ID || ''\n  }\n}];"
+      },
+      "id": "f1b2c3d4-0006-4000-8000-000000000007",
+      "name": "Compile Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 300]
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.report }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "f1b2c3d4-0006-4000-8000-000000000008",
+      "name": "Telegram Report",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1200, 200],
+      "credentials": {
+        "telegramApi": {
+          "id": "vizzor-tg",
+          "name": "Vizzor Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, riskLevel: $json.riskLevel, riskScore: $json.riskScore, report: $json.report }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "f1b2c3d4-0006-4000-8000-000000000009",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1200, 420]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Parse Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Request": {
+      "main": [
+        [
+          {
+            "node": "Rug Check",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Wallet Analysis",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "ML Analysis",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "DEX Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rug Check": {
+      "main": [
+        [
+          {
+            "node": "Compile Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wallet Analysis": {
+      "main": [
+        [
+          {
+            "node": "Compile Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ML Analysis": {
+      "main": [
+        [
+          {
+            "node": "Compile Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DEX Search": {
+      "main": [
+        [
+          {
+            "node": "Compile Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compile Report": {
+      "main": [
+        [
+          {
+            "node": "Telegram Report",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "anomaly"
+    },
+    {
+      "name": "forensics"
+    }
+  ],
+  "pinData": {},
+  "versionId": "06-anomaly-analysis-v1"
+}

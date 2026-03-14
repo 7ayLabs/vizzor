@@ -1,0 +1,179 @@
+{
+  "name": "01 — Data Collection (28 Pairs)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Every 5 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "pairs-list",
+              "name": "pairs",
+              "value": "={{ ['BTC/USDT','ETH/USDT','SOL/USDT','BNB/USDT','XRP/USDT','ADA/USDT','AVAX/USDT','DOT/USDT','MATIC/USDT','LINK/USDT','UNI/USDT','ATOM/USDT','LTC/USDT','FIL/USDT','APT/USDT','ARB/USDT','OP/USDT','SUI/USDT','NEAR/USDT','INJ/USDT','TIA/USDT','SEI/USDT','DOGE/USDT','SHIB/USDT','PEPE/USDT','WIF/USDT','BONK/USDT','RENDER/USDT'] }}",
+              "type": "array"
+            }
+          ]
+        }
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000002",
+      "name": "Set Pairs",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 7,
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000003",
+      "name": "Batch Pairs",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://vizzor-api:3000/v1/market/price",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "pairs",
+              "value": "={{ $json.pairs.join(',') }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000,
+          "fullResponse": false
+        }
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000004",
+      "name": "Fetch Prices",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst rows = [];\nconst now = new Date().toISOString();\n\nfor (const item of items) {\n  const data = item.json;\n  if (data && data.prices) {\n    for (const p of data.prices) {\n      rows.push({\n        json: {\n          pair: p.pair,\n          price: p.price,\n          volume_24h: p.volume24h || 0,\n          market_cap: p.marketCap || 0,\n          change_1h: p.change1h || 0,\n          change_24h: p.change24h || 0,\n          source: p.source || 'vizzor-api',\n          collected_at: now\n        }\n      });\n    }\n  }\n}\n\nreturn rows;"
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000005",
+      "name": "Transform Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "market_prices",
+        "columns": "pair, price, volume_24h, market_cap, change_1h, change_24h, source, collected_at",
+        "additionalFields": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000006",
+      "name": "Insert Postgres",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1340, 300],
+      "credentials": {
+        "postgres": {
+          "id": "vizzor-pg",
+          "name": "Vizzor Postgres"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every 5 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Set Pairs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Pairs": {
+      "main": [
+        [
+          {
+            "node": "Batch Pairs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Batch Pairs": {
+      "main": [
+        [
+          {
+            "node": "Fetch Prices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Prices": {
+      "main": [
+        [
+          {
+            "node": "Transform Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transform Rows": {
+      "main": [
+        [
+          {
+            "node": "Insert Postgres",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "data-collection"
+    },
+    {
+      "name": "market"
+    }
+  ],
+  "pinData": {},
+  "versionId": "01-data-collection-v1"
+}

@@ -24,9 +24,12 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY package.json ./
+COPY src/data/migrations/ src/data/migrations/
 
 USER vizzor
 ENV NODE_ENV=production
 
+EXPOSE 3000
+
 ENTRYPOINT ["node", "dist/index.js"]
-CMD ["bot", "start"]
+CMD ["serve", "--port", "3000"]
