@@ -143,6 +143,44 @@ collectCmd
     handleCollectStatus();
   });
 
+program
+  .command('serve')
+  .description('Start the REST API server')
+  .option('--port <port>', 'Server port', parseInt, 3000)
+  .option('--host <host>', 'Server host', '0.0.0.0')
+  .option('--auth', 'Enable API key authentication', false)
+  .action(async (options: { port: number; host: string; auth: boolean }) => {
+    const { handleServe } = await import('./cli/commands/serve.js');
+    await handleServe(options);
+  });
+
+const apiCmd = program.command('api').description('API management');
+const apiKeyCmd = apiCmd.command('key').description('API key management');
+
+apiKeyCmd
+  .command('create [label]')
+  .description('Generate a new API key')
+  .action(async (label: string) => {
+    const { handleApiKeyCreate } = await import('./cli/commands/api.js');
+    handleApiKeyCreate(label);
+  });
+
+apiKeyCmd
+  .command('list')
+  .description('List active API keys')
+  .action(async () => {
+    const { handleApiKeyList } = await import('./cli/commands/api.js');
+    handleApiKeyList();
+  });
+
+apiKeyCmd
+  .command('revoke <id>')
+  .description('Revoke an API key')
+  .action(async (id: string) => {
+    const { handleApiKeyRevoke } = await import('./cli/commands/api.js');
+    handleApiKeyRevoke(id);
+  });
+
 // If no arguments provided, launch interactive TUI
 const args = process.argv.slice(2);
 if (args.length === 0) {
