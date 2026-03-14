@@ -77,7 +77,7 @@ export const VIZZOR_TOOLS: AITool[] = [
   {
     name: 'get_market_data',
     description:
-      'Get current market data for a token including price, 24h volume, market cap, price change percentages, and circulating supply.',
+      'Get LIVE current market data for a token including price, 24h volume, market cap, price change percentages, and circulating supply. Returns real-time data — never quote prices from training data.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -96,7 +96,7 @@ export const VIZZOR_TOOLS: AITool[] = [
   {
     name: 'search_upcoming_icos',
     description:
-      'Search for upcoming ICOs, token launches, and fundraising rounds filtered by category and/or blockchain. Powered by DeFiLlama raises and Pump.fun launches.',
+      'Search for CURRENT upcoming ICOs, token launches, and fundraising rounds filtered by category, blockchain, or round type. Returns LIVE data from DeFiLlama raises and Pump.fun launches, updated daily. MUST call for any ICO/launch question — training data is stale.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -109,12 +109,37 @@ export const VIZZOR_TOOLS: AITool[] = [
           type: 'string',
           description: 'Filter by blockchain (e.g. "ethereum", "solana", "bsc").',
         },
+        roundType: {
+          type: 'string',
+          description:
+            'Filter by funding round type (e.g. "Seed", "Pre-Seed", "Series A", "Series B", "Token Launch").',
+        },
         limit: {
           type: 'number',
           description: 'Maximum number of results to return. Defaults to 10.',
         },
       },
       required: [],
+    },
+  },
+  {
+    name: 'get_funding_history',
+    description:
+      'Get complete funding history for a project by name. Returns all known fundraising rounds with amounts, investors, valuations, and dates. Also works for looking up an investor portfolio.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        name: {
+          type: 'string',
+          description: 'Project name or investor name to look up.',
+        },
+        type: {
+          type: 'string',
+          description:
+            'Type of lookup: "project" for project funding history, "investor" for investor portfolio. Defaults to "project".',
+        },
+      },
+      required: ['name'],
     },
   },
   {
@@ -135,7 +160,7 @@ export const VIZZOR_TOOLS: AITool[] = [
   {
     name: 'get_trending',
     description:
-      'Get currently trending and hot tokens from DexScreener (boosted tokens) and CoinGecko trending combined. Shows what the market is excited about right now.',
+      'Get REAL-TIME trending and hot tokens from DexScreener (boosted tokens) and CoinGecko trending combined. Returns what the market is excited about RIGHT NOW — trends change hourly. Always call for trending/hot token questions.',
     input_schema: {
       type: 'object' as const,
       properties: {},
@@ -145,7 +170,7 @@ export const VIZZOR_TOOLS: AITool[] = [
   {
     name: 'get_crypto_news',
     description:
-      'Get the latest crypto news with sentiment analysis for a specific token or the market in general. Powered by CryptoPanic.',
+      'Get LIVE latest crypto news with sentiment analysis for a specific token or the market in general. Returns current headlines from CryptoPanic — MUST call for news questions, training data is outdated.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -161,7 +186,7 @@ export const VIZZOR_TOOLS: AITool[] = [
   {
     name: 'get_raises',
     description:
-      'Get recent crypto fundraising rounds, venture capital investments, and token launches. Powered by DeFiLlama raises data.',
+      'Get LIVE recent crypto fundraising rounds, venture capital investments, and token launches. Returns CURRENT data updated daily from DeFiLlama — always call this for ICO/funding questions, never use training data.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -199,7 +224,7 @@ export const VIZZOR_TOOLS: AITool[] = [
   {
     name: 'get_fear_greed',
     description:
-      'Get the current Crypto Fear & Greed Index with 7-day history. Values: 0-20 Extreme Fear, 21-40 Fear, 41-60 Neutral, 61-80 Greed, 81-100 Extreme Greed.',
+      'Get the LIVE Crypto Fear & Greed Index with 7-day history (updated daily). Values: 0-20 Extreme Fear, 21-40 Fear, 41-60 Neutral, 61-80 Greed, 81-100 Extreme Greed. Call for any market sentiment question.',
     input_schema: {
       type: 'object' as const,
       properties: {},
@@ -209,7 +234,7 @@ export const VIZZOR_TOOLS: AITool[] = [
   {
     name: 'get_derivatives_data',
     description:
-      'Get derivatives data from Binance Futures: funding rate, open interest, and mark price for a trading pair. Useful for sentiment analysis and market positioning.',
+      'Get LIVE derivatives data from Binance Futures: funding rate (updates every 8h), open interest, and mark price for a trading pair. Essential for current market positioning analysis.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -219,6 +244,93 @@ export const VIZZOR_TOOLS: AITool[] = [
         },
       },
       required: ['symbol'],
+    },
+  },
+  {
+    name: 'get_technical_analysis',
+    description:
+      'Run technical analysis on a token: RSI, MACD, Bollinger Bands, EMA crossovers, ATR, OBV. Returns individual indicator signals and a composite direction with confidence.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        symbol: {
+          type: 'string',
+          description: 'The token symbol (e.g. "BTC", "ETH", "SOL").',
+        },
+        timeframe: {
+          type: 'string',
+          description: 'Kline interval: "1h", "4h", "1d". Defaults to "4h".',
+        },
+      },
+      required: ['symbol'],
+    },
+  },
+  {
+    name: 'get_prediction',
+    description:
+      'Generate a multi-signal composite prediction combining technical analysis (40%), sentiment (20%), derivatives (20%), trend (15%), and macro (5%). Returns direction, confidence, composite score, and reasoning.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        symbol: {
+          type: 'string',
+          description: 'The token symbol (e.g. "BTC", "ETH", "SOL").',
+        },
+      },
+      required: ['symbol'],
+    },
+  },
+  {
+    name: 'create_agent',
+    description:
+      'Create an autonomous trading agent that monitors crypto pairs using a strategy (momentum or trend-following). Returns the created agent config.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        name: {
+          type: 'string',
+          description: 'A unique name for the agent (e.g. "btc-momentum-bot").',
+        },
+        strategy: {
+          type: 'string',
+          description:
+            'Trading strategy: "momentum" (RSI+MACD) or "trend-following" (EMA crossover).',
+        },
+        pairs: {
+          type: 'string',
+          description: 'Comma-separated trading pairs (e.g. "BTC,ETH,SOL").',
+        },
+        interval: {
+          type: 'number',
+          description: 'Cycle interval in seconds. Defaults to 60.',
+        },
+      },
+      required: ['name', 'strategy', 'pairs'],
+    },
+  },
+  {
+    name: 'list_agents',
+    description:
+      'List all created trading agents with their status, strategy, and monitored pairs.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: 'get_agent_status',
+    description:
+      'Get detailed status of a trading agent including cycle count, last decision, and recent trade signals.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        name: {
+          type: 'string',
+          description: 'The agent name.',
+        },
+      },
+      required: ['name'],
     },
   },
 ];

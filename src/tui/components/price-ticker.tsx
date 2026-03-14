@@ -11,23 +11,37 @@ function formatPrice(price: number): string {
 
 interface PriceTickerProps {
   ticker: UsePriceTickerResult;
+  focused?: boolean;
+  onSelect?: (symbol: string) => void;
   onAddPress?: () => void;
 }
 
-export function PriceTicker({ ticker, onAddPress }: PriceTickerProps): React.JSX.Element {
-  const { entries, isRefreshing } = ticker;
+export function PriceTicker({
+  ticker,
+  focused = false,
+  onSelect: _onSelect,
+  onAddPress,
+}: PriceTickerProps): React.JSX.Element {
+  const { entries, isRefreshing, selectedIndex } = ticker;
 
   return (
     <Box
       borderStyle="single"
-      borderColor="gray"
+      borderColor={focused ? 'cyan' : 'gray'}
       borderLeft={false}
       borderRight={false}
       borderTop={false}
       paddingX={1}
       gap={3}
     >
-      {entries.map((entry) => {
+      {focused && (
+        <Text color="cyan" dimColor>
+          {'<'}
+        </Text>
+      )}
+      {entries.map((entry, idx) => {
+        const isSelected = focused && selectedIndex === idx;
+
         if (entry.loading) {
           return (
             <Box key={entry.geckoId} gap={1}>
@@ -51,7 +65,9 @@ export function PriceTicker({ ticker, onAddPress }: PriceTickerProps): React.JSX
         const prefix = entry.change24h >= 0 ? '+' : '';
         return (
           <Box key={entry.geckoId} gap={1}>
-            <Text bold>{entry.symbol}</Text>
+            <Text bold inverse={isSelected} color={isSelected ? 'cyan' : undefined}>
+              {isSelected ? `[${entry.symbol}]` : entry.symbol}
+            </Text>
             <Text>{formatPrice(entry.price)}</Text>
             <Text color={color}>
               {arrow}
@@ -61,6 +77,11 @@ export function PriceTicker({ ticker, onAddPress }: PriceTickerProps): React.JSX
           </Box>
         );
       })}
+      {focused && (
+        <Text color="cyan" dimColor>
+          {'>'}
+        </Text>
+      )}
       {isRefreshing && (
         <Text dimColor>
           <Spinner type="dots" />
@@ -71,6 +92,7 @@ export function PriceTicker({ ticker, onAddPress }: PriceTickerProps): React.JSX
           [+]
         </Text>
       )}
+      {focused && <Text dimColor>Tab:exit | Enter:analyze</Text>}
     </Box>
   );
 }

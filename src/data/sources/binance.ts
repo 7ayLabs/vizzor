@@ -243,6 +243,60 @@ export async function fetchOpenInterest(symbol: string): Promise<OpenInterest> {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Market overview
+// ---------------------------------------------------------------------------
+
+export interface Ticker24hr {
+  symbol: string;
+  price: number;
+  change24h: number;
+  volume: number;
+  quoteVolume: number;
+  highPrice: number;
+  lowPrice: number;
+}
+
+/**
+ * Fetch all USDT pairs sorted by 24h price change percentage.
+ * Returns the top N gainers and top N losers.
+ */
+export async function fetchTopGainersLosers(limit = 10): Promise<{
+  gainers: Ticker24hr[];
+  losers: Ticker24hr[];
+}> {
+  const data = await fetchJson<
+    {
+      symbol: string;
+      lastPrice: string;
+      priceChangePercent: string;
+      volume: string;
+      quoteVolume: string;
+      highPrice: string;
+      lowPrice: string;
+    }[]
+  >(`${BASE_URL}/ticker/24hr`);
+
+  const usdtPairs = data
+    .filter((t) => t.symbol.endsWith('USDT') && !t.symbol.includes('_'))
+    .map((t) => ({
+      symbol: t.symbol.replace('USDT', ''),
+      price: parseFloat(t.lastPrice),
+      change24h: parseFloat(t.priceChangePercent),
+      volume: parseFloat(t.volume),
+      quoteVolume: parseFloat(t.quoteVolume),
+      highPrice: parseFloat(t.highPrice),
+      lowPrice: parseFloat(t.lowPrice),
+    }))
+    .filter((t) => t.quoteVolume > 100_000); // filter dust pairs
+
+  const sorted = [...usdtPairs].sort((a, b) => b.change24h - a.change24h);
+  return {
+    gainers: sorted.slice(0, limit),
+    losers: sorted.slice(-limit).reverse(),
+  };
+}
+
 /**
  * Check if a symbol exists on Binance.
  */

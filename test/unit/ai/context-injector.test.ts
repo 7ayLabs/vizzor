@@ -89,7 +89,7 @@ describe('buildContextBlock', () => {
   it('includes critical instructions for AI', async () => {
     const result = await buildContextBlock('bitcoin price');
     expect(result).toContain('CRITICAL INSTRUCTIONS');
-    expect(result).toContain('do NOT make something up');
+    expect(result).toContain('Do NOT invent or fabricate');
   });
 
   it('detects price keywords and fetches token data', async () => {

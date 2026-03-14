@@ -76,14 +76,6 @@ program
     await handleAudit(contract, options);
   });
 
-program
-  .command('chat')
-  .description('Conversational AI mode')
-  .action(async () => {
-    const { handleChat } = await import('./cli/commands/chat.js');
-    await handleChat();
-  });
-
 const configCmd = program.command('config').description('Configuration management');
 
 configCmd
@@ -121,6 +113,34 @@ botCmd
   .action(async (options: { discord: boolean; telegram: boolean; all: boolean }) => {
     const { handleBotStart } = await import('./cli/commands/bot.js');
     await handleBotStart(options);
+  });
+
+botCmd
+  .command('validate')
+  .description('Check bot token configuration')
+  .action(async () => {
+    const { handleBotValidate } = await import('./cli/commands/bot.js');
+    handleBotValidate();
+  });
+
+const collectCmd = program.command('collect').description('Data collection pipeline');
+
+collectCmd
+  .command('start')
+  .description('Start background OHLCV data collection (requires PostgreSQL)')
+  .option('--symbols <symbols>', 'Comma-separated symbols to collect (default: 23 major pairs)')
+  .option('--interval <seconds>', 'Collection interval in seconds (default: 300)', parseInt)
+  .action(async (options: { symbols?: string; interval?: number }) => {
+    const { handleCollectStart } = await import('./cli/commands/collect.js');
+    await handleCollectStart(options);
+  });
+
+collectCmd
+  .command('status')
+  .description('Show data collection status')
+  .action(async () => {
+    const { handleCollectStatus } = await import('./cli/commands/collect.js');
+    handleCollectStatus();
   });
 
 // If no arguments provided, launch interactive TUI

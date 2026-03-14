@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { render, Box, Text, Static } from 'ink';
+import { render, Box, Text, Static, useInput } from 'ink';
 import { StatusBar } from './components/status-bar.js';
 import { PriceTicker } from './components/price-ticker.js';
 import { WelcomeBanner } from './components/welcome-banner.js';
@@ -17,268 +17,12 @@ import { useAIStream } from './hooks/use-ai-stream.js';
 import { useCommand } from './hooks/use-command.js';
 import { usePriceTicker } from './hooks/use-price-ticker.js';
 import { isSlashCommand, parseCommand } from './commands.js';
-import { loadConfig, getConfig } from '../config/loader.js';
+import { loadConfig } from '../config/loader.js';
 import { DEFAULT_CHAIN, CHAIN_REGISTRY, KNOWN_SYMBOLS } from '../config/constants.js';
 import { setConfig, setToolHandler, getProvider } from '../ai/client.js';
+import { handleTool } from '../ai/tool-handler.js';
 import { VIZZOR_TOOLS } from '../ai/tools.js';
-import { getAdapter } from '../chains/registry.js';
-import {
-  isValidSymbol,
-  fetchTickerPrice,
-  fetchFundingRate,
-  fetchOpenInterest,
-} from '../data/sources/binance.js';
-import { checkTokenSecurity } from '../data/sources/goplus.js';
-import { fetchFearGreedIndex } from '../data/sources/fear-greed.js';
-import { analyzeWallet } from '../core/forensics/wallet-analyzer.js';
-import { detectRugIndicators } from '../core/forensics/rug-detector.js';
-import { fetchMarketData, fetchTokenFromDex, fetchTrendingTokens } from '../core/trends/market.js';
-import { fetchUpcomingICOs, searchICOs } from '../core/scanner/ico-tracker.js';
-import { fetchCryptoNews } from '../data/sources/cryptopanic.js';
-import { fetchRecentRaises } from '../data/sources/defillama.js';
-
-// ---------------------------------------------------------------------------
-// Tool handler — bridges Claude tool-use to Vizzor core modules
-// ---------------------------------------------------------------------------
-
-async function handleTool(name: string, input: unknown): Promise<unknown> {
-  const params = input as Record<string, unknown>;
-
-  switch (name) {
-    case 'get_token_info': {
-      const address = String(params['address'] ?? '');
-      const chain = String(params['chain'] ?? DEFAULT_CHAIN);
-      const adapter = getAdapter(chain);
-      await adapter.connect(undefined, getConfig().etherscanApiKey);
-      const info = await adapter.getTokenInfo(address);
-      return {
-        address: info.address,
-        name: info.name,
-        symbol: info.symbol,
-        decimals: info.decimals,
-        totalSupply: info.totalSupply.toString(),
-      };
-    }
-
-    case 'analyze_wallet': {
-      const address = String(params['address'] ?? '');
-      const chain = String(params['chain'] ?? DEFAULT_CHAIN);
-      const adapter = getAdapter(chain);
-      await adapter.connect(undefined, getConfig().etherscanApiKey);
-      const analysis = await analyzeWallet(address, adapter);
-      return {
-        address: analysis.address,
-        chain: analysis.chain,
-        balance: analysis.balance.toString(),
-        transactionCount: analysis.transactionCount,
-        riskLevel: analysis.riskLevel,
-        patterns: analysis.patterns,
-      };
-    }
-
-    case 'check_rug_indicators': {
-      const address = String(params['address'] ?? '');
-      const chain = String(params['chain'] ?? DEFAULT_CHAIN);
-      const adapter = getAdapter(chain);
-      await adapter.connect(undefined, getConfig().etherscanApiKey);
-      const indicators = await detectRugIndicators(address, adapter);
-      return {
-        isHoneypot: indicators.isHoneypot,
-        hasLiquidityLock: indicators.hasLiquidityLock,
-        ownerCanMint: indicators.ownerCanMint,
-        ownerCanPause: indicators.ownerCanPause,
-        hasBlacklist: indicators.hasBlacklist,
-        highSellTax: indicators.highSellTax,
-        riskScore: indicators.riskScore,
-        details: indicators.details,
-      };
-    }
-
-    case 'get_market_data': {
-      const symbol = String(params['symbol'] ?? '');
-      // Try Binance first (reliable, no rate limits), enrich with CoinGecko
-      try {
-        const binance = await fetchTickerPrice(symbol);
-        const gecko = await fetchMarketData(symbol).catch(() => null);
-        return {
-          symbol: binance.symbol,
-          name: gecko?.name ?? binance.symbol,
-          price: binance.price,
-          priceChange24h: binance.change24h,
-          priceChange7d: gecko?.priceChange7d ?? null,
-          volume24h: gecko?.volume24h ?? null,
-          marketCap: gecko?.marketCap ?? null,
-          rank: gecko?.rank ?? null,
-          source: 'binance+coingecko',
-        };
-      } catch {
-        // Fallback to CoinGecko only
-        const data = await fetchMarketData(symbol);
-        if (!data) {
-          return { error: `No market data found for "${symbol}"` };
-        }
-        return data;
-      }
-    }
-
-    case 'search_upcoming_icos': {
-      const category = params['category'] ? String(params['category']) : undefined;
-      const chain = params['chain'] ? String(params['chain']) : undefined;
-      const projects =
-        category || chain
-          ? await searchICOs(undefined, category, chain)
-          : await fetchUpcomingICOs();
-      return { projects };
-    }
-
-    case 'search_token_dex': {
-      const query = String(params['query'] ?? '');
-      const pairs = await fetchTokenFromDex(query);
-      return {
-        results: pairs.slice(0, 5).map((p) => ({
-          name: p.baseToken.name,
-          symbol: p.baseToken.symbol,
-          chain: p.chainId,
-          dex: p.dexId,
-          priceUsd: p.priceUsd,
-          volume24h: p.volume?.h24 ?? 0,
-          liquidity: p.liquidity?.usd ?? 0,
-          priceChange24h: p.priceChange?.h24 ?? 0,
-          marketCap: p.marketCap ?? p.fdv ?? null,
-          buys24h: p.txns?.h24?.buys ?? 0,
-          sells24h: p.txns?.h24?.sells ?? 0,
-          pairAddress: p.pairAddress,
-          url: p.url,
-        })),
-      };
-    }
-
-    case 'get_trending': {
-      const trending = await fetchTrendingTokens();
-      return {
-        trending: trending.slice(0, 10).map((t) => ({
-          name: t.name,
-          symbol: t.symbol,
-          chain: t.chain,
-          priceUsd: t.priceUsd,
-          priceChange24h: t.priceChange24h,
-          volume24h: t.volume24h,
-          marketCap: t.marketCap,
-          source: t.source,
-          url: t.url,
-        })),
-      };
-    }
-
-    case 'get_crypto_news': {
-      const symbol = params['symbol'] ? String(params['symbol']) : undefined;
-      const news = await fetchCryptoNews(symbol, getConfig().cryptopanicApiKey);
-      return {
-        news: news.slice(0, 10).map((n) => ({
-          title: n.title,
-          sentiment: n.sentiment,
-          source: n.source.title,
-          publishedAt: n.publishedAt,
-          url: n.url,
-        })),
-      };
-    }
-
-    case 'get_raises': {
-      const raises = await fetchRecentRaises(30);
-      let filtered = raises;
-      if (params['category']) {
-        const cat = String(params['category']).toLowerCase();
-        filtered = filtered.filter(
-          (r) => r.category?.toLowerCase().includes(cat) || r.sector?.toLowerCase().includes(cat),
-        );
-      }
-      if (params['chain']) {
-        const ch = String(params['chain']).toLowerCase();
-        filtered = filtered.filter((r) => r.chains.some((c) => c.toLowerCase().includes(ch)));
-      }
-      return {
-        raises: filtered.slice(0, 10).map((r) => ({
-          name: r.name,
-          round: r.round,
-          amount: r.amount,
-          chains: r.chains,
-          sector: r.sector,
-          category: r.category,
-          leadInvestors: r.leadInvestors,
-          date: new Date(r.date * 1000).toISOString().split('T')[0],
-        })),
-      };
-    }
-
-    case 'get_token_security': {
-      const address = String(params['address'] ?? '');
-      const chain = String(params['chain'] ?? 'ethereum');
-      const security = await checkTokenSecurity(address, chain);
-      if (!security) {
-        return { error: `No security data for ${address} on ${chain}` };
-      }
-      return {
-        contractAddress: security.contractAddress,
-        chain: security.chain,
-        riskLevel: security.riskLevel,
-        isHoneypot: security.isHoneypot,
-        isMintable: security.isMintable,
-        buyTax: security.buyTax,
-        sellTax: security.sellTax,
-        isOpenSource: security.isOpenSource,
-        isProxy: security.isProxy,
-        hiddenOwner: security.hiddenOwner,
-        cannotBuy: security.cannotBuy,
-        cannotSellAll: security.cannotSellAll,
-        isBlacklisted: security.isBlacklisted,
-        holderCount: security.holderCount,
-        lpHolderCount: security.lpHolderCount,
-        creatorPercent: security.creatorPercent,
-        ownerPercent: security.ownerPercent,
-        trustList: security.trustList,
-      };
-    }
-
-    case 'get_fear_greed': {
-      const data = await fetchFearGreedIndex(7);
-      return {
-        current: { value: data.current.value, classification: data.current.classification },
-        previous: data.previous
-          ? { value: data.previous.value, classification: data.previous.classification }
-          : null,
-        history: data.history.map((h) => ({
-          value: h.value,
-          classification: h.classification,
-          date: new Date(h.timestamp * 1000).toISOString().split('T')[0],
-        })),
-      };
-    }
-
-    case 'get_derivatives_data': {
-      const symbol = String(params['symbol'] ?? 'BTC');
-      const [fundingResult, oiResult] = await Promise.allSettled([
-        fetchFundingRate(symbol),
-        fetchOpenInterest(symbol),
-      ]);
-
-      const result: Record<string, unknown> = { symbol: symbol.toUpperCase() };
-      if (fundingResult.status === 'fulfilled') {
-        result['fundingRate'] = fundingResult.value.fundingRate;
-        result['fundingRatePct'] = `${(fundingResult.value.fundingRate * 100).toFixed(4)}%`;
-        result['markPrice'] = fundingResult.value.markPrice;
-      }
-      if (oiResult.status === 'fulfilled') {
-        result['openInterest'] = oiResult.value.openInterest;
-        result['openInterestNotional'] = oiResult.value.notionalValue;
-      }
-      return result;
-    }
-
-    default:
-      return { error: `Unknown tool: ${name}` };
-  }
-}
+import { isValidSymbol } from '../data/sources/binance.js';
 
 // ---------------------------------------------------------------------------
 // App component
@@ -293,10 +37,48 @@ function App(): React.JSX.Element {
   const [clearEpoch, setClearEpoch] = useState(0);
   const [providerName, setProviderName] = useState('ollama');
   const [chainName, setChainName] = useState(DEFAULT_CHAIN);
+  const [tickerFocused, setTickerFocused] = useState(false);
 
   const { streamingText, isStreaming, activeTools, completedTools, sendMessage } = useAIStream();
   const { isExecuting, executeSlashCommand } = useCommand();
   const ticker = usePriceTicker();
+
+  // -----------------------------------------------------------------------
+  // Ticker keyboard navigation (Tab to focus, arrows to navigate, Enter to analyze)
+  // -----------------------------------------------------------------------
+  useInput(
+    (input, key) => {
+      if (key.tab) {
+        if (tickerFocused) {
+          setTickerFocused(false);
+          ticker.clearSelection();
+        } else {
+          setTickerFocused(true);
+        }
+        return;
+      }
+      if (!tickerFocused) return;
+      if (key.rightArrow) {
+        ticker.selectNext();
+      } else if (key.leftArrow) {
+        ticker.selectPrev();
+      } else if (key.return) {
+        const selected = ticker.getSelected();
+        if (selected && !isProcessing && !isStreaming) {
+          setTickerFocused(false);
+          ticker.clearSelection();
+          const msg = `Analyze ${selected.symbol} with full prediction`;
+          setMessages((prev) => [...prev, { role: 'user', content: msg, timestamp: new Date() }]);
+          setIsProcessing(true);
+          sendMessage(msg);
+        }
+      } else if (key.escape || input === 'q') {
+        setTickerFocused(false);
+        ticker.clearSelection();
+      }
+    },
+    { isActive: true },
+  );
 
   // -----------------------------------------------------------------------
   // Initialisation: load config, set up AI client and tool handler
@@ -514,7 +296,7 @@ function App(): React.JSX.Element {
   // -----------------------------------------------------------------------
   // Determine whether the input should be disabled
   // -----------------------------------------------------------------------
-  const inputDisabled = isProcessing || isStreaming || isExecuting;
+  const inputDisabled = isProcessing || isStreaming || isExecuting || tickerFocused;
 
   // -----------------------------------------------------------------------
   // Render
@@ -524,8 +306,8 @@ function App(): React.JSX.Element {
       {/* Status bar */}
       <StatusBar provider={providerName} chain={chainName} connected />
 
-      {/* Live price ticker */}
-      <PriceTicker ticker={ticker} onAddPress={undefined} />
+      {/* Live price ticker — Tab to focus, arrows to navigate, Enter to analyze */}
+      <PriceTicker ticker={ticker} focused={tickerFocused} onAddPress={undefined} />
 
       {/* Compact banner — hides after first message */}
       {showBanner && <WelcomeBanner />}

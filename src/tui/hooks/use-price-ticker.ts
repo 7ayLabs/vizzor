@@ -16,8 +16,13 @@ export interface TickerEntry {
 export interface UsePriceTickerResult {
   entries: TickerEntry[];
   isRefreshing: boolean;
+  selectedIndex: number | null;
   addSymbol: (geckoId: string, symbol: string) => void;
   removeSymbol: (geckoId: string) => void;
+  selectNext: () => void;
+  selectPrev: () => void;
+  clearSelection: () => void;
+  getSelected: () => TickerEntry | null;
 }
 
 export function usePriceTicker(): UsePriceTickerResult {
@@ -32,6 +37,7 @@ export function usePriceTicker(): UsePriceTickerResult {
     })),
   );
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastGoodRef = useRef<Map<string, { price: number; change24h: number }>>(new Map());
 
@@ -113,5 +119,44 @@ export function usePriceTicker(): UsePriceTickerResult {
     lastGoodRef.current.delete(geckoId);
   }, []);
 
-  return { entries, isRefreshing, addSymbol, removeSymbol };
+  const selectNext = useCallback((): void => {
+    setEntries((current) => {
+      setSelectedIndex((prev) => {
+        if (prev === null) return 0;
+        return prev < current.length - 1 ? prev + 1 : 0;
+      });
+      return current;
+    });
+  }, []);
+
+  const selectPrev = useCallback((): void => {
+    setEntries((current) => {
+      setSelectedIndex((prev) => {
+        if (prev === null) return current.length - 1;
+        return prev > 0 ? prev - 1 : current.length - 1;
+      });
+      return current;
+    });
+  }, []);
+
+  const clearSelection = useCallback((): void => {
+    setSelectedIndex(null);
+  }, []);
+
+  const getSelected = useCallback((): TickerEntry | null => {
+    if (selectedIndex === null) return null;
+    return entries[selectedIndex] ?? null;
+  }, [selectedIndex, entries]);
+
+  return {
+    entries,
+    isRefreshing,
+    selectedIndex,
+    addSymbol,
+    removeSymbol,
+    selectNext,
+    selectPrev,
+    clearSelection,
+    getSelected,
+  };
 }
