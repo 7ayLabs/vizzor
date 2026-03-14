@@ -281,6 +281,41 @@ export const VIZZOR_TOOLS: AITool[] = [
     },
   },
   {
+    name: 'get_ml_prediction',
+    description:
+      'Get an ML-enhanced prediction using LSTM/Random Forest models from the ML sidecar. Returns direction, probability, model confidence, and feature importance. Falls back to rule-based prediction if ML sidecar is unavailable.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        symbol: {
+          type: 'string',
+          description: 'The token symbol (e.g. "BTC", "ETH", "SOL").',
+        },
+      },
+      required: ['symbol'],
+    },
+  },
+  {
+    name: 'get_model_accuracy',
+    description:
+      'Get historical accuracy metrics for ML prediction models. Shows total predictions, accuracy percentage, and breakdown by direction (up/down/sideways).',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        model: {
+          type: 'string',
+          description:
+            'Model name (e.g. "lstm-predictor", "signal-classifier"). Defaults to "lstm-predictor".',
+        },
+        days: {
+          type: 'number',
+          description: 'Number of days to look back for accuracy stats. Defaults to 30.',
+        },
+      },
+      required: [],
+    },
+  },
+  {
     name: 'create_agent',
     description:
       'Create an autonomous trading agent that monitors crypto pairs using a strategy (momentum or trend-following). Returns the created agent config.',
