@@ -21,11 +21,11 @@ export function registerCommands(bot: Bot): void {
     ctx.reply(
       '*Welcome to Vizzor* — AI\\-powered crypto chronovisor\\.\n\n' +
         '*Commands:*\n' +
-        '/scan <address> — Analyze a project\n' +
+        '/scan \\<address\\> — Analyze a project\n' +
         '/trends — Trending tokens \\+ market movers\n' +
-        '/track <wallet> — Wallet forensics\n' +
+        '/track \\<wallet\\> — Wallet forensics\n' +
         '/ico — Upcoming ICOs \\& raises\n' +
-        '/audit <contract> — Smart contract audit\n' +
+        '/audit \\<contract\\> — Smart contract audit\n' +
         '/help — Show all commands',
       { parse_mode: 'MarkdownV2' },
     ),
@@ -34,11 +34,11 @@ export function registerCommands(bot: Bot): void {
   bot.command('help', (ctx) =>
     ctx.reply(
       '*Vizzor Commands*\n\n' +
-        '/scan <address> — Analyze token/project risk\n' +
-        '/track <wallet> — Wallet analysis \\& forensics\n' +
+        '/scan \\<address\\> — Analyze token/project risk\n' +
+        '/track \\<wallet\\> — Wallet analysis \\& forensics\n' +
         '/trends — Trending tokens from DexScreener\n' +
         '/ico — Upcoming ICOs \\& fundraising rounds\n' +
-        '/audit <contract> — Smart contract audit\n' +
+        '/audit \\<contract\\> — Smart contract audit\n' +
         '/start — Welcome message\n\n' +
         '_Send any message for AI\\-powered analysis_',
       { parse_mode: 'MarkdownV2' },
@@ -57,7 +57,7 @@ async function handleScan(ctx: Context): Promise<void> {
   const project = args[0];
 
   if (!project) {
-    await ctx.reply('Usage: /scan <project_address>');
+    await ctx.reply('Usage: /scan <project_address>', { parse_mode: undefined });
     return;
   }
 
@@ -139,7 +139,7 @@ async function handleTrack(ctx: Context): Promise<void> {
   const wallet = args[0];
 
   if (!wallet) {
-    await ctx.reply('Usage: /track <wallet_address>');
+    await ctx.reply('Usage: /track <wallet_address>', { parse_mode: undefined });
     return;
   }
 
@@ -225,7 +225,7 @@ async function handleAudit(ctx: Context): Promise<void> {
   const contract = args[0];
 
   if (!contract) {
-    await ctx.reply('Usage: /audit <contract_address>');
+    await ctx.reply('Usage: /audit <contract_address>', { parse_mode: undefined });
     return;
   }
 

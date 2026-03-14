@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 export function escapeMarkdown(text: string): string {
-  return text.replace(/([_*[\]()~`>#+\-=|{}.!\\])/g, '\\$1');
+  return text.replace(/([_*[\]()~`>#+\-=|{}.!\\<>])/g, '\\$1');
 }
 
 export function formatPrice(price: number): string {
@@ -83,7 +83,7 @@ export interface ICOItem {
 }
 
 export function formatICOs(icos: ICOItem[]): string {
-  const lines = ['*🚀 Upcoming ICOs & Raises*', ''];
+  const lines = ['*🚀 Upcoming ICOs \\& Raises*', ''];
   for (const ico of icos.slice(0, 10)) {
     const amount = ico.amount
       ? escapeMarkdown(`$${(ico.amount / 1e6).toFixed(1)}M`)
