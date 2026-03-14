@@ -54,6 +54,19 @@ export const vizzorConfigSchema = z.object({
       sidecarUrl: 'http://localhost:8000',
       fallbackToRules: true,
     })),
+  api: z
+    .object({
+      port: z.number().default(3000),
+      host: z.string().default('0.0.0.0'),
+      enableAuth: z.boolean().default(false),
+      corsOrigin: z.string().default('*'),
+    })
+    .default(() => ({
+      port: 3000,
+      host: '0.0.0.0',
+      enableAuth: false,
+      corsOrigin: '*',
+    })),
   discordToken: z.string().optional(),
   discordGuildId: z.string().optional(),
   telegramToken: z.string().optional(),

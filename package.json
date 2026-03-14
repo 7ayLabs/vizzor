@@ -1,6 +1,6 @@
 {
   "name": "@vizzor/cli",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "AI-powered crypto chronovisor — on-chain intelligence for the future",
   "type": "module",
   "license": "BUSL-1.1",
@@ -55,6 +55,10 @@
   ],
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
+    "@fastify/cors": "^11.2.0",
+    "@fastify/rate-limit": "^10.3.0",
+    "@fastify/swagger": "^9.7.0",
+    "@fastify/swagger-ui": "^5.2.5",
     "@google/generative-ai": "^0.24.1",
     "@types/react": "^19.2.14",
     "better-sqlite3": "^12.6.2",
@@ -62,6 +66,7 @@
     "cli-table3": "^0.6.5",
     "commander": "^14.0.3",
     "discord.js": "^14.25.1",
+    "fastify": "^5.8.2",
     "grammy": "^1.41.1",
     "ink": "^6.8.0",
     "ink-spinner": "^5.0.0",
