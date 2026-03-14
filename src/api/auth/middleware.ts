@@ -2,8 +2,8 @@
 // API Key authentication middleware
 // ---------------------------------------------------------------------------
 
-import { createHash } from 'node:crypto';
 import type { FastifyRequest, FastifyReply } from 'fastify';
+import { hashApiKey } from './keys.js';
 import { getStoreInstance } from '../../data/store-factory.js';
 
 // Paths that don't require authentication
@@ -23,7 +23,7 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
     });
   }
 
-  const keyHash = hashKey(apiKey);
+  const keyHash = hashApiKey(apiKey);
   const valid = await validateKey(keyHash);
   if (!valid) {
     return reply.status(403).send({
@@ -31,10 +31,6 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
       message: 'Invalid API key',
     });
   }
-}
-
-function hashKey(key: string): string {
-  return createHash('sha256').update(key).digest('hex');
 }
 
 async function validateKey(keyHash: string): Promise<boolean> {

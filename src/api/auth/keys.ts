@@ -2,8 +2,14 @@
 // API Key management — create, list, revoke keys
 // ---------------------------------------------------------------------------
 
-import { randomBytes, createHash } from 'node:crypto';
+import { randomBytes, scryptSync } from 'node:crypto';
 import { getDb } from '../../data/cache.js';
+
+const API_KEY_SALT = 'vizzor-api-key-v1';
+
+export function hashApiKey(key: string): string {
+  return scryptSync(key, API_KEY_SALT, 64).toString('hex');
+}
 
 function ensureKeysTable(): void {
   getDb().exec(`
@@ -32,7 +38,7 @@ export function createApiKey(label: string): { key: string; record: ApiKeyRecord
   ensureKeysTable();
 
   const rawKey = `vzr_${randomBytes(32).toString('hex')}`;
-  const keyHash = createHash('sha256').update(rawKey).digest('hex');
+  const keyHash = hashApiKey(rawKey);
   const keyPrefix = rawKey.slice(0, 12) + '...';
   const id = randomBytes(16).toString('hex');
   const now = Date.now();
