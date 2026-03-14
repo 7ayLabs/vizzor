@@ -9,24 +9,26 @@ services:
         condition: service_healthy
     environment:
       DATABASE_TYPE: postgres
-      DATABASE_URL: postgres://vizzor:vizzor_secure_pass@postgres:5432/vizzor
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       ML_ENABLED: "true"
       ML_SIDECAR_URL: http://ml-sidecar:8000
+      ML_API_SECRET: ${ML_API_SECRET:-}
       NODE_ENV: production
     restart: unless-stopped
 
   ml-sidecar:
     build: ./ml-sidecar
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgres://vizzor:vizzor_secure_pass@postgres:5432/vizzor
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       MODEL_DIR: /app/models
+      ML_API_SECRET: ${ML_API_SECRET:-}
     volumes:
-      - ml_models:/app/models
+      - ml_models:/app/models:ro
     restart: unless-stopped
 
   collector:
@@ -37,27 +39,30 @@ services:
         condition: service_healthy
     environment:
       DATABASE_TYPE: postgres
-      DATABASE_URL: postgres://vizzor:vizzor_secure_pass@postgres:5432/vizzor
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
     restart: unless-stopped
 
   n8n:
     image: n8nio/n8n:latest
     ports:
-      - "5678:5678"
+      - "127.0.0.1:5678:5678"
     depends_on:
       - vizzor-api
       - ml-sidecar
     environment:
       N8N_DEFAULT_BINARY_DATA_MODE: filesystem
+      N8N_BASIC_AUTH_ACTIVE: "true"
+      N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER:-admin}
+      N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD}
       VIZZOR_API_URL: http://vizzor-api:3000
       ML_SIDECAR_URL: http://ml-sidecar:8000
       DB_TYPE: postgresdb
       DB_POSTGRESDB_HOST: postgres
       DB_POSTGRESDB_PORT: 5432
       DB_POSTGRESDB_DATABASE: n8n
-      DB_POSTGRESDB_USER: vizzor
-      DB_POSTGRESDB_PASSWORD: vizzor_secure_pass
-      N8N_ENCRYPTION_KEY: "${N8N_ENCRYPTION_KEY:-change-this-encryption-key}"
+      DB_POSTGRESDB_USER: ${POSTGRES_USER}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
     volumes:
       - n8n_data:/home/node/.n8n
       - ./n8n/workflows:/home/node/workflows:ro
@@ -65,17 +70,17 @@ services:
 
   postgres:
     image: timescale/timescaledb:latest-pg15
-    ports:
-      - "5432:5432"
+    expose:
+      - "5432"
     environment:
-      POSTGRES_DB: vizzor
-      POSTGRES_USER: vizzor
-      POSTGRES_PASSWORD: vizzor_secure_pass
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - pg_data:/var/lib/postgresql/data
       - ./src/data/migrations/001-init.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U vizzor"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vizzor}"]
       interval: 5s
       timeout: 5s
       retries: 5
