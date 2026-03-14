@@ -1,5 +1,10 @@
 import { Client, GatewayIntentBits, REST, Routes, type Interaction } from 'discord.js';
 import { loadConfig } from '../config/loader.js';
+import { setConfig, setToolHandler, analyze } from '../ai/client.js';
+import { handleTool } from '../ai/tool-handler.js';
+import { VIZZOR_TOOLS } from '../ai/tools.js';
+import { buildChatSystemPrompt } from '../ai/prompts/chat.js';
+import { splitMessage } from '../utils/message-split.js';
 import { registerSlashCommands, handleSlashCommand } from './commands/index.js';
 import { startRateLimitCleanup } from './middleware/rate-limit.js';
 
@@ -10,6 +15,10 @@ export async function startDiscordBot(): Promise<void> {
   if (!token) {
     throw new Error('Discord token not configured. Run: vizzor config set discordToken <token>');
   }
+
+  // Initialize AI layer for tool-use chat
+  setConfig(config);
+  setToolHandler(handleTool);
 
   const client = new Client({
     intents: [
@@ -47,16 +56,32 @@ export async function startDiscordBot(): Promise<void> {
     await handleSlashCommand(interaction);
   });
 
-  // Freetext handler — respond to @mentions with guidance
+  // Freetext handler — AI chat on @mention
   client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
     if (!client.user || !message.mentions.has(client.user)) return;
 
-    await message.reply(
-      'Use slash commands for on-chain intelligence:\n' +
-        '`/scan` `/trends` `/track` `/ico` `/audit` `/help`\n\n' +
-        'For full AI-powered predictions, run `vizzor` in your terminal.',
-    );
+    const text = message.content.replace(/<@!?\d+>/g, '').trim();
+    if (!text) {
+      await message.reply(
+        'Mention me with a question! e.g. `@Vizzor what is BTC price?`\n' +
+          'Or use slash commands: `/scan` `/trends` `/track` `/ico` `/audit` `/help`',
+      );
+      return;
+    }
+
+    await message.reply('🔮 Analyzing...');
+
+    try {
+      const response = await analyze(buildChatSystemPrompt(), text, VIZZOR_TOOLS);
+      const chunks = splitMessage(response, 1900);
+      for (const chunk of chunks) {
+        await message.reply(chunk);
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      await message.reply(`Analysis failed: ${msg}`);
+    }
   });
 
   await client.login(token);

@@ -8,10 +8,25 @@ import { auditContract } from '../../core/forensics/contract-auditor.js';
 import { fetchTrendingTokens } from '../../core/trends/market.js';
 import { fetchUpcomingICOs } from '../../core/scanner/ico-tracker.js';
 import { fetchRecentRaises } from '../../data/sources/defillama.js';
+import { fetchTickerPrice } from '../../data/sources/binance.js';
+import { generatePrediction } from '../../core/trends/predictor.js';
+import {
+  createAgent,
+  listAgents,
+  getAgentByName,
+  startAgent,
+  stopAgent,
+  getAgentStatus,
+  getRecentDecisions,
+  deleteAgent,
+  getWalletBalance,
+  isValidAddress,
+} from '../../core/agent/index.js';
 import { checkRateLimit } from '../middleware/rate-limit.js';
 
 export function registerSlashCommands(): object[] {
   return [
+    // Core commands
     new SlashCommandBuilder()
       .setName('scan')
       .setDescription('Analyze a crypto project')
@@ -51,6 +66,72 @@ export function registerSlashCommands(): object[] {
       )
       .toJSON(),
     new SlashCommandBuilder().setName('help').setDescription('Show all Vizzor commands').toJSON(),
+
+    // Quick commands
+    new SlashCommandBuilder()
+      .setName('price')
+      .setDescription('Quick price check')
+      .addStringOption((opt) =>
+        opt.setName('symbol').setDescription('Token symbol (e.g. BTC, ETH)').setRequired(true),
+      )
+      .toJSON(),
+    new SlashCommandBuilder()
+      .setName('predict')
+      .setDescription('AI prediction with multi-signal analysis')
+      .addStringOption((opt) =>
+        opt.setName('symbol').setDescription('Token symbol (e.g. BTC, ETH)').setRequired(true),
+      )
+      .toJSON(),
+    new SlashCommandBuilder()
+      .setName('wallet')
+      .setDescription('Check wallet balance')
+      .addStringOption((opt) =>
+        opt.setName('address').setDescription('Ethereum address').setRequired(true),
+      )
+      .toJSON(),
+
+    // Agent commands
+    new SlashCommandBuilder()
+      .setName('agent_create')
+      .setDescription('Create a trading agent')
+      .addStringOption((opt) => opt.setName('name').setDescription('Agent name').setRequired(true))
+      .addStringOption((opt) =>
+        opt
+          .setName('strategy')
+          .setDescription('Strategy (momentum, trend-following)')
+          .setRequired(false),
+      )
+      .addStringOption((opt) =>
+        opt
+          .setName('pairs')
+          .setDescription('Comma-separated pairs (e.g. BTC,ETH,SOL)')
+          .setRequired(false),
+      )
+      .toJSON(),
+    new SlashCommandBuilder()
+      .setName('agent_list')
+      .setDescription('List all trading agents')
+      .toJSON(),
+    new SlashCommandBuilder()
+      .setName('agent_start')
+      .setDescription('Start a trading agent')
+      .addStringOption((opt) => opt.setName('name').setDescription('Agent name').setRequired(true))
+      .toJSON(),
+    new SlashCommandBuilder()
+      .setName('agent_stop')
+      .setDescription('Stop a trading agent')
+      .addStringOption((opt) => opt.setName('name').setDescription('Agent name').setRequired(true))
+      .toJSON(),
+    new SlashCommandBuilder()
+      .setName('agent_status')
+      .setDescription('View agent status & recent decisions')
+      .addStringOption((opt) => opt.setName('name').setDescription('Agent name').setRequired(true))
+      .toJSON(),
+    new SlashCommandBuilder()
+      .setName('agent_delete')
+      .setDescription('Delete a trading agent')
+      .addStringOption((opt) => opt.setName('name').setDescription('Agent name').setRequired(true))
+      .toJSON(),
   ];
 }
 
@@ -87,6 +168,33 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
       case 'help':
         await handleHelpCommand(interaction);
         break;
+      case 'price':
+        await handlePriceCommand(interaction);
+        break;
+      case 'predict':
+        await handlePredictCommand(interaction);
+        break;
+      case 'wallet':
+        await handleWalletCommand(interaction);
+        break;
+      case 'agent_create':
+        await handleAgentCreateCommand(interaction);
+        break;
+      case 'agent_list':
+        await handleAgentListCommand(interaction);
+        break;
+      case 'agent_start':
+        await handleAgentStartCommand(interaction);
+        break;
+      case 'agent_stop':
+        await handleAgentStopCommand(interaction);
+        break;
+      case 'agent_status':
+        await handleAgentStatusCommand(interaction);
+        break;
+      case 'agent_delete':
+        await handleAgentDeleteCommand(interaction);
+        break;
       default:
         await interaction.reply({
           content: `Unknown command: \`/${commandName}\`. Use \`/help\` for available commands.`,
@@ -106,7 +214,7 @@ export async function handleSlashCommand(interaction: ChatInputCommandInteractio
 }
 
 // ---------------------------------------------------------------------------
-// Command handlers
+// Core command handlers
 // ---------------------------------------------------------------------------
 
 async function handleScanCommand(interaction: ChatInputCommandInteraction): Promise<void> {
@@ -200,12 +308,12 @@ async function handleTrendsCommand(interaction: ChatInputCommandInteraction): Pr
 async function handleTrackCommand(interaction: ChatInputCommandInteraction): Promise<void> {
   await interaction.deferReply();
 
-  const wallet = interaction.options.getString('wallet', true);
+  const walletAddr = interaction.options.getString('wallet', true);
   const chain = interaction.options.getString('chain') ?? 'ethereum';
 
   const adapter = getAdapter(chain);
   await adapter.connect(undefined, getConfig().etherscanApiKey);
-  const analysis = await analyzeWallet(wallet, adapter);
+  const analysis = await analyzeWallet(walletAddr, adapter);
   await adapter.disconnect();
 
   const riskColor =
@@ -219,7 +327,7 @@ async function handleTrackCommand(interaction: ChatInputCommandInteraction): Pro
     .setTitle(`Wallet Analysis`)
     .setColor(riskColor)
     .addFields(
-      { name: 'Address', value: `\`${wallet}\``, inline: false },
+      { name: 'Address', value: `\`${walletAddr}\``, inline: false },
       { name: 'Chain', value: chain, inline: true },
       { name: 'Balance', value: `${analysis.balance.toString()} wei`, inline: true },
       { name: 'Transactions', value: String(analysis.transactionCount), inline: true },
@@ -360,16 +468,296 @@ async function handleHelpCommand(interaction: ChatInputCommandInteraction): Prom
         .setTitle('Vizzor Commands')
         .setColor(0x5865f2)
         .setDescription(
-          '`/scan <address>` — Analyze token/project risk\n' +
+          '**Analysis:**\n' +
+            '`/scan <address>` — Analyze token/project risk\n' +
             '`/trends` — Trending tokens + market data\n' +
             '`/track <wallet>` — Wallet forensics\n' +
             '`/ico` — Upcoming ICOs & fundraising rounds\n' +
-            '`/audit <contract>` — Smart contract audit\n' +
-            '`/help` — Show this message\n\n' +
-            '_Mention the bot for AI chat guidance._',
+            '`/audit <contract>` — Smart contract audit\n\n' +
+            '**Quick Commands:**\n' +
+            '`/price <symbol>` — Live price check\n' +
+            '`/predict <symbol>` — AI prediction with signals\n' +
+            '`/wallet <address>` — ETH wallet balance\n\n' +
+            '**Agent Management:**\n' +
+            '`/agent_create <name>` — Create trading agent\n' +
+            '`/agent_list` — List all agents\n' +
+            '`/agent_start <name>` — Start an agent\n' +
+            '`/agent_stop <name>` — Stop an agent\n' +
+            '`/agent_status <name>` — Agent status & decisions\n' +
+            '`/agent_delete <name>` — Delete an agent\n\n' +
+            '_@mention the bot for AI-powered analysis._',
         )
         .setFooter({ text: 'Vizzor by 7ayLabs' }),
     ],
     ephemeral: true,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Quick command handlers
+// ---------------------------------------------------------------------------
+
+async function handlePriceCommand(interaction: ChatInputCommandInteraction): Promise<void> {
+  await interaction.deferReply();
+
+  const symbol = interaction.options.getString('symbol', true).toUpperCase();
+
+  const ticker = await fetchTickerPrice(symbol);
+  const changeEmoji = ticker.change24h >= 0 ? '🟢' : '🔴';
+  const changeSign = ticker.change24h >= 0 ? '+' : '';
+
+  const embed = new EmbedBuilder()
+    .setTitle(`💰 ${ticker.symbol}`)
+    .setColor(ticker.change24h >= 0 ? 0x00ff00 : 0xff0000)
+    .addFields(
+      { name: 'Price', value: `$${ticker.price.toLocaleString()}`, inline: true },
+      {
+        name: '24h Change',
+        value: `${changeEmoji} ${changeSign}${ticker.change24h.toFixed(2)}%`,
+        inline: true,
+      },
+    )
+    .setFooter({ text: 'Live from Binance' })
+    .setTimestamp();
+
+  await interaction.editReply({ embeds: [embed] });
+}
+
+async function handlePredictCommand(interaction: ChatInputCommandInteraction): Promise<void> {
+  await interaction.deferReply();
+
+  const symbol = interaction.options.getString('symbol', true).toUpperCase();
+  const prediction = await generatePrediction(symbol);
+
+  const dirColor =
+    prediction.direction === 'up'
+      ? 0x00ff00
+      : prediction.direction === 'down'
+        ? 0xff0000
+        : 0x808080;
+  const dirEmoji =
+    prediction.direction === 'up' ? '🟢' : prediction.direction === 'down' ? '🔴' : '⚪';
+
+  const embed = new EmbedBuilder()
+    .setTitle(`🔮 ${prediction.symbol} Prediction`)
+    .setColor(dirColor)
+    .addFields(
+      {
+        name: 'Direction',
+        value: `${dirEmoji} ${prediction.direction.toUpperCase()}`,
+        inline: true,
+      },
+      { name: 'Confidence', value: `${prediction.confidence}%`, inline: true },
+      { name: 'Composite', value: prediction.composite.toFixed(2), inline: true },
+      { name: 'Timeframe', value: prediction.timeframe, inline: true },
+    )
+    .setFooter({ text: 'Not financial advice — DYOR' })
+    .setTimestamp();
+
+  const signalLines = [
+    `Technical: ${prediction.signals.technical}`,
+    `Sentiment: ${prediction.signals.sentiment}`,
+    `Derivatives: ${prediction.signals.derivatives}`,
+    `Trend: ${prediction.signals.trend}`,
+    `Macro: ${prediction.signals.macro}`,
+  ];
+  embed.addFields({
+    name: 'Signals',
+    value: signalLines.join('\n'),
+  });
+
+  if (prediction.reasoning.length > 0) {
+    embed.addFields({
+      name: 'Reasoning',
+      value: prediction.reasoning.join('\n').slice(0, 1024),
+    });
+  }
+
+  await interaction.editReply({ embeds: [embed] });
+}
+
+async function handleWalletCommand(interaction: ChatInputCommandInteraction): Promise<void> {
+  await interaction.deferReply();
+
+  const address = interaction.options.getString('address', true);
+
+  if (!isValidAddress(address)) {
+    await interaction.editReply(
+      'Invalid Ethereum address. Must start with 0x followed by 40 hex characters.',
+    );
+    return;
+  }
+
+  const balance = await getWalletBalance(address);
+
+  const embed = new EmbedBuilder()
+    .setTitle('👛 Wallet Balance')
+    .setColor(0x5865f2)
+    .addFields(
+      { name: 'Address', value: `\`${address}\``, inline: false },
+      { name: 'Balance', value: `${balance} ETH`, inline: true },
+    )
+    .setFooter({ text: 'Use /track for full forensic analysis' })
+    .setTimestamp();
+
+  await interaction.editReply({ embeds: [embed] });
+}
+
+// ---------------------------------------------------------------------------
+// Agent command handlers
+// ---------------------------------------------------------------------------
+
+async function handleAgentCreateCommand(interaction: ChatInputCommandInteraction): Promise<void> {
+  await interaction.deferReply();
+
+  const name = interaction.options.getString('name', true);
+  const strategy = interaction.options.getString('strategy') ?? 'momentum';
+  const pairsStr = interaction.options.getString('pairs') ?? 'BTC,ETH';
+  const pairs = pairsStr.split(',').map((p) => p.trim().toUpperCase());
+
+  const agent = createAgent(name, strategy, pairs);
+
+  const embed = new EmbedBuilder()
+    .setTitle('✅ Agent Created')
+    .setColor(0x00ff00)
+    .addFields(
+      { name: 'Name', value: agent.name, inline: true },
+      { name: 'Strategy', value: agent.strategy, inline: true },
+      { name: 'Pairs', value: agent.pairs.join(', '), inline: true },
+      { name: 'Interval', value: `${agent.interval}s`, inline: true },
+    )
+    .setFooter({ text: `Use /agent_start ${agent.name} to activate` });
+
+  await interaction.editReply({ embeds: [embed] });
+}
+
+async function handleAgentListCommand(interaction: ChatInputCommandInteraction): Promise<void> {
+  await interaction.deferReply();
+
+  const agents = listAgents();
+
+  if (agents.length === 0) {
+    await interaction.editReply('No agents created yet. Use `/agent_create` to create one.');
+    return;
+  }
+
+  const embed = new EmbedBuilder().setTitle('🤖 Your Agents').setColor(0x5865f2).setTimestamp();
+
+  for (const agent of agents) {
+    const state = getAgentStatus(agent.id);
+    const statusEmoji =
+      state?.status === 'running' ? '🟢' : state?.status === 'stopped' ? '🔴' : '⚪';
+    embed.addFields({
+      name: `${statusEmoji} ${agent.name} [${state?.status ?? 'idle'}]`,
+      value: `Strategy: ${agent.strategy}\nPairs: ${agent.pairs.join(', ')}\nCycles: ${state?.cycleCount ?? 0} | Interval: ${agent.interval}s`,
+      inline: false,
+    });
+  }
+
+  await interaction.editReply({ embeds: [embed] });
+}
+
+async function handleAgentStartCommand(interaction: ChatInputCommandInteraction): Promise<void> {
+  const name = interaction.options.getString('name', true);
+
+  const agent = getAgentByName(name);
+  if (!agent) {
+    await interaction.reply({
+      content: `Agent "${name}" not found. Use \`/agent_list\` to see your agents.`,
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const state = startAgent(agent.id);
+  await interaction.reply(
+    `🟢 Agent "${state.config.name}" started. Monitoring ${state.config.pairs.join(', ')}.`,
+  );
+}
+
+async function handleAgentStopCommand(interaction: ChatInputCommandInteraction): Promise<void> {
+  const name = interaction.options.getString('name', true);
+
+  const agent = getAgentByName(name);
+  if (!agent) {
+    await interaction.reply({
+      content: `Agent "${name}" not found.`,
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const state = stopAgent(agent.id);
+  await interaction.reply(
+    `🔴 Agent "${state.config.name}" stopped after ${state.cycleCount} cycles.`,
+  );
+}
+
+async function handleAgentStatusCommand(interaction: ChatInputCommandInteraction): Promise<void> {
+  await interaction.deferReply();
+
+  const name = interaction.options.getString('name', true);
+
+  const agent = getAgentByName(name);
+  if (!agent) {
+    await interaction.editReply(`Agent "${name}" not found.`);
+    return;
+  }
+
+  const state = getAgentStatus(agent.id);
+  if (!state) {
+    await interaction.editReply(`Agent "${name}" not found.`);
+    return;
+  }
+
+  const statusColor =
+    state.status === 'running' ? 0x00ff00 : state.status === 'stopped' ? 0xff0000 : 0x808080;
+  const statusEmoji = state.status === 'running' ? '🟢' : state.status === 'stopped' ? '🔴' : '⚪';
+
+  const embed = new EmbedBuilder()
+    .setTitle(`🤖 Agent: ${state.config.name}`)
+    .setColor(statusColor)
+    .addFields(
+      { name: 'Status', value: `${statusEmoji} ${state.status}`, inline: true },
+      { name: 'Strategy', value: state.config.strategy, inline: true },
+      { name: 'Pairs', value: state.config.pairs.join(', '), inline: true },
+      { name: 'Interval', value: `${state.config.interval}s`, inline: true },
+      { name: 'Cycles', value: String(state.cycleCount), inline: true },
+    )
+    .setTimestamp();
+
+  if (state.error) {
+    embed.addFields({ name: 'Error', value: state.error });
+  }
+
+  const decisions = getRecentDecisions(agent.id, 5);
+  if (decisions.length > 0) {
+    const decisionText = decisions
+      .map((d) => {
+        const actionEmoji =
+          d.decision.action === 'buy' ? '🟢' : d.decision.action === 'sell' ? '🔴' : '⚪';
+        const time = new Date(d.timestamp).toLocaleString();
+        return `${actionEmoji} ${d.symbol} ${d.decision.action.toUpperCase()} (${d.decision.confidence}%) — ${time}`;
+      })
+      .join('\n');
+    embed.addFields({ name: 'Recent Decisions', value: decisionText.slice(0, 1024) });
+  }
+
+  await interaction.editReply({ embeds: [embed] });
+}
+
+async function handleAgentDeleteCommand(interaction: ChatInputCommandInteraction): Promise<void> {
+  const name = interaction.options.getString('name', true);
+
+  const agent = getAgentByName(name);
+  if (!agent) {
+    await interaction.reply({
+      content: `Agent "${name}" not found.`,
+      ephemeral: true,
+    });
+    return;
+  }
+
+  deleteAgent(agent.id);
+  await interaction.reply(`🗑 Agent "${name}" deleted.`);
 }
