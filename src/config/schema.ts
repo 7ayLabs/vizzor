@@ -67,6 +67,12 @@ export const vizzorConfigSchema = z.object({
       enableAuth: false,
       corsOrigin: '*',
     })),
+  n8n: z
+    .object({
+      enabled: z.boolean().default(false),
+      webhookUrl: z.string().optional(),
+    })
+    .default(() => ({ enabled: false })),
   discordToken: z.string().optional(),
   discordGuildId: z.string().optional(),
   telegramToken: z.string().optional(),
