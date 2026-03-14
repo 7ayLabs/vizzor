@@ -91,6 +91,7 @@ Beyond price targets, Vizzor provides:
 | **pnpm** | >= 8.0 | Recommended (npm/yarn also work) |
 | **Python** | 3.x | Required by `better-sqlite3` native build |
 | **C++ compiler** | GCC / Clang / MSVC | Required by `better-sqlite3` native build |
+| **Docker** | >= 24 | Optional, for ML sidecar + PostgreSQL |
 
 Works on **macOS**, **Linux**, and **Windows**. No GPU required.
 
@@ -115,6 +116,13 @@ cd vizzor
 pnpm install
 pnpm build
 pnpm link --global
+```
+
+### Docker (Full Stack)
+
+```bash
+cp .env.example .env    # Configure API keys
+docker compose up -d     # Starts CLI + ML sidecar + PostgreSQL
 ```
 
 ---
@@ -337,7 +345,115 @@ For providers without tool support (Ollama), Vizzor pre-fetches all relevant dat
 | **Fear & Greed** | Crypto Fear & Greed Index | Public |
 | **Pump.fun** | Solana meme coin launches | Public |
 
-All responses cached in SQLite with configurable TTL (5 min for market data, 1 hour for token info, 24 hours for contract code).
+All responses cached with configurable TTL (5 min for market data, 1 hour for token info, 24 hours for contract code).
+
+### Database Layer
+
+Dual-backend storage with automatic migration:
+
+| Backend | Use Case |
+|---------|----------|
+| **SQLite** | Default, zero-config local cache |
+| **PostgreSQL** | Multi-instance deployments, Docker stack |
+
+Data pipeline collectors run on configurable intervals, aggregating market snapshots, token metrics, and wallet activity into time-series tables for ML training and trend analysis.
+
+### ML Prediction Sidecar
+
+A Python FastAPI sidecar enhances predictions with trained models:
+
+| Model | Algorithm | Purpose |
+|-------|-----------|---------|
+| **Price Predictor** | LSTM | Short-term price direction |
+| **Signal Classifier** | Random Forest | Buy/sell/hold signal quality |
+| **Anomaly Detector** | Isolation Forest | Unusual market activity |
+| **Rug Detector** | GBM | Scam token identification |
+| **Wallet Classifier** | LSTM | Wallet behavior profiling |
+| **Sentiment NLP** | DistilBERT | News headline sentiment |
+
+Models fall back to heuristic scoring when the sidecar is unavailable. Start with Docker:
+
+```bash
+docker compose up ml-sidecar
+curl http://localhost:8000/health
+```
+
+### REST API
+
+Authenticated REST API exposing all Vizzor capabilities programmatically:
+
+```bash
+# Start the API server
+vizzor api start --port 3100
+
+# Create an API key
+vizzor api key create "my-app"
+
+# Endpoints
+GET  /health              # Health check (public)
+GET  /docs                # OpenAPI/Swagger UI (dev only)
+POST /scan                # Token security scan
+POST /trends              # Market trends
+POST /track               # Wallet forensics
+POST /predict             # AI prediction
+POST /audit               # Contract audit
+```
+
+All endpoints require `X-API-Key` header. Rate limited to 100 req/min per key. Keys are hashed with scrypt and stored locally.
+
+### Autonomous Agents v2
+
+Portfolio-aware trading agents with risk management:
+
+- **Portfolio Manager** — tracks positions, calculates P&L, manages allocation limits
+- **Risk System** — Kelly criterion position sizing, ATR-based stop losses, drawdown limits
+- **ML-Adaptive Strategy** — combines RSI, MACD, EMA, Bollinger, funding rate with ML regime detection
+- **Strategy Registry** — pluggable strategy system, easy to add custom strategies
+
+### Security & ZK
+
+- **AES-256-GCM encryption** for sensitive data at rest
+- **HMAC signatures** for API request integrity
+- **Audit logging** for security-critical operations
+- **ZK-proof chain adapters** for privacy-preserving verification
+- **Input sanitization** across all user-facing surfaces
+
+### n8n Workflow Automation
+
+14 pre-built n8n workflows for automated operations:
+
+| Workflow | Function |
+|----------|----------|
+| Data Collection | Scheduled market data ingestion |
+| Alert Pipeline | Real-time anomaly alerts |
+| ML Retraining | Periodic model retraining |
+| Agent Monitor | Agent health and decision tracking |
+| Daily Report | Automated portfolio summaries |
+| Anomaly Analysis | Deep-dive unusual activity |
+| Narrative Generator | Market narrative detection |
+| Portfolio Rebalancer | Automated rebalancing signals |
+| Strategy Tournament | Strategy backtesting comparison |
+| Arbitrage Scanner | Cross-DEX price divergence |
+
+```bash
+docker compose up -d  # Starts Vizzor + ML sidecar + PostgreSQL + n8n
+```
+
+### Extended ML Models
+
+v0.10 adds 7 new Python models to the sidecar:
+
+| Model | Algorithm | Purpose |
+|-------|-----------|---------|
+| **Trend Scorer** | XGBoost | Market trend strength scoring |
+| **TA Interpreter** | Random Forest | Technical analysis signal weighting |
+| **Strategy Bandit** | Contextual Bandit | Adaptive strategy selection |
+| **Regime Detector** | HMM | Market regime classification |
+| **Project Risk** | GBM | Comprehensive project risk scoring |
+| **Portfolio Optimizer** | Mean-Variance | Dynamic position sizing |
+| **Intent Classifier** | DistilBERT | User query intent detection |
+
+All 13 models integrated across 14 TypeScript modules with graceful fallback to heuristics.
 
 ---
 
@@ -357,8 +473,9 @@ Autonomous prediction agents that run a continuous **think -> analyze -> decide 
 |----------|---------|-------|------|
 | **Momentum** | RSI + MACD + Bollinger + Funding | RSI crosses above 30 + bullish MACD | RSI > 70 + bearish divergence |
 | **Trend-Following** | EMA Crossover + OBV + Fear & Greed | Golden cross + rising volume | Death cross |
+| **ML-Adaptive** | All TA + Funding + Fear & Greed + Regime | ML composite score > threshold | ML signal reversal + stop loss |
 
-> v0.3.0: Agents operate in **alert-only mode** -- they log decisions and emit signals but do not execute on-chain transactions.
+> Agents operate in **alert-only mode** -- they log decisions and emit signals but do not execute on-chain transactions.
 
 ---
 
@@ -457,7 +574,9 @@ pnpm test:coverage    # With coverage
 | TUI | Ink (React for terminals) |
 | AI | Anthropic SDK, OpenAI SDK, Google GenAI, Ollama |
 | Blockchain | viem (EVM), plugin adapter system |
-| Database | better-sqlite3 with TTL cache |
+| Database | better-sqlite3 + PostgreSQL (pg) |
+| ML Sidecar | Python FastAPI, scikit-learn, PyTorch |
+| API | Fastify + Swagger/OpenAPI |
 | Bots | discord.js, grammY |
 | Build | tsup |
 | Test | Vitest |
