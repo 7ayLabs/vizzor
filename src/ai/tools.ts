@@ -369,6 +369,74 @@ export const VIZZOR_TOOLS: AITool[] = [
     },
   },
   {
+    name: 'get_market_regime',
+    description:
+      'Detect the current market regime using ML Hidden Markov Model. Returns regime type (trending_bull, trending_bear, ranging, volatile, capitulation), confidence, and probability distribution across all regimes. Uses HMM when available, falls back to heuristic analysis.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        symbol: {
+          type: 'string',
+          description: 'The token symbol (e.g. "BTC", "ETH", "SOL").',
+        },
+      },
+      required: ['symbol'],
+    },
+  },
+  {
+    name: 'get_ta_ml_analysis',
+    description:
+      'Run ML-enhanced technical analysis with learned signal weights. Uses Random Forest to interpret RSI, MACD, Bollinger Bands, EMA crossover, ATR, OBV simultaneously. Returns signals with ML-derived importance weights and composite direction. More accurate than static weight TA.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        symbol: {
+          type: 'string',
+          description: 'The token symbol (e.g. "BTC", "ETH", "SOL").',
+        },
+        timeframe: {
+          type: 'string',
+          description: 'Kline interval: "1h", "4h", "1d". Defaults to "4h".',
+        },
+      },
+      required: ['symbol'],
+    },
+  },
+  {
+    name: 'get_project_risk_ml',
+    description:
+      'Run ML-powered project risk scoring on a token. Uses GBM classifier trained on contract features (verification, holder concentration, taxes, mint/pause/blacklist capabilities) to predict overall project risk probability and identify top risk factors.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        address: {
+          type: 'string',
+          description: 'The token contract address to analyze.',
+        },
+        chain: {
+          type: 'string',
+          description: 'The blockchain the token is deployed on.',
+        },
+      },
+      required: ['address', 'chain'],
+    },
+  },
+  {
+    name: 'get_portfolio_forecast',
+    description:
+      'Generate forward-looking portfolio performance predictions using ML. Analyzes trade history to predict next-period return, Sharpe ratio, and max drawdown. Requires at least 10 completed trades.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        agentName: {
+          type: 'string',
+          description: 'The trading agent name to forecast for.',
+        },
+      },
+      required: ['agentName'],
+    },
+  },
+  {
     name: 'create_agent',
     description:
       'Create an autonomous trading agent that monitors crypto pairs using a strategy (momentum or trend-following). Returns the created agent config.',
