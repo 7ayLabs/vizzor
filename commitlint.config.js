@@ -18,6 +18,11 @@ export default {
         'adapters',
         'ci',
         'deps',
+        'ml',
+        'api',
+        'agent',
+        'n8n',
+        'security',
       ],
     ],
     'type-enum': [
