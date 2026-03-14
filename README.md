@@ -246,10 +246,19 @@ vizzor bot validate                 # Check bot token configuration
 | `/track <wallet>` | Wallet forensics |
 | `/ico` | Upcoming launches and rounds |
 | `/audit <contract>` | Contract audit |
+| `/price <symbol>` | Live price check |
+| `/predict <symbol>` | AI prediction with signals |
+| `/wallet <address>` | ETH wallet balance |
+| `/agent_create` | Create a trading agent |
+| `/agent_list` | List all agents |
+| `/agent_start` | Start an agent |
+| `/agent_stop` | Stop an agent |
+| `/agent_status` | Agent status & decisions |
+| `/agent_delete` | Delete an agent |
 | `/help` | Show all commands |
-| *@mention* | AI chat guidance |
+| *@mention* | AI-powered chat with live data |
 
-**Setup**: Enable the `MESSAGE_CONTENT` privileged intent in the [Discord Developer Portal](https://discord.com/developers/applications) for @mention responses.
+**Setup**: Enable the `MESSAGE_CONTENT` privileged intent in the [Discord Developer Portal](https://discord.com/developers/applications) for @mention AI chat.
 
 ### Telegram Bot
 
@@ -260,7 +269,16 @@ vizzor bot validate                 # Check bot token configuration
 | `/track <wallet>` | Wallet forensics |
 | `/ico` | Upcoming launches and rounds |
 | `/audit <contract>` | Contract audit |
-| *Any text* | AI-powered prediction and analysis |
+| `/price <symbol>` | Live price check |
+| `/predict <symbol>` | AI prediction with signals |
+| `/wallet <address>` | ETH wallet balance |
+| `/agent_create` | Create a trading agent |
+| `/agent_list` | List all agents |
+| `/agent_start` | Start an agent |
+| `/agent_stop` | Stop an agent |
+| `/agent_status` | Agent status & decisions |
+| `/agent_delete` | Delete an agent |
+| *Any text* | AI-powered chat with live data |
 
 ---
 
