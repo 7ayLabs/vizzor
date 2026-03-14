@@ -1,4 +1,6 @@
 import type { ChainAdapter, TokenInfo } from '../../chains/types.js';
+import { getMLClient } from '../../ml/client.js';
+import type { ProjectRiskMLResult } from '../../ml/types.js';
 
 export interface ProjectAnalysis {
   token: TokenInfo | null;
@@ -8,6 +10,7 @@ export interface ProjectAnalysis {
   topHolders: { address: string; percentage: number }[];
   riskIndicators: RiskIndicator[];
   riskScore: number;
+  mlRisk?: ProjectRiskMLResult;
 }
 
 export interface RiskIndicator {
@@ -45,17 +48,53 @@ export async function analyzeProject(
       ? Number(((topHolders[0]?.balance ?? 0n) * 10000n) / totalSupply) / 100
       : 0;
 
+  const topHoldersMapped = topHolders.map((h) => ({
+    address: h.address,
+    percentage: totalSupply > 0n ? Number((h.balance * 10000n) / totalSupply) / 100 : 0,
+  }));
+
+  const top10Pct = topHoldersMapped.reduce((sum, h) => sum + h.percentage, 0);
+
+  // ML: score project risk with ML model
+  let mlRisk: ProjectRiskMLResult | undefined;
+  const mlClient = getMLClient();
+  if (mlClient) {
+    try {
+      const result = await mlClient.scoreProjectRisk({
+        bytecode_size: contractCode.length,
+        is_verified: hasSourceCode ? 1 : 0,
+        holder_concentration: topHolderPercentage,
+        has_proxy: 0,
+        has_mint: 0,
+        has_pause: 0,
+        has_blacklist: 0,
+        liquidity_locked: 0,
+        buy_tax: 0,
+        sell_tax: 0,
+        contract_age_days: 0,
+        total_transfers: 0,
+        owner_balance_pct: topHolderPercentage,
+        is_open_source: hasSourceCode ? 1 : 0,
+        top10_holder_pct: top10Pct,
+        has_token_info: tokenInfo ? 1 : 0,
+      });
+      if (result) {
+        mlRisk = result;
+      }
+    } catch {
+      // ML unavailable
+    }
+  }
+
   return {
     token: tokenInfo,
     contractVerified: hasSourceCode,
     hasSourceCode,
     holderConcentration: topHolderPercentage,
-    topHolders: topHolders.map((h) => ({
-      address: h.address,
-      percentage: totalSupply > 0n ? Number((h.balance * 10000n) / totalSupply) / 100 : 0,
-    })),
+    topHolders: topHoldersMapped,
     riskIndicators,
     riskScore: Math.min(100, riskScore),
+    mlRisk,
   };
 }
 
