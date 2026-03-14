@@ -13,6 +13,7 @@ import { fetchFearGreedIndex } from '../data/sources/fear-greed.js';
 import { checkTokenSecurity, checkAddressSecurity } from '../data/sources/goplus.js';
 import { getConfig } from '../config/loader.js';
 import { KNOWN_SYMBOLS } from '../config/constants.js';
+import { getMLClient } from '../ml/client.js';
 
 // ---------------------------------------------------------------------------
 // Keyword patterns for detecting user intent
@@ -119,13 +120,33 @@ export async function buildContextBlock(userMessage: string): Promise<string> {
   const lower = userMessage.toLowerCase();
   const sections: string[] = [];
 
-  // Detect 0x addresses
-  const addressMatch = userMessage.match(/0x[a-fA-F0-9]{40}/);
+  // ML: try intent classification for improved query routing
+  let mlIntent: string | null = null;
+  const mlClientForIntent = getMLClient();
+  if (mlClientForIntent) {
+    try {
+      const intentResult = await mlClientForIntent.classifyIntent(userMessage);
+      if (intentResult && intentResult.confidence > 0.7) {
+        mlIntent = intentResult.intent;
+      }
+    } catch {
+      // ML unavailable — fall through to keyword matching
+    }
+  }
+
+  // Detect addresses (EVM 0x... and Solana base58)
+  const evmMatch = userMessage.match(/0x[a-fA-F0-9]{40}/);
+  // Solana base58: 32-44 chars, must contain at least one digit to avoid matching English words
+  const solanaMatch = userMessage.match(/\b([1-9A-HJ-NP-Za-km-z]{32,44})\b/);
+  const isSolanaAddr =
+    solanaMatch && !evmMatch && /\d/.test(solanaMatch[1]!) && solanaMatch[1]!.length >= 32;
+  const addressMatch = evmMatch ?? (isSolanaAddr ? solanaMatch : null);
+  const detectedChain = evmMatch ? null : isSolanaAddr ? 'solana' : null;
 
   // Detect token mentions (known + unknown)
   const mentionedTokens = detectTokens(lower);
   const unknownTokens = detectUnknownTokens(userMessage, mentionedTokens);
-  const isAnalysisQuery = matchesAny(lower, ANALYSIS_KEYWORDS);
+  const isAnalysisQuery = matchesAny(lower, ANALYSIS_KEYWORDS) || mlIntent === 'analysis';
 
   // Run relevant fetches in parallel
   const tasks: Promise<void>[] = [];
@@ -164,8 +185,7 @@ export async function buildContextBlock(userMessage: string): Promise<string> {
 
   // 1c. If address provided + analysis intent, run GoPlus security + address check
   if (addressMatch && isAnalysisQuery) {
-    const cfg = getConfig();
-    const chain = cfg.defaultChain || 'ethereum';
+    const chain = detectedChain || getConfig().defaultChain || 'ethereum';
     tasks.push(
       fetchSecurityData(addressMatch[0], chain).then((data) => {
         if (data) sections.push(data);
@@ -218,7 +238,7 @@ export async function buildContextBlock(userMessage: string): Promise<string> {
   // 6. Broad / general query — fetch everything for a full picture
   //    BUT skip the broad dump when a specific token is mentioned (e.g. "bitcoin today"
   //    should focus on Bitcoin, not dump trending meme coins and fundraising rounds).
-  const isBroadQuery = matchesAny(lower, BROAD_KEYWORDS);
+  const isBroadQuery = matchesAny(lower, BROAD_KEYWORDS) || mlIntent === 'broad_overview';
   const hasSpecificIntent =
     mentionedTokens.length > 0 || unknownTokens.length > 0 || !!addressMatch;
   if (isBroadQuery && !hasSpecificIntent) {
@@ -625,8 +645,38 @@ async function fetchNewsData(symbol?: string): Promise<string | null> {
   try {
     const news = await fetchCryptoNews(symbol, getConfig().cryptopanicApiKey);
     if (news.length > 0) {
+      const headlines = news.slice(0, 8);
       const lines = [`## Latest Crypto News${symbol ? ` (${symbol})` : ''}`];
-      for (const n of news.slice(0, 8)) {
+
+      // ML: enhance sentiment labels with ML NLP analysis
+      const mlClient = getMLClient();
+      if (mlClient) {
+        try {
+          const texts = headlines.map((n) => n.title);
+          const mlResults = await mlClient.analyzeSentimentBatch(texts);
+          if (mlResults.length > 0) {
+            for (let i = 0; i < headlines.length; i++) {
+              const n = headlines[i]!;
+              const ml = mlResults[i];
+              const label = ml
+                ? `${ml.sentiment.toUpperCase()} (${(ml.confidence * 100).toFixed(0)}%)`
+                : n.sentiment.toUpperCase();
+              lines.push(`- [${label}] ${n.title} (${n.source.title}, ${n.publishedAt})`);
+            }
+            // Aggregate ML sentiment score
+            const avgScore = mlResults.reduce((s, r) => s + r.score, 0) / mlResults.length;
+            const avgSentiment =
+              avgScore > 0.2 ? 'BULLISH' : avgScore < -0.2 ? 'BEARISH' : 'NEUTRAL';
+            lines.push(`\nML Aggregate Sentiment: ${avgSentiment} (score: ${avgScore.toFixed(3)})`);
+            return lines.join('\n');
+          }
+        } catch {
+          // ML unavailable — fall through to rule-based labels
+        }
+      }
+
+      // Fallback: use CryptoPanic sentiment labels
+      for (const n of headlines) {
         lines.push(
           `- [${n.sentiment.toUpperCase()}] ${n.title} (${n.source.title}, ${n.publishedAt})`,
         );
