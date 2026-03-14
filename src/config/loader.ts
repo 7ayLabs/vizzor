@@ -74,6 +74,36 @@ export function loadConfig(): VizzorConfig {
     (raw['ai'] as Record<string, unknown>)['provider'] = process.env['VIZZOR_AI_PROVIDER'];
   }
 
+  // Database env overrides
+  if (process.env['DATABASE_TYPE'] || process.env['DATABASE_URL']) {
+    if (!raw['database'] || typeof raw['database'] !== 'object') {
+      raw['database'] = {};
+    }
+    const db = raw['database'] as Record<string, unknown>;
+    if (process.env['DATABASE_TYPE']) db['type'] = process.env['DATABASE_TYPE'];
+    if (process.env['DATABASE_URL']) db['url'] = process.env['DATABASE_URL'];
+  }
+
+  // ML env overrides
+  if (process.env['ML_ENABLED'] || process.env['ML_SIDECAR_URL']) {
+    if (!raw['ml'] || typeof raw['ml'] !== 'object') {
+      raw['ml'] = {};
+    }
+    const ml = raw['ml'] as Record<string, unknown>;
+    if (process.env['ML_ENABLED']) ml['enabled'] = process.env['ML_ENABLED'] === 'true';
+    if (process.env['ML_SIDECAR_URL']) ml['sidecarUrl'] = process.env['ML_SIDECAR_URL'];
+  }
+
+  // API env overrides
+  if (process.env['API_PORT'] || process.env['API_HOST']) {
+    if (!raw['api'] || typeof raw['api'] !== 'object') {
+      raw['api'] = {};
+    }
+    const api = raw['api'] as Record<string, unknown>;
+    if (process.env['API_PORT']) api['port'] = Number(process.env['API_PORT']);
+    if (process.env['API_HOST']) api['host'] = process.env['API_HOST'];
+  }
+
   const config = vizzorConfigSchema.parse(raw);
   cachedConfig = config;
   return config;
@@ -106,6 +136,17 @@ const SETTABLE_KEYS: Record<string, { env: string; nested?: string }> = {
   'ai.model': { env: 'VIZZOR_AI_MODEL', nested: 'ai' },
   'ai.maxTokens': { env: 'VIZZOR_AI_MAX_TOKENS', nested: 'ai' },
   'ai.ollamaHost': { env: 'OLLAMA_HOST', nested: 'ai' },
+  'database.type': { env: 'DATABASE_TYPE', nested: 'database' },
+  'database.url': { env: 'DATABASE_URL', nested: 'database' },
+  'ml.enabled': { env: 'ML_ENABLED', nested: 'ml' },
+  'ml.sidecarUrl': { env: 'ML_SIDECAR_URL', nested: 'ml' },
+  'ml.fallbackToRules': { env: 'ML_FALLBACK_TO_RULES', nested: 'ml' },
+  'api.port': { env: 'API_PORT', nested: 'api' },
+  'api.host': { env: 'API_HOST', nested: 'api' },
+  'api.enableAuth': { env: 'API_ENABLE_AUTH', nested: 'api' },
+  'api.corsOrigin': { env: 'API_CORS_ORIGIN', nested: 'api' },
+  'n8n.enabled': { env: 'N8N_ENABLED', nested: 'n8n' },
+  'n8n.webhookUrl': { env: 'N8N_WEBHOOK_URL', nested: 'n8n' },
 };
 
 /**
@@ -148,8 +189,11 @@ export function saveConfigValue(key: string, value: string): void {
     if (!raw[section] || typeof raw[section] !== 'object') {
       raw[section] = {};
     }
-    // Parse numeric values for number fields
-    const parsed = field === 'maxTokens' ? Number(value) : value;
+    // Parse numeric and boolean values
+    let parsed: string | number | boolean = value;
+    if (field === 'maxTokens' || field === 'port') parsed = Number(value);
+    else if (value === 'true') parsed = true;
+    else if (value === 'false') parsed = false;
     (raw[section] as Record<string, unknown>)[field] = parsed;
   } else {
     raw[key] = value;

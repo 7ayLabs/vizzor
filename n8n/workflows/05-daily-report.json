@@ -22,270 +22,115 @@
       "parameters": {
         "method": "GET",
         "url": "http://vizzor-api:3000/v1/market/trending",
-        "options": {
-          "timeout": 15000
-        }
+        "options": { "timeout": 15000 }
       },
       "id": "e1b2c3d4-0005-4000-8000-000000000002",
       "name": "Fetch Trending",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [480, 120]
+      "position": [480, 300]
     },
     {
       "parameters": {
         "method": "GET",
         "url": "http://vizzor-api:3000/v1/market/fear-greed",
-        "options": {
-          "timeout": 15000
-        }
+        "options": { "timeout": 15000 }
       },
       "id": "e1b2c3d4-0005-4000-8000-000000000003",
       "name": "Fetch Fear & Greed",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [480, 280]
+      "position": [720, 300]
     },
     {
       "parameters": {
         "method": "GET",
-        "url": "http://vizzor-api:3000/v1/market/news",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "limit",
-              "value": "20"
-            }
-          ]
-        },
-        "options": {
-          "timeout": 15000
-        }
+        "url": "http://ml-sidecar:8000/health",
+        "options": { "timeout": 5000 }
       },
-      "id": "e1b2c3d4-0005-4000-8000-000000000004",
-      "name": "Fetch News",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [480, 440]
-    },
-    {
-      "parameters": {
-        "method": "GET",
-        "url": "http://vizzor-api:3000/v1/market/raises",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "days",
-              "value": "1"
-            }
-          ]
-        },
-        "options": {
-          "timeout": 15000
-        }
-      },
-      "id": "e1b2c3d4-0005-4000-8000-000000000005",
-      "name": "Fetch Raises",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [480, 600]
-    },
-    {
-      "parameters": {
-        "jsCode": "const trending = $('Fetch Trending').first().json;\nconst fearGreed = $('Fetch Fear & Greed').first().json;\nconst news = $('Fetch News').first().json;\nconst raises = $('Fetch Raises').first().json;\n\n// Prepare top tokens for ML prediction\nconst topTokens = (trending.tokens || trending.trending || []).slice(0, 10);\nconst symbols = topTokens.map(t => t.symbol || t.pair || t.name);\n\nreturn [{\n  json: {\n    trending: topTokens,\n    fearGreed,\n    news: (news.articles || news.news || []).slice(0, 10),\n    raises: (raises.raises || raises.data || []).slice(0, 5),\n    symbols\n  }\n}];"
-      },
-      "id": "e1b2c3d4-0005-4000-8000-000000000006",
-      "name": "Merge Data",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [740, 300]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "http://ml-sidecar:8000/predict/batch",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "symbols",
-              "value": "={{ $json.symbols }}"
-            },
-            {
-              "name": "horizon",
-              "value": "24h"
-            }
-          ]
-        },
-        "options": {
-          "timeout": 30000
-        }
-      },
-      "id": "e1b2c3d4-0005-4000-8000-000000000007",
-      "name": "ML Batch Predict",
+      "id": "e1b2c3d4-0005-4000-8000-000000000010",
+      "name": "ML Health Check",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [960, 300]
     },
     {
       "parameters": {
-        "jsCode": "const data = $('Merge Data').first().json;\nconst predictions = $input.first().json.predictions || [];\n\nconst date = new Date().toISOString().split('T')[0];\nconst fg = data.fearGreed;\nconst fgLabel = fg.value >= 75 ? 'Extreme Greed' : fg.value >= 55 ? 'Greed' : fg.value >= 45 ? 'Neutral' : fg.value >= 25 ? 'Fear' : 'Extreme Fear';\n\nlet report = `VIZZOR DAILY REPORT — ${date}\\n`;\nreport += `${'='.repeat(40)}\\n\\n`;\n\n// Fear & Greed\nreport += `MARKET SENTIMENT\\n`;\nreport += `Fear & Greed Index: ${fg.value}/100 (${fgLabel})\\n\\n`;\n\n// Trending tokens with ML predictions\nreport += `TOP TRENDING TOKENS\\n`;\nfor (let i = 0; i < data.trending.length; i++) {\n  const t = data.trending[i];\n  const pred = predictions.find(p => p.symbol === (t.symbol || t.pair));\n  const predStr = pred ? ` | ML 24h: ${pred.direction} (${(pred.confidence * 100).toFixed(0)}%)` : '';\n  report += `${i + 1}. ${t.symbol || t.pair} — $${Number(t.price || 0).toLocaleString()}${predStr}\\n`;\n}\n\n// News\nreport += `\\nTOP NEWS\\n`;\nfor (const n of data.news.slice(0, 5)) {\n  report += `• ${n.title}\\n`;\n}\n\n// Raises\nif (data.raises.length > 0) {\n  report += `\\nFUNDING RAISES (24h)\\n`;\n  for (const r of data.raises) {\n    report += `• ${r.project}: $${Number(r.amount || 0).toLocaleString()} (${r.round || 'N/A'})\\n`;\n  }\n}\n\nreturn [{ json: { report, chatId: process.env.TELEGRAM_REPORT_CHAT_ID || '', discordWebhook: process.env.DISCORD_REPORT_WEBHOOK || '' } }];"
+        "jsCode": "const trending = $('Fetch Trending').first().json;\nconst fearGreed = $('Fetch Fear & Greed').first().json;\nconst mlHealth = $('ML Health Check').first().json;\n\nconst topTokens = (trending.tokens || trending.trending || []).slice(0, 10);\n\nreturn [{\n  json: {\n    trending: topTokens,\n    fearGreed,\n    mlHealth,\n    features: topTokens.map(t => ({\n      rsi: 50, macdHistogram: 0, bollingerPercentB: 0.5,\n      fundingRate: 0, fearGreed: fearGreed.value || fearGreed.index || 50,\n      rsiSlope: 0, volumeRatio: 1, emaCrossoverPct: 0, atrPct: 2,\n      symbol: t.symbol || t.pair || t.name,\n      timestamp: Date.now()\n    }))\n  }\n}];"
+      },
+      "id": "e1b2c3d4-0005-4000-8000-000000000006",
+      "name": "Merge Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ml-sidecar:8000/predict/batch",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ features: $json.features }) }}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "e1b2c3d4-0005-4000-8000-000000000007",
+      "name": "ML Batch Predict",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1440, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $('Merge Data').first().json;\nconst mlResult = $input.first().json;\nconst predictions = mlResult.predictions || [];\n\nconst date = new Date().toISOString().split('T')[0];\nconst fg = data.fearGreed;\nconst fgVal = fg.value || fg.index || 0;\nconst fgLabel = fgVal >= 75 ? 'Extreme Greed' : fgVal >= 55 ? 'Greed' : fgVal >= 45 ? 'Neutral' : fgVal >= 25 ? 'Fear' : 'Extreme Fear';\n\nlet report = `VIZZOR DAILY REPORT — ${date}\\n`;\nreport += `${'='.repeat(40)}\\n\\n`;\n\nreport += `MARKET SENTIMENT\\n`;\nreport += `Fear & Greed Index: ${fgVal}/100 (${fgLabel})\\n\\n`;\n\nreport += `ML SIDECAR\\n`;\nreport += `Models: ${(data.mlHealth.models || []).map(m => m.name).join(', ')}\\n`;\nreport += `Predictions served: ${data.mlHealth.predictionsServed || 0}\\n\\n`;\n\nreport += `TOP TRENDING TOKENS (with ML predictions)\\n`;\nfor (let i = 0; i < data.trending.length; i++) {\n  const t = data.trending[i];\n  const sym = t.symbol || t.pair || t.name;\n  const price = t.priceUsd || t.price || 0;\n  const change = t.priceChange24h || t.change24h || 0;\n  const pred = predictions[i];\n  const dir = pred ? pred.direction : '?';\n  const conf = pred ? Math.round((pred.probability || pred.confidence || 0) * 100) : 0;\n  report += `${i + 1}. ${sym} — $${Number(price).toLocaleString()} (${change > 0 ? '+' : ''}${Number(change).toFixed(1)}%) | ML: ${dir} ${conf}%\\n`;\n}\n\nreport += `\\n— Generated by Vizzor v0.9.0`;\n\nreturn [{ json: { report } }];"
       },
       "id": "e1b2c3d4-0005-4000-8000-000000000008",
       "name": "Compose Report",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1180, 300]
+      "position": [1680, 300]
     },
     {
       "parameters": {
-        "operation": "sendMessage",
-        "chatId": "={{ $json.chatId }}",
-        "text": "={{ $json.report }}",
-        "additionalFields": {
-          "parse_mode": "Markdown"
-        }
+        "assignments": {
+          "assignments": [
+            {
+              "id": "preview",
+              "name": "report",
+              "value": "={{ $json.report }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
       },
       "id": "e1b2c3d4-0005-4000-8000-000000000009",
-      "name": "Telegram Report",
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
-      "position": [1420, 200],
-      "credentials": {
-        "telegramApi": {
-          "id": "vizzor-tg",
-          "name": "Vizzor Telegram Bot"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{ $json.discordWebhook }}",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ content: $json.report.substring(0, 2000) }) }}",
-        "options": {
-          "timeout": 10000
-        }
-      },
-      "id": "e1b2c3d4-0005-4000-8000-000000000010",
-      "name": "Discord Webhook",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [1420, 420]
+      "name": "Output Report",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1920, 300]
     }
   ],
   "connections": {
     "Daily 08:00 UTC": {
-      "main": [
-        [
-          {
-            "node": "Fetch Trending",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Fetch Fear & Greed",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Fetch News",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Fetch Raises",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Fetch Trending", "type": "main", "index": 0 }]]
     },
     "Fetch Trending": {
-      "main": [
-        [
-          {
-            "node": "Merge Data",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Fetch Fear & Greed", "type": "main", "index": 0 }]]
     },
     "Fetch Fear & Greed": {
-      "main": [
-        [
-          {
-            "node": "Merge Data",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "ML Health Check", "type": "main", "index": 0 }]]
     },
-    "Fetch News": {
-      "main": [
-        [
-          {
-            "node": "Merge Data",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Fetch Raises": {
-      "main": [
-        [
-          {
-            "node": "Merge Data",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+    "ML Health Check": {
+      "main": [[{ "node": "Merge Data", "type": "main", "index": 0 }]]
     },
     "Merge Data": {
-      "main": [
-        [
-          {
-            "node": "ML Batch Predict",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "ML Batch Predict", "type": "main", "index": 0 }]]
     },
     "ML Batch Predict": {
-      "main": [
-        [
-          {
-            "node": "Compose Report",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Compose Report", "type": "main", "index": 0 }]]
     },
     "Compose Report": {
-      "main": [
-        [
-          {
-            "node": "Telegram Report",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Discord Webhook",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Output Report", "type": "main", "index": 0 }]]
     }
   },
   "settings": {
@@ -294,14 +139,8 @@
     "callerPolicy": "workflowsFromSameOwner"
   },
   "staticData": null,
-  "tags": [
-    {
-      "name": "reports"
-    },
-    {
-      "name": "daily"
-    }
-  ],
+  "tags": [{ "name": "reports" }, { "name": "daily" }],
   "pinData": {},
-  "versionId": "05-daily-report-v1"
+  "versionId": "05-daily-report-v3",
+  "id": "105"
 }

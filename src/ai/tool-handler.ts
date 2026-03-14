@@ -22,6 +22,9 @@ import { checkTokenSecurity } from '../data/sources/goplus.js';
 import { fetchFearGreedIndex } from '../data/sources/fear-greed.js';
 import { analyzeTechnicals } from '../core/technical-analysis/index.js';
 import { generatePrediction } from '../core/trends/predictor.js';
+import { detectMarketRegime } from '../core/trends/regime.js';
+import { analyzeProject } from '../core/scanner/project-analyzer.js';
+import { assessRisk } from '../core/scanner/risk-scorer.js';
 import {
   createAgent,
   listAgents,
@@ -29,7 +32,7 @@ import {
   getAgentStatus,
   getRecentDecisions,
 } from '../core/agent/index.js';
-import { getMLClient } from '../ml/client.js';
+import { getMLClient, initMLClient } from '../ml/client.js';
 import { buildFeatureVector } from '../ml/feature-engineer.js';
 import { getStoreInstance } from '../data/store-factory.js';
 
@@ -354,7 +357,17 @@ export async function handleTool(name: string, input: unknown): Promise<unknown>
 
     case 'get_ml_prediction': {
       const symbol = String(params['symbol'] ?? 'BTC');
-      const mlClient = getMLClient();
+      let mlClient = getMLClient();
+      if (!mlClient) {
+        try {
+          const cfg = getConfig();
+          if (cfg.ml?.enabled && cfg.ml.sidecarUrl) {
+            mlClient = initMLClient(cfg.ml.sidecarUrl);
+          }
+        } catch {
+          // Config not loaded
+        }
+      }
       if (!mlClient) {
         // Fallback to rule-based prediction
         const prediction = await generatePrediction(symbol);
@@ -415,6 +428,295 @@ export async function handleTool(name: string, input: unknown): Promise<unknown>
           down: `${(accuracy.byDirection.down.accuracy * 100).toFixed(1)}% (${accuracy.byDirection.down.correct}/${accuracy.byDirection.down.total})`,
           sideways: `${(accuracy.byDirection.sideways.accuracy * 100).toFixed(1)}% (${accuracy.byDirection.sideways.correct}/${accuracy.byDirection.sideways.total})`,
         },
+      };
+    }
+
+    case 'get_rug_ml_analysis': {
+      const address = String(params['address'] ?? '');
+      const chain = String(params['chain'] ?? DEFAULT_CHAIN);
+      // Run both bytecode analysis + ML
+      const adapter = getAdapter(chain);
+      await adapter.connect(undefined, getConfig().etherscanApiKey);
+      const indicators = await detectRugIndicators(address, adapter);
+
+      // Also get GoPlus security data for enrichment
+      let goplus = null;
+      try {
+        goplus = await checkTokenSecurity(address, chain);
+      } catch {
+        /* GoPlus unavailable */
+      }
+
+      // Call ML rug detector directly with enriched features
+      let mlClient = getMLClient();
+      if (!mlClient) {
+        try {
+          const cfg = getConfig();
+          if (cfg.ml?.enabled && cfg.ml.sidecarUrl) {
+            mlClient = initMLClient(cfg.ml.sidecarUrl);
+          }
+        } catch {
+          /* config not loaded */
+        }
+      }
+
+      let mlResult = indicators.mlAnalysis ?? null;
+      if (!mlResult && mlClient && goplus) {
+        mlResult =
+          (await mlClient.predictRug({
+            bytecode_size: 0,
+            is_verified: goplus.isOpenSource ? 1 : 0,
+            holder_concentration: (goplus.creatorPercent ?? 0) + (goplus.ownerPercent ?? 0),
+            has_proxy: goplus.isProxy ? 1 : 0,
+            has_mint: goplus.isMintable ? 1 : 0,
+            has_pause: indicators.ownerCanPause ? 1 : 0,
+            has_blacklist: indicators.hasBlacklist ? 1 : 0,
+            liquidity_locked: 0,
+            buy_tax: goplus.buyTax ?? 0,
+            sell_tax: goplus.sellTax ?? 0,
+            contract_age_days: 0,
+            total_transfers: 0,
+            owner_balance_pct: goplus.ownerPercent ?? 0,
+            is_open_source: goplus.isOpenSource ? 1 : 0,
+            top10_holder_pct: 0,
+          })) ?? null;
+      }
+
+      return {
+        address,
+        chain,
+        ruleBasedRiskScore: indicators.riskScore,
+        mlAnalysis: mlResult ?? { note: 'ML sidecar not available' },
+        indicators: {
+          isHoneypot: indicators.isHoneypot,
+          ownerCanMint: indicators.ownerCanMint,
+          ownerCanPause: indicators.ownerCanPause,
+          hasBlacklist: indicators.hasBlacklist,
+          highSellTax: indicators.highSellTax,
+        },
+        details: indicators.details,
+        goplus: goplus
+          ? {
+              riskLevel: goplus.riskLevel,
+              buyTax: goplus.buyTax,
+              sellTax: goplus.sellTax,
+              isHoneypot: goplus.isHoneypot,
+              isMintable: goplus.isMintable,
+              holderCount: goplus.holderCount,
+            }
+          : null,
+      };
+    }
+
+    case 'get_wallet_behavior': {
+      const address = String(params['address'] ?? '');
+      const chain = String(params['chain'] ?? DEFAULT_CHAIN);
+      const adapter = getAdapter(chain);
+      await adapter.connect(undefined, getConfig().etherscanApiKey);
+      const analysis = await analyzeWallet(address, adapter);
+      return {
+        address: analysis.address,
+        chain: analysis.chain,
+        balance: analysis.balance.toString(),
+        transactionCount: analysis.transactionCount,
+        riskLevel: analysis.riskLevel,
+        patterns: analysis.patterns,
+        mlBehavior: analysis.mlBehavior ?? { note: 'ML sidecar not available' },
+      };
+    }
+
+    case 'analyze_news_sentiment': {
+      const symbol = String(params['symbol'] ?? '');
+      let mlClient = getMLClient();
+      if (!mlClient) {
+        try {
+          const cfg = getConfig();
+          if (cfg.ml?.enabled && cfg.ml.sidecarUrl) {
+            mlClient = initMLClient(cfg.ml.sidecarUrl);
+          }
+        } catch {
+          /* config not loaded */
+        }
+      }
+
+      const news = await fetchCryptoNews(symbol || undefined, getConfig().cryptopanicApiKey);
+      if (news.length === 0) {
+        return { symbol, sentiment: 'neutral', note: 'No news found' };
+      }
+
+      const headlines = news.slice(0, 10).map((n) => n.title);
+
+      if (mlClient) {
+        const results = await mlClient.analyzeSentimentBatch(headlines);
+        if (results.length > 0) {
+          const avgScore = results.reduce((s, r) => s + r.score, 0) / results.length;
+          const avgConf = results.reduce((s, r) => s + r.confidence, 0) / results.length;
+          const allTopics = [...new Set(results.flatMap((r) => r.key_topics))];
+          return {
+            symbol,
+            sentiment: avgScore > 0.2 ? 'bullish' : avgScore < -0.2 ? 'bearish' : 'neutral',
+            score: Math.round(avgScore * 1000) / 1000,
+            confidence: Math.round(avgConf * 100),
+            topics: allTopics.slice(0, 5),
+            headlines: results.map((r, i) => ({
+              title: headlines[i],
+              sentiment: r.sentiment,
+              score: r.score,
+              confidence: r.confidence,
+            })),
+            model: results[0]?.model ?? 'unknown',
+            articleCount: news.length,
+          };
+        }
+      }
+
+      // Fallback: vote-based sentiment
+      let pos = 0;
+      let neg = 0;
+      for (const n of news) {
+        if (n.sentiment === 'positive') pos++;
+        else if (n.sentiment === 'negative') neg++;
+      }
+      const score = news.length > 0 ? (pos - neg) / news.length : 0;
+      return {
+        symbol,
+        sentiment: score > 0.2 ? 'bullish' : score < -0.2 ? 'bearish' : 'neutral',
+        score,
+        confidence: 50,
+        topics: [],
+        headlines: headlines.map((h, i) => ({
+          title: h,
+          sentiment: news[i]?.sentiment ?? 'neutral',
+        })),
+        model: 'vote-count-fallback',
+        articleCount: news.length,
+      };
+    }
+
+    case 'get_market_regime': {
+      const symbol = String(params['symbol'] ?? 'BTC');
+      // Fetch indicators needed for regime detection
+      const ta = await analyzeTechnicals(symbol, '4h');
+      const [fgResult, fundingResult] = await Promise.allSettled([
+        fetchFearGreedIndex(1),
+        fetchFundingRate(symbol),
+      ]);
+      const fg = fgResult.status === 'fulfilled' ? fgResult.value.current.value : 50;
+      const funding = fundingResult.status === 'fulfilled' ? fundingResult.value.fundingRate : 0;
+      const price = ta.indicators.ema12 ?? 0;
+      const atrVal = ta.indicators.atr ?? 0;
+      const atrPct = price > 0 ? (atrVal / price) * 100 : 3;
+
+      const regime = await detectMarketRegime(symbol, {
+        returns_1d: 0,
+        returns_7d: 0,
+        volatility_14d: atrPct,
+        volume_ratio: 1,
+        rsi: ta.indicators.rsi ?? 50,
+        bb_width: ta.indicators.bollingerBands
+          ? ((ta.indicators.bollingerBands.upper - ta.indicators.bollingerBands.lower) /
+              ta.indicators.bollingerBands.middle) *
+            100
+          : 0,
+        fear_greed: fg,
+        funding_rate: funding,
+        price_vs_sma200: 0,
+      });
+
+      return {
+        symbol: symbol.toUpperCase(),
+        regime: regime.regime,
+        confidence: regime.confidence,
+        probabilities: regime.probabilities,
+        model: regime.model,
+      };
+    }
+
+    case 'get_ta_ml_analysis': {
+      const symbol = String(params['symbol'] ?? 'BTC');
+      const timeframe = String(params['timeframe'] ?? '4h');
+      const ta = await analyzeTechnicals(symbol, timeframe);
+      return {
+        symbol: ta.symbol,
+        timeframe: ta.timeframe,
+        composite: ta.composite,
+        signals: ta.signals.map((s) => ({
+          name: s.name,
+          signal: s.signal,
+          strength: s.strength,
+          description: s.description,
+        })),
+        indicators: {
+          rsi: ta.indicators.rsi ? Math.round(ta.indicators.rsi * 100) / 100 : null,
+          macd: ta.indicators.macd,
+          bollingerBands: ta.indicators.bollingerBands,
+          ema12: ta.indicators.ema12,
+          ema26: ta.indicators.ema26,
+          atr: ta.indicators.atr,
+        },
+        note: 'ML-enhanced: signals and composite use learned weights when ML sidecar is available',
+      };
+    }
+
+    case 'get_project_risk_ml': {
+      const address = String(params['address'] ?? '');
+      const chain = String(params['chain'] ?? DEFAULT_CHAIN);
+      const adapter = getAdapter(chain);
+      await adapter.connect(undefined, getConfig().etherscanApiKey);
+      const analysis = await analyzeProject(address, adapter);
+      const risk = assessRisk(analysis);
+      return {
+        address,
+        chain,
+        riskScore: risk.score,
+        riskLevel: risk.level,
+        summary: risk.summary,
+        factors: risk.factors,
+        mlScore: risk.mlScore ?? null,
+        mlLevel: risk.mlLevel ?? null,
+        token: analysis.token
+          ? {
+              name: analysis.token.name,
+              symbol: analysis.token.symbol,
+              decimals: analysis.token.decimals,
+            }
+          : null,
+        holderConcentration: analysis.holderConcentration,
+        contractVerified: analysis.contractVerified,
+      };
+    }
+
+    case 'get_portfolio_forecast': {
+      const agentName = String(params['agentName'] ?? '');
+      const agent = getAgentByName(agentName);
+      if (!agent) return { error: `Agent "${agentName}" not found` };
+      // Forecast requires trade history — currently we return a placeholder
+      // since the full trade store integration is agent-specific
+      let mlClient = getMLClient();
+      if (!mlClient) {
+        try {
+          const cfg = getConfig();
+          if (cfg.ml?.enabled && cfg.ml.sidecarUrl) {
+            mlClient = initMLClient(cfg.ml.sidecarUrl);
+          }
+        } catch {
+          /* config not loaded */
+        }
+      }
+      if (!mlClient) {
+        return {
+          agentName,
+          error: 'ML sidecar not available for portfolio forecast',
+        };
+      }
+
+      // Use agent state for basic forecast
+      const state = getAgentStatus(agent.id);
+      return {
+        agentName,
+        status: state?.status ?? 'idle',
+        cycleCount: state?.cycleCount ?? 0,
+        note: 'Portfolio forecast requires trade history. Use calculateMetricsWithForecast() in agent engine for full predictions.',
       };
     }
 

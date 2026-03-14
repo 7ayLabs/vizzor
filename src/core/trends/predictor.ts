@@ -10,9 +10,10 @@ import {
   fetchOpenInterest,
   fetchTickerPrice,
 } from '../../data/sources/binance.js';
-import { getMLClient } from '../../ml/client.js';
+import { getMLClient, initMLClient } from '../../ml/client.js';
 import { buildFeatureVector } from '../../ml/feature-engineer.js';
 import type { MLPredictionResult } from '../../ml/types.js';
+import { getConfig } from '../../config/loader.js';
 
 export interface Prediction {
   symbol: string;
@@ -208,7 +209,17 @@ export async function generatePrediction(symbol: string): Promise<Prediction> {
   };
 
   // ML enhancement: if sidecar is available, merge ML prediction
-  const mlClient = getMLClient();
+  let mlClient = getMLClient();
+  if (!mlClient) {
+    try {
+      const cfg = getConfig();
+      if (cfg.ml?.enabled && cfg.ml.sidecarUrl) {
+        mlClient = initMLClient(cfg.ml.sidecarUrl);
+      }
+    } catch {
+      // Config not loaded yet — skip ML
+    }
+  }
   if (mlClient) {
     try {
       const features = await buildFeatureVector(symbol);

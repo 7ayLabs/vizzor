@@ -146,7 +146,7 @@ collectCmd
 program
   .command('serve')
   .description('Start the REST API server')
-  .option('--port <port>', 'Server port', parseInt, 3000)
+  .option('--port <port>', 'Server port', (v: string) => parseInt(v, 10), 3000)
   .option('--host <host>', 'Server host', '0.0.0.0')
   .option('--auth', 'Enable API key authentication', false)
   .action(async (options: { port: number; host: string; auth: boolean }) => {

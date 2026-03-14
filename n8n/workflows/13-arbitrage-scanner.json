@@ -16,7 +16,10 @@
       "name": "Every 1 Minute",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [240, 300]
+      "position": [
+        240,
+        300
+      ]
     },
     {
       "parameters": {
@@ -43,7 +46,10 @@
       "name": "CEX Prices",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [480, 200]
+      "position": [
+        480,
+        300
+      ]
     },
     {
       "parameters": {
@@ -70,7 +76,10 @@
       "name": "DEX Prices",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [480, 420]
+      "position": [
+        700,
+        300
+      ]
     },
     {
       "parameters": {
@@ -80,7 +89,10 @@
       "name": "Calculate Spreads",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [740, 300]
+      "position": [
+        920,
+        300
+      ]
     },
     {
       "parameters": {
@@ -108,7 +120,10 @@
       "name": "Spread > 1.5%?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [960, 300]
+      "position": [
+        1140,
+        300
+      ]
     },
     {
       "parameters": {
@@ -125,7 +140,10 @@
       "name": "ML Confirm",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1200, 200]
+      "position": [
+        1380,
+        200
+      ]
     },
     {
       "parameters": {
@@ -135,7 +153,10 @@
       "name": "Format Opportunity",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1420, 200]
+      "position": [
+        1600,
+        200
+      ]
     },
     {
       "parameters": {
@@ -163,7 +184,10 @@
       "name": "ML Confirmed?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [1640, 200]
+      "position": [
+        1820,
+        200
+      ]
     },
     {
       "parameters": {
@@ -178,7 +202,10 @@
       "name": "Telegram Alert",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [1880, 140],
+      "position": [
+        2060,
+        140
+      ],
       "credentials": {
         "telegramApi": {
           "id": "vizzor-tg",
@@ -195,11 +222,6 @@
             "node": "CEX Prices",
             "type": "main",
             "index": 0
-          },
-          {
-            "node": "DEX Prices",
-            "type": "main",
-            "index": 0
           }
         ]
       ]
@@ -208,7 +230,7 @@
       "main": [
         [
           {
-            "node": "Calculate Spreads",
+            "node": "DEX Prices",
             "type": "main",
             "index": 0
           }
@@ -299,5 +321,6 @@
     }
   ],
   "pinData": {},
-  "versionId": "13-arbitrage-scanner-v1"
+  "versionId": "13-arbitrage-scanner-v1",
+  "id": "113"
 }

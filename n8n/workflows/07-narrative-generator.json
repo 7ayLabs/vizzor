@@ -1,5 +1,5 @@
 {
-  "name": "07 — Narrative Generator",
+  "name": "07 \u2014 Narrative Generator",
   "nodes": [
     {
       "parameters": {
@@ -16,7 +16,10 @@
       "name": "Every 6 Hours",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [240, 300]
+      "position": [
+        240,
+        300
+      ]
     },
     {
       "parameters": {
@@ -30,7 +33,10 @@
       "name": "Fetch Trending",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [480, 160]
+      "position": [
+        480,
+        300
+      ]
     },
     {
       "parameters": {
@@ -53,7 +59,10 @@
       "name": "Fetch News",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [480, 320]
+      "position": [
+        700,
+        300
+      ]
     },
     {
       "parameters": {
@@ -67,7 +76,10 @@
       "name": "Fetch Fear & Greed",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [480, 480]
+      "position": [
+        920,
+        300
+      ]
     },
     {
       "parameters": {
@@ -77,7 +89,10 @@
       "name": "Merge Market Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [740, 300]
+      "position": [
+        1140,
+        300
+      ]
     },
     {
       "parameters": {
@@ -104,17 +119,23 @@
       "name": "ML Batch Predict",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [960, 300]
+      "position": [
+        1360,
+        300
+      ]
     },
     {
       "parameters": {
-        "jsCode": "const data = $('Merge Market Data').first().json;\nconst predictions = $input.first().json.predictions || [];\n\nconst fg = data.fearGreed;\nconst fgLabel = fg.value >= 75 ? 'Extreme Greed' : fg.value >= 55 ? 'Greed' : fg.value >= 45 ? 'Neutral' : fg.value >= 25 ? 'Fear' : 'Extreme Fear';\n\nlet trendingSummary = data.trending.map((t, i) => {\n  const pred = predictions.find(p => p.symbol === (t.symbol || t.pair));\n  return `${i+1}. ${t.symbol || t.pair}: $${Number(t.price || 0).toLocaleString()} (24h: ${(t.change24h || 0).toFixed(1)}%)` +\n    (pred ? ` — ML predicts ${pred.direction} (${(pred.confidence * 100).toFixed(0)}% conf)` : '');\n}).join('\\n');\n\nlet newsSummary = data.news.map(n => `- ${n.title} (${n.source || 'unknown'})`).join('\\n');\n\nconst prompt = `You are Vizzor, a crypto market analyst AI. Generate a concise but insightful market narrative (300-500 words) based on the following real-time data.\\n\\n` +\n  `MARKET SENTIMENT: Fear & Greed Index = ${fg.value}/100 (${fgLabel})\\n\\n` +\n  `TOP TRENDING TOKENS (with ML predictions):\\n${trendingSummary}\\n\\n` +\n  `LATEST NEWS:\\n${newsSummary}\\n\\n` +\n  `Requirements:\\n` +\n  `1. Identify the dominant market narrative/theme\\n` +\n  `2. Highlight key catalysts and risks\\n` +\n  `3. Note any sector rotations or emerging trends\\n` +\n  `4. Provide actionable insights without financial advice\\n` +\n  `5. Keep tone professional but accessible\\n` +\n  `6. End with 2-3 key things to watch in the next 6 hours`;\n\nreturn [{ json: { prompt } }];"
+        "jsCode": "const data = $('Merge Market Data').first().json;\nconst predictions = $input.first().json.predictions || [];\n\nconst fg = data.fearGreed;\nconst fgLabel = fg.value >= 75 ? 'Extreme Greed' : fg.value >= 55 ? 'Greed' : fg.value >= 45 ? 'Neutral' : fg.value >= 25 ? 'Fear' : 'Extreme Fear';\n\nlet trendingSummary = data.trending.map((t, i) => {\n  const pred = predictions.find(p => p.symbol === (t.symbol || t.pair));\n  return `${i+1}. ${t.symbol || t.pair}: $${Number(t.price || 0).toLocaleString()} (24h: ${(t.change24h || 0).toFixed(1)}%)` +\n    (pred ? ` \u2014 ML predicts ${pred.direction} (${(pred.confidence * 100).toFixed(0)}% conf)` : '');\n}).join('\\n');\n\nlet newsSummary = data.news.map(n => `- ${n.title} (${n.source || 'unknown'})`).join('\\n');\n\nconst prompt = `You are Vizzor, a crypto market analyst AI. Generate a concise but insightful market narrative (300-500 words) based on the following real-time data.\\n\\n` +\n  `MARKET SENTIMENT: Fear & Greed Index = ${fg.value}/100 (${fgLabel})\\n\\n` +\n  `TOP TRENDING TOKENS (with ML predictions):\\n${trendingSummary}\\n\\n` +\n  `LATEST NEWS:\\n${newsSummary}\\n\\n` +\n  `Requirements:\\n` +\n  `1. Identify the dominant market narrative/theme\\n` +\n  `2. Highlight key catalysts and risks\\n` +\n  `3. Note any sector rotations or emerging trends\\n` +\n  `4. Provide actionable insights without financial advice\\n` +\n  `5. Keep tone professional but accessible\\n` +\n  `6. End with 2-3 key things to watch in the next 6 hours`;\n\nreturn [{ json: { prompt } }];"
       },
       "id": "a2b2c3d4-0007-4000-8000-000000000007",
       "name": "Structure Prompt",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1180, 300]
+      "position": [
+        1580,
+        300
+      ]
     },
     {
       "parameters": {
@@ -136,7 +157,10 @@
       "name": "OpenAI Generate",
       "type": "@n8n/n8n-nodes-langchain.openAi",
       "typeVersion": 1.8,
-      "position": [1400, 300],
+      "position": [
+        1800,
+        300
+      ],
       "credentials": {
         "openAiApi": {
           "id": "vizzor-openai",
@@ -146,13 +170,16 @@
     },
     {
       "parameters": {
-        "jsCode": "const narrative = $input.first().json.message?.content || $input.first().json.text || $input.first().json.choices?.[0]?.message?.content || 'No narrative generated.';\nconst timestamp = new Date().toISOString();\n\nconst message = `VIZZOR MARKET NARRATIVE\\n` +\n  `${timestamp}\\n` +\n  `${'—'.repeat(30)}\\n\\n` +\n  narrative;\n\nreturn [{ json: { message, chatId: process.env.TELEGRAM_REPORT_CHAT_ID || '' } }];"
+        "jsCode": "const narrative = $input.first().json.message?.content || $input.first().json.text || $input.first().json.choices?.[0]?.message?.content || 'No narrative generated.';\nconst timestamp = new Date().toISOString();\n\nconst message = `VIZZOR MARKET NARRATIVE\\n` +\n  `${timestamp}\\n` +\n  `${'\u2014'.repeat(30)}\\n\\n` +\n  narrative;\n\nreturn [{ json: { message, chatId: process.env.TELEGRAM_REPORT_CHAT_ID || '' } }];"
       },
       "id": "a2b2c3d4-0007-4000-8000-000000000009",
       "name": "Format Output",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1620, 300]
+      "position": [
+        2020,
+        300
+      ]
     },
     {
       "parameters": {
@@ -167,7 +194,10 @@
       "name": "Telegram Narrative",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [1840, 300],
+      "position": [
+        2240,
+        300
+      ],
       "credentials": {
         "telegramApi": {
           "id": "vizzor-tg",
@@ -184,16 +214,6 @@
             "node": "Fetch Trending",
             "type": "main",
             "index": 0
-          },
-          {
-            "node": "Fetch News",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Fetch Fear & Greed",
-            "type": "main",
-            "index": 0
           }
         ]
       ]
@@ -202,7 +222,7 @@
       "main": [
         [
           {
-            "node": "Merge Market Data",
+            "node": "Fetch News",
             "type": "main",
             "index": 0
           }
@@ -213,7 +233,7 @@
       "main": [
         [
           {
-            "node": "Merge Market Data",
+            "node": "Fetch Fear & Greed",
             "type": "main",
             "index": 0
           }
@@ -302,5 +322,6 @@
     }
   ],
   "pinData": {},
-  "versionId": "07-narrative-generator-v1"
+  "versionId": "07-narrative-generator-v1",
+  "id": "107"
 }

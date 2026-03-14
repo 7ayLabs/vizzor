@@ -3,6 +3,9 @@
 // No external API needed — works purely on contract bytecode.
 // ---------------------------------------------------------------------------
 
+import { getMLClient } from '../../ml/client.js';
+import type { BytecodeRiskMLResult } from '../../ml/types.js';
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -212,4 +215,77 @@ export function hasBlacklistFunction(code: string): boolean {
     normalized.includes('44337ea1') ||
     normalized.includes('e47d6060')
   );
+}
+
+/**
+ * Calculate Shannon entropy of byte distribution in bytecode.
+ * Higher entropy = more random/packed code, lower = repetitive patterns.
+ */
+export function calculateEntropy(code: string): number {
+  const normalized = code.startsWith('0x') ? code.slice(2).toLowerCase() : code.toLowerCase();
+  if (normalized.length < 2) return 0;
+
+  // Count byte frequencies (pairs of hex chars)
+  const counts = new Map<string, number>();
+  const totalBytes = Math.floor(normalized.length / 2);
+
+  for (let i = 0; i < normalized.length - 1; i += 2) {
+    const byte = normalized.slice(i, i + 2);
+    counts.set(byte, (counts.get(byte) ?? 0) + 1);
+  }
+
+  // Shannon entropy
+  let entropy = 0;
+  for (const count of counts.values()) {
+    const p = count / totalBytes;
+    if (p > 0) {
+      entropy -= p * Math.log2(p);
+    }
+  }
+
+  return entropy;
+}
+
+export interface BytecodeScanResult {
+  findings: BytecodeFinding[];
+  mlRisk?: BytecodeRiskMLResult;
+}
+
+/**
+ * ML-enhanced bytecode scan. Runs rule-based scan then ML risk scoring.
+ */
+export async function scanBytecodeML(code: string): Promise<BytecodeScanResult> {
+  const findings = scanBytecode(code);
+  const normalized = code.startsWith('0x') ? code.slice(2).toLowerCase() : code.toLowerCase();
+
+  const mlClient = getMLClient();
+  if (!mlClient) return { findings };
+
+  try {
+    const hasSd = findings.some((f) => f.name === 'SELFDESTRUCT');
+    const hasDc = normalized.includes('f4'); // DELEGATECALL opcode
+    const selectorCount = DANGEROUS_FUNCTIONS.filter((f) => normalized.includes(f.selector)).length;
+    const entropy = calculateEntropy(code);
+
+    const result = await mlClient.scoreBytecodeRisk({
+      bytecode_size: Math.floor(normalized.length / 2),
+      is_verified: 0,
+      has_selfdestruct: hasSd ? 1 : 0,
+      has_delegatecall: hasDc ? 1 : 0,
+      selector_count: selectorCount,
+      opcode_entropy: entropy,
+      has_mint: hasMintFunction(code) ? 1 : 0,
+      has_pause: hasPauseFunction(code) ? 1 : 0,
+      has_blacklist: hasBlacklistFunction(code) ? 1 : 0,
+      has_proxy: normalized.includes('f4') ? 1 : 0,
+    });
+
+    if (result) {
+      return { findings, mlRisk: result };
+    }
+  } catch {
+    // ML unavailable
+  }
+
+  return { findings };
 }

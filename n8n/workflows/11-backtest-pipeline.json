@@ -1,5 +1,5 @@
 {
-  "name": "11 — Backtest Pipeline (Webhook)",
+  "name": "11 \u2014 Backtest Pipeline (Webhook)",
   "nodes": [
     {
       "parameters": {
@@ -12,7 +12,10 @@
       "name": "Webhook Trigger",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [240, 300],
+      "position": [
+        240,
+        300
+      ],
       "webhookId": "backtest-pipeline-webhook"
     },
     {
@@ -23,7 +26,10 @@
       "name": "Parse Request",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [460, 300]
+      "position": [
+        460,
+        300
+      ]
     },
     {
       "parameters": {
@@ -35,7 +41,10 @@
       "name": "Query OHLCV",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [680, 300],
+      "position": [
+        680,
+        300
+      ],
       "credentials": {
         "postgres": {
           "id": "vizzor-pg",
@@ -58,7 +67,10 @@
       "name": "Run Backtest",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [900, 300]
+      "position": [
+        900,
+        300
+      ]
     },
     {
       "parameters": {
@@ -68,7 +80,10 @@
       "name": "Parse Results",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1120, 300]
+      "position": [
+        1120,
+        300
+      ]
     },
     {
       "parameters": {
@@ -96,7 +111,10 @@
       "name": "Sharpe < 0.5?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [1340, 300]
+      "position": [
+        1340,
+        300
+      ]
     },
     {
       "parameters": {
@@ -111,7 +129,10 @@
       "name": "Telegram Fail Alert",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [1580, 200],
+      "position": [
+        1580,
+        200
+      ],
       "credentials": {
         "telegramApi": {
           "id": "vizzor-tg",
@@ -131,7 +152,10 @@
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1580, 420]
+      "position": [
+        1580,
+        420
+      ]
     }
   ],
   "connections": {
@@ -223,5 +247,6 @@
     }
   ],
   "pinData": {},
-  "versionId": "11-backtest-pipeline-v1"
+  "versionId": "11-backtest-pipeline-v1",
+  "id": "111"
 }

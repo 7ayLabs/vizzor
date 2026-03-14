@@ -1,5 +1,5 @@
 {
-  "name": "01 — Data Collection (28 Pairs)",
+  "name": "01 \u2014 Data Collection (28 Pairs)",
   "nodes": [
     {
       "parameters": {
@@ -16,7 +16,10 @@
       "name": "Every 5 Minutes",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [240, 300]
+      "position": [
+        240,
+        300
+      ]
     },
     {
       "parameters": {
@@ -35,7 +38,10 @@
       "name": "Set Pairs",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [460, 300]
+      "position": [
+        460,
+        300
+      ]
     },
     {
       "parameters": {
@@ -46,7 +52,10 @@
       "name": "Batch Pairs",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
-      "position": [680, 300]
+      "position": [
+        680,
+        300
+      ]
     },
     {
       "parameters": {
@@ -70,7 +79,10 @@
       "name": "Fetch Prices",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [900, 300]
+      "position": [
+        900,
+        300
+      ]
     },
     {
       "parameters": {
@@ -80,7 +92,10 @@
       "name": "Transform Rows",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1120, 300]
+      "position": [
+        1120,
+        300
+      ]
     },
     {
       "parameters": {
@@ -93,7 +108,10 @@
       "name": "Insert Postgres",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [1340, 300],
+      "position": [
+        1340,
+        300
+      ],
       "credentials": {
         "postgres": {
           "id": "vizzor-pg",
@@ -175,5 +193,6 @@
     }
   ],
   "pinData": {},
-  "versionId": "01-data-collection-v1"
+  "versionId": "01-data-collection-v1",
+  "id": "101"
 }

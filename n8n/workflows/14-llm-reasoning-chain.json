@@ -12,7 +12,10 @@
       "name": "Webhook Trigger",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [240, 300],
+      "position": [
+        240,
+        300
+      ],
       "webhookId": "reasoning-chain-webhook"
     },
     {
@@ -23,7 +26,10 @@
       "name": "Parse Request",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [460, 300]
+      "position": [
+        460,
+        300
+      ]
     },
     {
       "parameters": {
@@ -34,7 +40,7 @@
           "parameters": [
             {
               "name": "pairs",
-              "value": "={{ $json.token + '/USDT' }}"
+              "value": "={{ $('Parse Request').first().json.token + '/USDT' }}"
             }
           ]
         },
@@ -46,12 +52,15 @@
       "name": "Fetch Market Data",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [700, 100]
+      "position": [
+        700,
+        300
+      ]
     },
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ 'http://vizzor-api:3000/v1/scanner/ta/' + $json.token }}",
+        "url": "={{ 'http://vizzor-api:3000/v1/scanner/ta/' + $('Parse Request').first().json.token }}",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
@@ -69,7 +78,10 @@
       "name": "Fetch TA",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [700, 260]
+      "position": [
+        920,
+        300
+      ]
     },
     {
       "parameters": {
@@ -80,11 +92,11 @@
           "parameters": [
             {
               "name": "token",
-              "value": "={{ $json.token }}"
+              "value": "={{ $('Parse Request').first().json.token }}"
             },
             {
               "name": "chain",
-              "value": "={{ $json.chain }}"
+              "value": "={{ $('Parse Request').first().json.chain }}"
             }
           ]
         },
@@ -96,7 +108,10 @@
       "name": "Fetch Security",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [700, 420]
+      "position": [
+        1140,
+        300
+      ]
     },
     {
       "parameters": {
@@ -107,7 +122,7 @@
           "parameters": [
             {
               "name": "symbol",
-              "value": "={{ $json.token }}"
+              "value": "={{ $('Parse Request').first().json.token }}"
             },
             {
               "name": "horizon",
@@ -123,7 +138,10 @@
       "name": "ML Prediction",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [700, 580]
+      "position": [
+        1360,
+        300
+      ]
     },
     {
       "parameters": {
@@ -133,7 +151,10 @@
       "name": "Structure Step 1 Prompt",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [960, 300]
+      "position": [
+        1580,
+        300
+      ]
     },
     {
       "parameters": {
@@ -155,7 +176,10 @@
       "name": "Step 1 — Analyze",
       "type": "@n8n/n8n-nodes-langchain.openAi",
       "typeVersion": 1.8,
-      "position": [1200, 300],
+      "position": [
+        1800,
+        300
+      ],
       "credentials": {
         "openAiApi": {
           "id": "vizzor-openai",
@@ -171,7 +195,10 @@
       "name": "Structure Step 2 Prompt",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1420, 300]
+      "position": [
+        2020,
+        300
+      ]
     },
     {
       "parameters": {
@@ -193,7 +220,10 @@
       "name": "Step 2 — Recommend",
       "type": "@n8n/n8n-nodes-langchain.openAi",
       "typeVersion": 1.8,
-      "position": [1640, 300],
+      "position": [
+        2240,
+        300
+      ],
       "credentials": {
         "openAiApi": {
           "id": "vizzor-openai",
@@ -209,7 +239,10 @@
       "name": "Compose Final Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1860, 300]
+      "position": [
+        2460,
+        300
+      ]
     },
     {
       "parameters": {
@@ -231,7 +264,10 @@
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [2080, 300]
+      "position": [
+        2680,
+        300
+      ]
     }
   ],
   "connections": {
@@ -253,21 +289,6 @@
             "node": "Fetch Market Data",
             "type": "main",
             "index": 0
-          },
-          {
-            "node": "Fetch TA",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Fetch Security",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "ML Prediction",
-            "type": "main",
-            "index": 0
           }
         ]
       ]
@@ -276,7 +297,7 @@
       "main": [
         [
           {
-            "node": "Structure Step 1 Prompt",
+            "node": "Fetch TA",
             "type": "main",
             "index": 0
           }
@@ -287,7 +308,7 @@
       "main": [
         [
           {
-            "node": "Structure Step 1 Prompt",
+            "node": "Fetch Security",
             "type": "main",
             "index": 0
           }
@@ -298,7 +319,7 @@
       "main": [
         [
           {
-            "node": "Structure Step 1 Prompt",
+            "node": "ML Prediction",
             "type": "main",
             "index": 0
           }
@@ -387,5 +408,6 @@
     }
   ],
   "pinData": {},
-  "versionId": "14-llm-reasoning-chain-v1"
+  "versionId": "14-llm-reasoning-chain-v1",
+  "id": "114"
 }

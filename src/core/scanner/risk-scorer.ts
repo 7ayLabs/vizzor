@@ -5,19 +5,38 @@ export interface RiskAssessment {
   level: 'low' | 'medium' | 'high' | 'critical';
   summary: string;
   factors: string[];
+  mlScore?: number;
+  mlLevel?: string;
 }
 
 export function assessRisk(analysis: ProjectAnalysis): RiskAssessment {
-  const { riskScore, riskIndicators } = analysis;
+  const { riskScore, riskIndicators, mlRisk } = analysis;
 
-  const level = getRiskLevel(riskScore);
+  // Use ML risk probability if available, else fall back to point sum
+  const effectiveScore = mlRisk ? Math.round(mlRisk.risk_probability * 100) : riskScore;
+  const level = getRiskLevel(effectiveScore);
+
   const factors = riskIndicators
     .filter((i) => i.detected)
     .map((i) => `${i.name}: ${i.description} (+${i.points})`);
 
+  // Add ML risk factors if available
+  if (mlRisk) {
+    for (const f of mlRisk.risk_factors) {
+      factors.push(`ML: ${f.factor} (importance: ${(f.importance * 100).toFixed(1)}%)`);
+    }
+  }
+
   const summary = buildSummary(level, factors.length);
 
-  return { score: riskScore, level, summary, factors };
+  return {
+    score: effectiveScore,
+    level,
+    summary,
+    factors,
+    mlScore: mlRisk ? Math.round(mlRisk.risk_probability * 100) : undefined,
+    mlLevel: mlRisk?.risk_level,
+  };
 }
 
 function getRiskLevel(score: number): RiskAssessment['level'] {

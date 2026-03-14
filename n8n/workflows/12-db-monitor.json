@@ -1,5 +1,5 @@
 {
-  "name": "12 — Database Monitor",
+  "name": "12 \u2014 Database Monitor",
   "nodes": [
     {
       "parameters": {
@@ -16,7 +16,10 @@
       "name": "Every Hour",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [240, 300]
+      "position": [
+        240,
+        300
+      ]
     },
     {
       "parameters": {
@@ -28,7 +31,10 @@
       "name": "Query Table Sizes",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [480, 200],
+      "position": [
+        480,
+        300
+      ],
       "credentials": {
         "postgres": {
           "id": "vizzor-pg",
@@ -46,7 +52,10 @@
       "name": "Query Slow Queries",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [480, 420],
+      "position": [
+        700,
+        300
+      ],
       "credentials": {
         "postgres": {
           "id": "vizzor-pg",
@@ -56,13 +65,16 @@
     },
     {
       "parameters": {
-        "jsCode": "const tables = $('Query Table Sizes').all().map(i => i.json);\nconst slowQueries = $('Query Slow Queries').all().map(i => i.json);\n\nconst issues = [];\n\n// Check for large tables (> 1GB)\nconst largeTables = tables.filter(t => t.size_bytes > 1073741824);\nif (largeTables.length > 0) {\n  issues.push({\n    type: 'LARGE_TABLE',\n    severity: 'warning',\n    details: largeTables.map(t => `${t.tablename}: ${t.total_size}`)\n  });\n}\n\n// Check for high dead row percentage (> 20%)\nconst bloatedTables = tables.filter(t => parseFloat(t.dead_pct || 0) > 20);\nif (bloatedTables.length > 0) {\n  issues.push({\n    type: 'TABLE_BLOAT',\n    severity: 'warning',\n    details: bloatedTables.map(t => `${t.tablename}: ${t.dead_pct}% dead rows (${t.dead_rows} dead / ${t.live_rows} live)`)\n  });\n}\n\n// Check for tables not vacuumed recently (> 7 days)\nconst staleVacuum = tables.filter(t => {\n  if (!t.last_autovacuum && !t.last_vacuum) return true;\n  const lastVac = new Date(t.last_autovacuum || t.last_vacuum);\n  return (Date.now() - lastVac.getTime()) > 7 * 24 * 60 * 60 * 1000;\n});\nif (staleVacuum.length > 0) {\n  issues.push({\n    type: 'STALE_VACUUM',\n    severity: 'info',\n    details: staleVacuum.map(t => `${t.tablename}: last vacuum ${t.last_autovacuum || t.last_vacuum || 'never'}`)\n  });\n}\n\n// Slow queries\nif (slowQueries.length > 0) {\n  issues.push({\n    type: 'SLOW_QUERIES',\n    severity: 'critical',\n    details: slowQueries.map(q => `PID ${q.pid}: ${q.duration} — ${(q.query || '').substring(0, 100)}...`)\n  });\n}\n\n// Total DB size\nconst totalBytes = tables.reduce((sum, t) => sum + (t.size_bytes || 0), 0);\nconst totalSizeGB = (totalBytes / 1073741824).toFixed(2);\n\nreturn [{\n  json: {\n    issues,\n    hasIssues: issues.length > 0,\n    totalSizeGB,\n    tableCount: tables.length,\n    slowQueryCount: slowQueries.length,\n    tables: tables.slice(0, 5).map(t => ({ name: t.tablename, size: t.total_size, rows: t.live_rows }))\n  }\n}];"
+        "jsCode": "const tables = $('Query Table Sizes').all().map(i => i.json);\nconst slowQueries = $('Query Slow Queries').all().map(i => i.json);\n\nconst issues = [];\n\n// Check for large tables (> 1GB)\nconst largeTables = tables.filter(t => t.size_bytes > 1073741824);\nif (largeTables.length > 0) {\n  issues.push({\n    type: 'LARGE_TABLE',\n    severity: 'warning',\n    details: largeTables.map(t => `${t.tablename}: ${t.total_size}`)\n  });\n}\n\n// Check for high dead row percentage (> 20%)\nconst bloatedTables = tables.filter(t => parseFloat(t.dead_pct || 0) > 20);\nif (bloatedTables.length > 0) {\n  issues.push({\n    type: 'TABLE_BLOAT',\n    severity: 'warning',\n    details: bloatedTables.map(t => `${t.tablename}: ${t.dead_pct}% dead rows (${t.dead_rows} dead / ${t.live_rows} live)`)\n  });\n}\n\n// Check for tables not vacuumed recently (> 7 days)\nconst staleVacuum = tables.filter(t => {\n  if (!t.last_autovacuum && !t.last_vacuum) return true;\n  const lastVac = new Date(t.last_autovacuum || t.last_vacuum);\n  return (Date.now() - lastVac.getTime()) > 7 * 24 * 60 * 60 * 1000;\n});\nif (staleVacuum.length > 0) {\n  issues.push({\n    type: 'STALE_VACUUM',\n    severity: 'info',\n    details: staleVacuum.map(t => `${t.tablename}: last vacuum ${t.last_autovacuum || t.last_vacuum || 'never'}`)\n  });\n}\n\n// Slow queries\nif (slowQueries.length > 0) {\n  issues.push({\n    type: 'SLOW_QUERIES',\n    severity: 'critical',\n    details: slowQueries.map(q => `PID ${q.pid}: ${q.duration} \u2014 ${(q.query || '').substring(0, 100)}...`)\n  });\n}\n\n// Total DB size\nconst totalBytes = tables.reduce((sum, t) => sum + (t.size_bytes || 0), 0);\nconst totalSizeGB = (totalBytes / 1073741824).toFixed(2);\n\nreturn [{\n  json: {\n    issues,\n    hasIssues: issues.length > 0,\n    totalSizeGB,\n    tableCount: tables.length,\n    slowQueryCount: slowQueries.length,\n    tables: tables.slice(0, 5).map(t => ({ name: t.tablename, size: t.total_size, rows: t.live_rows }))\n  }\n}];"
       },
       "id": "f2b2c3d4-0012-4000-8000-000000000004",
       "name": "Analyze DB Health",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [740, 300]
+      "position": [
+        920,
+        300
+      ]
     },
     {
       "parameters": {
@@ -90,7 +102,10 @@
       "name": "Issues Found?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [960, 300]
+      "position": [
+        1140,
+        300
+      ]
     },
     {
       "parameters": {
@@ -100,7 +115,10 @@
       "name": "Format Alert",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1200, 200]
+      "position": [
+        1380,
+        200
+      ]
     },
     {
       "parameters": {
@@ -115,7 +133,10 @@
       "name": "Telegram Alert",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [1420, 200],
+      "position": [
+        1600,
+        200
+      ],
       "credentials": {
         "telegramApi": {
           "id": "vizzor-tg",
@@ -132,11 +153,6 @@
             "node": "Query Table Sizes",
             "type": "main",
             "index": 0
-          },
-          {
-            "node": "Query Slow Queries",
-            "type": "main",
-            "index": 0
           }
         ]
       ]
@@ -145,7 +161,7 @@
       "main": [
         [
           {
-            "node": "Analyze DB Health",
+            "node": "Query Slow Queries",
             "type": "main",
             "index": 0
           }
@@ -213,5 +229,6 @@
     }
   ],
   "pinData": {},
-  "versionId": "12-db-monitor-v1"
+  "versionId": "12-db-monitor-v1",
+  "id": "112"
 }

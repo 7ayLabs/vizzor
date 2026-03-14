@@ -1,7 +1,7 @@
 services:
   vizzor-api:
     build: .
-    command: ["node", "dist/index.js", "serve", "--port", "3000", "--auth"]
+    command: ["serve", "--port", "3000"]
     ports:
       - "3000:3000"
     depends_on:
@@ -33,7 +33,7 @@ services:
 
   collector:
     build: .
-    command: ["node", "dist/index.js", "collect", "start"]
+    command: ["collect", "start"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -78,6 +78,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - pg_data:/var/lib/postgresql/data
+      - ./src/data/migrations/000-create-n8n-db.sh:/docker-entrypoint-initdb.d/000-create-n8n-db.sh:ro
       - ./src/data/migrations/001-init.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vizzor}"]

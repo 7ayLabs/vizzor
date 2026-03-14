@@ -1,5 +1,5 @@
 {
-  "name": "08 — Portfolio Rebalancer",
+  "name": "08 \u2014 Portfolio Rebalancer",
   "nodes": [
     {
       "parameters": {
@@ -16,7 +16,10 @@
       "name": "Every 4 Hours",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [240, 300]
+      "position": [
+        240,
+        300
+      ]
     },
     {
       "parameters": {
@@ -30,7 +33,10 @@
       "name": "Fetch Agents",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [460, 300]
+      "position": [
+        460,
+        300
+      ]
     },
     {
       "parameters": {
@@ -40,7 +46,10 @@
       "name": "Filter Active Agents",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [680, 300]
+      "position": [
+        680,
+        300
+      ]
     },
     {
       "parameters": {
@@ -51,7 +60,10 @@
       "name": "For Each Agent",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
-      "position": [900, 300]
+      "position": [
+        900,
+        300
+      ]
     },
     {
       "parameters": {
@@ -65,7 +77,10 @@
       "name": "Get Portfolio",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1120, 300]
+      "position": [
+        1120,
+        300
+      ]
     },
     {
       "parameters": {
@@ -92,7 +107,10 @@
       "name": "ML Predict Holdings",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1340, 300]
+      "position": [
+        1340,
+        300
+      ]
     },
     {
       "parameters": {
@@ -102,7 +120,10 @@
       "name": "Analyze Correlations",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1560, 300]
+      "position": [
+        1560,
+        300
+      ]
     },
     {
       "parameters": {
@@ -130,17 +151,23 @@
       "name": "Needs Rebalance?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [1780, 300]
+      "position": [
+        1780,
+        300
+      ]
     },
     {
       "parameters": {
-        "jsCode": "const data = $input.first().json;\n\nlet message = `PORTFOLIO REBALANCE ALERT\\n\\n`;\nmessage += `Agent: ${data.agentName} (${data.agentId})\\n`;\nmessage += `Total Value: $${Number(data.totalValue).toLocaleString()}\\n\\n`;\n\nmessage += `Current Allocations:\\n`;\nfor (const a of data.allocations) {\n  message += `  ${a.symbol}: ${a.pct}% ($${Number(a.value).toLocaleString()}) — ML: ${a.mlDirection}\\n`;\n}\n\nmessage += `\\nReasons:\\n`;\nfor (const r of data.reasons) {\n  message += `  - ${r}\\n`;\n}\n\nmessage += `\\nAction: Review and rebalance recommended.`;\n\nreturn [{ json: { message, chatId: process.env.TELEGRAM_ALERT_CHAT_ID || '' } }];"
+        "jsCode": "const data = $input.first().json;\n\nlet message = `PORTFOLIO REBALANCE ALERT\\n\\n`;\nmessage += `Agent: ${data.agentName} (${data.agentId})\\n`;\nmessage += `Total Value: $${Number(data.totalValue).toLocaleString()}\\n\\n`;\n\nmessage += `Current Allocations:\\n`;\nfor (const a of data.allocations) {\n  message += `  ${a.symbol}: ${a.pct}% ($${Number(a.value).toLocaleString()}) \u2014 ML: ${a.mlDirection}\\n`;\n}\n\nmessage += `\\nReasons:\\n`;\nfor (const r of data.reasons) {\n  message += `  - ${r}\\n`;\n}\n\nmessage += `\\nAction: Review and rebalance recommended.`;\n\nreturn [{ json: { message, chatId: process.env.TELEGRAM_ALERT_CHAT_ID || '' } }];"
       },
       "id": "b2b2c3d4-0008-4000-8000-000000000009",
       "name": "Format Rebalance Alert",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2020, 200]
+      "position": [
+        2020,
+        200
+      ]
     },
     {
       "parameters": {
@@ -155,7 +182,10 @@
       "name": "Telegram Alert",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [2240, 200],
+      "position": [
+        2240,
+        200
+      ],
       "credentials": {
         "telegramApi": {
           "id": "vizzor-tg",
@@ -281,5 +311,6 @@
     }
   ],
   "pinData": {},
-  "versionId": "08-portfolio-rebalancer-v1"
+  "versionId": "08-portfolio-rebalancer-v1",
+  "id": "108"
 }

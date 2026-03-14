@@ -3,6 +3,8 @@
 // ---------------------------------------------------------------------------
 
 import type { TradeRecord, PortfolioState } from './types.js';
+import { getMLClient } from '../../../ml/client.js';
+import type { PortfolioPredMLResult } from '../../../ml/types.js';
 
 export interface PerformanceMetrics {
   totalReturn: number;
@@ -16,6 +18,7 @@ export interface PerformanceMetrics {
   calmarRatio: number;
   maxDrawdown: number;
   avgHoldingPeriodMs: number;
+  forecast?: PortfolioPredMLResult;
 }
 
 export function calculateMetrics(
@@ -76,4 +79,59 @@ export function calculateMetrics(
     maxDrawdown: portfolio.maxDrawdown,
     avgHoldingPeriodMs,
   };
+}
+
+/**
+ * Calculate metrics with ML-powered forward-looking forecast.
+ * Needs >= 10 trades to generate forecast.
+ */
+export async function calculateMetricsWithForecast(
+  trades: TradeRecord[],
+  portfolio: PortfolioState,
+  initialCapital: number,
+): Promise<PerformanceMetrics> {
+  const metrics = calculateMetrics(trades, portfolio, initialCapital);
+
+  if (trades.length < 10) return metrics;
+
+  const mlClient = getMLClient();
+  if (!mlClient) return metrics;
+
+  try {
+    const returns = trades.map((t) => t.pnlPct / 100);
+
+    // Build rolling Sharpe history (windows of 5)
+    const sharpeHistory: number[] = [];
+    for (let i = 4; i < returns.length; i++) {
+      const window = returns.slice(i - 4, i + 1);
+      const avg = window.reduce((a, b) => a + b, 0) / window.length;
+      const std = Math.sqrt(window.reduce((s, r) => s + (r - avg) ** 2, 0) / (window.length - 1));
+      sharpeHistory.push(std > 0 ? (avg / std) * Math.sqrt(365) : 0);
+    }
+
+    // Build drawdown history
+    const drawdownHistory: number[] = [];
+    let peak = initialCapital;
+    let running = initialCapital;
+    for (const trade of trades) {
+      running += trade.pnl;
+      if (running > peak) peak = running;
+      const dd = peak > 0 ? ((peak - running) / peak) * 100 : 0;
+      drawdownHistory.push(dd);
+    }
+
+    const forecast = await mlClient.predictPortfolioForward({
+      returns_history: returns,
+      sharpe_history: sharpeHistory,
+      drawdown_history: drawdownHistory,
+    });
+
+    if (forecast) {
+      metrics.forecast = forecast;
+    }
+  } catch {
+    // ML unavailable
+  }
+
+  return metrics;
 }

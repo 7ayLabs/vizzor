@@ -2,7 +2,7 @@ import chalk from 'chalk';
 import { writeFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { stringify as yamlStringify } from 'yaml';
-import { getConfigDir, loadConfig, getConfig } from '../../config/loader.js';
+import { getConfigDir, loadConfig, getConfig, saveConfigValue } from '../../config/loader.js';
 import { DEFAULT_CHAIN } from '../../config/constants.js';
 import { DEFAULT_MODELS } from '../../ai/providers/types.js';
 import { maskKey, validateKey } from '../../config/keys.js';
@@ -47,9 +47,6 @@ export async function handleConfigInit(): Promise<void> {
 }
 
 export async function handleConfigSet(key: string, value: string): Promise<void> {
-  const configDir = getConfigDir();
-  const configPath = resolve(configDir, 'config.yaml');
-
   // Validate keys for security (phishing, injection, format)
   const isSensitive = key.toLowerCase().includes('key') || key.toLowerCase().includes('token');
   if (isSensitive) {
@@ -63,25 +60,12 @@ export async function handleConfigSet(key: string, value: string): Promise<void>
     }
   }
 
-  await loadConfig();
-  const config = getConfig();
-
-  // Deep clone to avoid mutating cached config
-  const updatedConfig = JSON.parse(JSON.stringify(config)) as Record<string, unknown>;
-
-  // Handle dot-notation for nested keys (e.g. "ai.provider" -> config.ai.provider)
-  if (key.includes('.')) {
-    const [section, field] = key.split('.') as [string, string];
-    if (!updatedConfig[section] || typeof updatedConfig[section] !== 'object') {
-      updatedConfig[section] = {};
-    }
-    const parsed = field === 'maxTokens' ? Number(value) : value;
-    (updatedConfig[section] as Record<string, unknown>)[field] = parsed;
-  } else {
-    updatedConfig[key] = value;
+  try {
+    saveConfigValue(key, value);
+  } catch (err) {
+    console.log(chalk.red(err instanceof Error ? err.message : String(err)));
+    return;
   }
-
-  writeFileSync(configPath, yamlStringify(updatedConfig), 'utf-8');
 
   const displayValue = isSensitive ? maskKey(value) : value;
 

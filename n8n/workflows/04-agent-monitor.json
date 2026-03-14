@@ -1,5 +1,5 @@
 {
-  "name": "04 — Agent Monitor",
+  "name": "04 \u2014 Agent Monitor",
   "nodes": [
     {
       "parameters": {
@@ -16,7 +16,10 @@
       "name": "Every 5 Minutes",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [240, 300]
+      "position": [
+        240,
+        300
+      ]
     },
     {
       "parameters": {
@@ -30,7 +33,10 @@
       "name": "Fetch Agents",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [460, 300]
+      "position": [
+        460,
+        300
+      ]
     },
     {
       "parameters": {
@@ -40,7 +46,10 @@
       "name": "Split Agents",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [680, 300]
+      "position": [
+        680,
+        300
+      ]
     },
     {
       "parameters": {
@@ -51,7 +60,10 @@
       "name": "For Each Agent",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
-      "position": [900, 300]
+      "position": [
+        900,
+        300
+      ]
     },
     {
       "parameters": {
@@ -61,7 +73,10 @@
       "name": "Check Status",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1120, 300]
+      "position": [
+        1120,
+        300
+      ]
     },
     {
       "parameters": {
@@ -89,17 +104,23 @@
       "name": "Error or Stale?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [1340, 300]
+      "position": [
+        1340,
+        300
+      ]
     },
     {
       "parameters": {
-        "jsCode": "const a = $input.first().json;\nlet reason = '';\nif (a.isError) reason = `Status: ${a.status} — ${a.errorMessage || 'unknown error'}`;\nif (a.isStale) reason += `${reason ? '\\n' : ''}Stale: last heartbeat ${a.staleSec}s ago`;\n\nconst message = `Agent Alert\\n\\n` +\n  `Name: ${a.name}\\n` +\n  `ID: ${a.id}\\n` +\n  `Strategy: ${a.strategy || 'N/A'}\\n` +\n  `${reason}\\n\\n` +\n  `Action: Check agent logs and restart if needed.`;\n\nreturn [{ json: { message, chatId: process.env.TELEGRAM_ALERT_CHAT_ID || '' } }];"
+        "jsCode": "const a = $input.first().json;\nlet reason = '';\nif (a.isError) reason = `Status: ${a.status} \u2014 ${a.errorMessage || 'unknown error'}`;\nif (a.isStale) reason += `${reason ? '\\n' : ''}Stale: last heartbeat ${a.staleSec}s ago`;\n\nconst message = `Agent Alert\\n\\n` +\n  `Name: ${a.name}\\n` +\n  `ID: ${a.id}\\n` +\n  `Strategy: ${a.strategy || 'N/A'}\\n` +\n  `${reason}\\n\\n` +\n  `Action: Check agent logs and restart if needed.`;\n\nreturn [{ json: { message, chatId: process.env.TELEGRAM_ALERT_CHAT_ID || '' } }];"
       },
       "id": "d1b2c3d4-0004-4000-8000-000000000007",
       "name": "Format Agent Alert",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1580, 200]
+      "position": [
+        1580,
+        200
+      ]
     },
     {
       "parameters": {
@@ -114,7 +135,10 @@
       "name": "Telegram Alert",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [1800, 200],
+      "position": [
+        1800,
+        200
+      ],
       "credentials": {
         "telegramApi": {
           "id": "vizzor-tg",
@@ -218,5 +242,6 @@
     }
   ],
   "pinData": {},
-  "versionId": "04-agent-monitor-v1"
+  "versionId": "04-agent-monitor-v1",
+  "id": "104"
 }

@@ -5,6 +5,7 @@
 import { fetchCryptoNews } from '../../data/sources/cryptopanic.js';
 import { searchTokens } from '../../data/sources/dexscreener.js';
 import { getConfig } from '../../config/loader.js';
+import { getMLClient, initMLClient } from '../../ml/client.js';
 
 export interface SentimentData {
   source: string;
@@ -12,6 +13,9 @@ export interface SentimentData {
   volume: number;
   trending: boolean;
   topMentions: string[];
+  mlSentiment?: string;
+  mlConfidence?: number;
+  mlTopics?: string[];
 }
 
 export interface SentimentSummary {
@@ -28,7 +32,7 @@ export interface SentimentSummary {
 export async function analyzeSentiment(query: string): Promise<SentimentSummary> {
   const sources: SentimentData[] = [];
 
-  // 1. CryptoPanic news sentiment
+  // 1. CryptoPanic news sentiment (enhanced with ML NLP when available)
   try {
     let apiToken: string | undefined;
     try {
@@ -38,21 +42,54 @@ export async function analyzeSentiment(query: string): Promise<SentimentSummary>
     }
     const news = await fetchCryptoNews(query, apiToken);
     if (news.length > 0) {
-      let positiveCount = 0;
-      let negativeCount = 0;
-      for (const article of news) {
-        if (article.sentiment === 'positive') positiveCount++;
-        else if (article.sentiment === 'negative') negativeCount++;
+      // Try ML sentiment analysis on headlines
+      let mlClient = getMLClient();
+      if (!mlClient) {
+        try {
+          const cfg = getConfig();
+          if (cfg.ml?.enabled && cfg.ml.sidecarUrl) {
+            mlClient = initMLClient(cfg.ml.sidecarUrl);
+          }
+        } catch {
+          /* config not loaded */
+        }
       }
-      const total = news.length;
-      const newsScore = total > 0 ? (positiveCount - negativeCount) / total : 0;
 
+      let newsScore: number;
+      let mlSentiment: string | undefined;
+      let mlConfidence: number | undefined;
+      let mlTopics: string[] | undefined;
+
+      if (mlClient) {
+        // Use ML NLP for deeper sentiment analysis
+        const headlines = news.slice(0, 10).map((n) => n.title);
+        const mlResults = await mlClient.analyzeSentimentBatch(headlines);
+        if (mlResults.length > 0) {
+          const avgScore = mlResults.reduce((s, r) => s + r.score, 0) / mlResults.length;
+          const avgConf = mlResults.reduce((s, r) => s + r.confidence, 0) / mlResults.length;
+          const allTopics = [...new Set(mlResults.flatMap((r) => r.key_topics))];
+          newsScore = avgScore;
+          mlSentiment = avgScore > 0.2 ? 'bullish' : avgScore < -0.2 ? 'bearish' : 'neutral';
+          mlConfidence = avgConf;
+          mlTopics = allTopics.slice(0, 5);
+        } else {
+          // Fallback to vote counts
+          newsScore = countBasedScore(news);
+        }
+      } else {
+        newsScore = countBasedScore(news);
+      }
+
+      const total = news.length;
       sources.push({
-        source: 'CryptoPanic News',
+        source: mlSentiment ? 'ML NLP Sentiment' : 'CryptoPanic News',
         score: newsScore,
         volume: total,
         trending: total > 5,
         topMentions: news.slice(0, 3).map((n) => n.title),
+        mlSentiment,
+        mlConfidence,
+        mlTopics,
       });
     }
   } catch {
@@ -108,4 +145,15 @@ export async function analyzeSentiment(query: string): Promise<SentimentSummary>
   }
 
   return { overall, sources, consensus };
+}
+
+function countBasedScore(news: { sentiment?: string }[]): number {
+  let pos = 0;
+  let neg = 0;
+  for (const article of news) {
+    if (article.sentiment === 'positive') pos++;
+    else if (article.sentiment === 'negative') neg++;
+  }
+  const total = news.length;
+  return total > 0 ? (pos - neg) / total : 0;
 }
