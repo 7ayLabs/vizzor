@@ -29,6 +29,9 @@ import {
   getAgentStatus,
   getRecentDecisions,
 } from '../core/agent/index.js';
+import { getMLClient } from '../ml/client.js';
+import { buildFeatureVector } from '../ml/feature-engineer.js';
+import { getStoreInstance } from '../data/store-factory.js';
 
 export async function handleTool(name: string, input: unknown): Promise<unknown> {
   const params = input as Record<string, unknown>;
@@ -346,6 +349,72 @@ export async function handleTool(name: string, input: unknown): Promise<unknown>
         signals: prediction.signals,
         reasoning: prediction.reasoning,
         disclaimer: prediction.disclaimer,
+      };
+    }
+
+    case 'get_ml_prediction': {
+      const symbol = String(params['symbol'] ?? 'BTC');
+      const mlClient = getMLClient();
+      if (!mlClient) {
+        // Fallback to rule-based prediction
+        const prediction = await generatePrediction(symbol);
+        return {
+          ...prediction,
+          mlAvailable: false,
+          note: 'ML sidecar not configured; using rule-based prediction',
+        };
+      }
+      const features = await buildFeatureVector(symbol);
+      const mlPred = await mlClient.predict(features);
+      if (!mlPred) {
+        const prediction = await generatePrediction(symbol);
+        return {
+          ...prediction,
+          mlAvailable: false,
+          note: 'ML sidecar unavailable; using rule-based prediction',
+        };
+      }
+      return {
+        symbol: mlPred.symbol,
+        direction: mlPred.direction,
+        probability: mlPred.probability,
+        confidence: mlPred.confidence,
+        model: mlPred.model,
+        horizon: mlPred.horizon,
+        mlAvailable: true,
+        features: {
+          rsi: features.rsi,
+          macdHistogram: features.macdHistogram,
+          bollingerPercentB: features.bollingerPercentB,
+          fundingRate: features.fundingRate,
+          fearGreed: features.fearGreed,
+          rsiSlope: features.rsiSlope,
+          volumeRatio: features.volumeRatio,
+          emaCrossoverPct: features.emaCrossoverPct,
+          atrPct: features.atrPct,
+        },
+      };
+    }
+
+    case 'get_model_accuracy': {
+      const model = String(params['model'] ?? 'lstm-predictor');
+      const days = params['days'] ? Number(params['days']) : 30;
+      const store = getStoreInstance();
+      if (!store) {
+        return { error: 'DataStore not initialized. ML accuracy requires PostgreSQL backend.' };
+      }
+      const accuracy = await store.getPredictionAccuracy(model, days);
+      return {
+        model: accuracy.model,
+        period: accuracy.period,
+        totalPredictions: accuracy.totalPredictions,
+        correctPredictions: accuracy.correctPredictions,
+        accuracy: `${(accuracy.accuracy * 100).toFixed(1)}%`,
+        byDirection: {
+          up: `${(accuracy.byDirection.up.accuracy * 100).toFixed(1)}% (${accuracy.byDirection.up.correct}/${accuracy.byDirection.up.total})`,
+          down: `${(accuracy.byDirection.down.accuracy * 100).toFixed(1)}% (${accuracy.byDirection.down.correct}/${accuracy.byDirection.down.total})`,
+          sideways: `${(accuracy.byDirection.sideways.accuracy * 100).toFixed(1)}% (${accuracy.byDirection.sideways.correct}/${accuracy.byDirection.sideways.total})`,
+        },
       };
     }
 

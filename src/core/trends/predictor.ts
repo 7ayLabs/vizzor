@@ -10,6 +10,9 @@ import {
   fetchOpenInterest,
   fetchTickerPrice,
 } from '../../data/sources/binance.js';
+import { getMLClient } from '../../ml/client.js';
+import { buildFeatureVector } from '../../ml/feature-engineer.js';
+import type { MLPredictionResult } from '../../ml/types.js';
 
 export interface Prediction {
   symbol: string;
@@ -192,7 +195,7 @@ export async function generatePrediction(symbol: string): Promise<Prediction> {
     Math.max(positiveCount, negativeCount) / Math.max(1, positiveCount + negativeCount);
   const confidence = Math.round(Math.min(95, (completeness / 5) * agreement * 100));
 
-  return {
+  const rulePrediction: Prediction = {
     symbol: symbol.toUpperCase(),
     direction,
     confidence,
@@ -202,5 +205,48 @@ export async function generatePrediction(symbol: string): Promise<Prediction> {
     composite: Math.round(composite),
     disclaimer:
       'This is not financial advice. Predictions are based on historical data and AI analysis. Always do your own research.',
+  };
+
+  // ML enhancement: if sidecar is available, merge ML prediction
+  const mlClient = getMLClient();
+  if (mlClient) {
+    try {
+      const features = await buildFeatureVector(symbol);
+      const mlPred = await mlClient.predict(features);
+      if (mlPred) {
+        return mergePredictions(rulePrediction, mlPred);
+      }
+    } catch {
+      // Fall through to rule-based prediction
+    }
+  }
+
+  return rulePrediction;
+}
+
+function mergePredictions(rule: Prediction, ml: MLPredictionResult): Prediction {
+  // Weight: 40% rule-based, 60% ML when both available
+  const mlComposite =
+    ml.direction === 'up'
+      ? ml.probability * 100
+      : ml.direction === 'down'
+        ? -(ml.probability * 100)
+        : 0;
+
+  const mergedComposite = Math.round(rule.composite * 0.4 + mlComposite * 0.6);
+  const mergedDirection: Prediction['direction'] =
+    mergedComposite > 15 ? 'up' : mergedComposite < -15 ? 'down' : 'sideways';
+
+  const mergedConfidence = Math.round(Math.min(95, rule.confidence * 0.4 + ml.confidence * 0.6));
+
+  return {
+    ...rule,
+    direction: mergedDirection,
+    confidence: mergedConfidence,
+    composite: mergedComposite,
+    reasoning: [
+      ...rule.reasoning,
+      `ML (${ml.model}): ${ml.direction} with ${(ml.probability * 100).toFixed(1)}% probability (horizon: ${ml.horizon})`,
+    ],
   };
 }
