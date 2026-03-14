@@ -33,10 +33,15 @@ export async function startTelegramBot(): Promise<void> {
 
   // AI chat handler for freetext messages
   bot.on('message:text', async (ctx) => {
-    const text = ctx.message.text;
+    let text = ctx.message.text;
 
     // Skip if it's a command (handled above)
     if (text.startsWith('/')) return;
+
+    // Input length limit to prevent abuse
+    if (text.length > 4000) {
+      text = text.slice(0, 4000);
+    }
 
     await ctx.reply('🔮 Analyzing...');
 

@@ -159,7 +159,7 @@ export async function evaluateWithML(
       regime: regime.regime,
     });
 
-    if (strategyResult && strategyResult.confidence > 30) {
+    if (strategyResult && strategyResult.confidence > 60) {
       return {
         action: strategyResult.action,
         confidence: Math.round(strategyResult.confidence),

@@ -204,12 +204,17 @@ export function startAgent(id: string): AgentState {
   const config = getAgentById(id);
   if (!config) throw new Error(`Agent not found: ${id}`);
 
-  // Reuse existing engine if already created
-  let engine = engines.get(id);
-  if (!engine) {
-    engine = new AgentEngine(config);
-    engines.set(id, engine);
+  // Check if already running — prevent double-start race
+  const existing = engines.get(id);
+  if (existing) {
+    const state = existing.getState();
+    if (state.status === 'running') {
+      return state;
+    }
   }
+
+  const engine = new AgentEngine(config);
+  engines.set(id, engine);
 
   engine.start();
   return engine.getState();
@@ -244,6 +249,8 @@ export function getAgentStatus(id: string): AgentState | null {
 // Decision logging
 // ---------------------------------------------------------------------------
 
+let pruneCounter = 0;
+
 export function logDecision(result: AgentCycleResult): void {
   ensureAgentTables();
 
@@ -261,6 +268,31 @@ export function logDecision(result: AgentCycleResult): void {
       JSON.stringify(result.signals),
       result.timestamp,
     );
+
+  // Prune old decisions every 100 log calls to prevent unbounded growth
+  pruneCounter++;
+  if (pruneCounter >= 100) {
+    pruneCounter = 0;
+    pruneDecisions(result.agentId, 1000);
+  }
+}
+
+/**
+ * Prune old decisions beyond the retention limit per agent.
+ * Keeps at most `keep` most recent decisions.
+ */
+export function pruneDecisions(agentId: string, keep = 1000): number {
+  ensureAgentTables();
+
+  const result = getDb()
+    .prepare(
+      `DELETE FROM agent_decisions WHERE agent_id = ? AND id NOT IN (
+        SELECT id FROM agent_decisions WHERE agent_id = ? ORDER BY created_at DESC LIMIT ?
+      )`,
+    )
+    .run(agentId, agentId, keep);
+
+  return result.changes;
 }
 
 export function getRecentDecisions(agentId: string, limit = 20): AgentCycleResult[] {
@@ -278,15 +310,23 @@ export function getRecentDecisions(agentId: string, limit = 20): AgentCycleResul
     created_at: number;
   }[];
 
-  return rows.map((r) => ({
-    agentId: r.agent_id,
-    symbol: r.symbol,
-    timestamp: r.created_at,
-    signals: JSON.parse(r.signals) as AgentCycleResult['signals'],
-    decision: {
-      action: r.action as AgentCycleResult['decision']['action'],
-      confidence: r.confidence,
-      reasoning: JSON.parse(r.reasoning) as string[],
-    },
-  }));
+  return rows
+    .map((r) => {
+      try {
+        return {
+          agentId: r.agent_id,
+          symbol: r.symbol,
+          timestamp: r.created_at,
+          signals: JSON.parse(r.signals) as AgentCycleResult['signals'],
+          decision: {
+            action: r.action as AgentCycleResult['decision']['action'],
+            confidence: r.confidence,
+            reasoning: JSON.parse(r.reasoning) as string[],
+          },
+        };
+      } catch {
+        return null;
+      }
+    })
+    .filter((r): r is AgentCycleResult => r !== null);
 }

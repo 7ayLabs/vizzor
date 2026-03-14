@@ -12,12 +12,13 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       ML_ENABLED: "true"
       ML_SIDECAR_URL: http://ml-sidecar:8000
-      ML_API_SECRET: ${ML_API_SECRET:-}
       NODE_ENV: production
+      API_ENABLE_AUTH: "true"
     restart: unless-stopped
 
   ml-sidecar:
     build: ./ml-sidecar
+    # No port mapping — only accessible via internal Docker network
     expose:
       - "8000"
     depends_on:
@@ -26,7 +27,7 @@ services:
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       MODEL_DIR: /app/models
-      ML_API_SECRET: ${ML_API_SECRET:-}
+      ML_API_SECRET: ${ML_API_SECRET}
     volumes:
       - ml_models:/app/models:ro
     restart: unless-stopped
@@ -44,6 +45,7 @@ services:
 
   n8n:
     image: n8nio/n8n:latest
+    # Bind to localhost only — not exposed to external network
     ports:
       - "127.0.0.1:5678:5678"
     depends_on:
@@ -70,6 +72,7 @@ services:
 
   postgres:
     image: timescale/timescaledb:latest-pg15
+    # No external port — only accessible via internal Docker network
     expose:
       - "5432"
     environment:

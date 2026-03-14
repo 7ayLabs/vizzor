@@ -4,11 +4,13 @@ import { getAdapter } from '../../chains/registry.js';
 import { getConfig } from '../../config/loader.js';
 import { analyzeProject } from '../../core/scanner/project-analyzer.js';
 import { assessRisk } from '../../core/scanner/risk-scorer.js';
+import { assertValidAddress } from '../../utils/validate.js';
 
 export async function handleScan(
   project: string,
   options: { chain: string; deep: boolean; json: boolean },
 ): Promise<void> {
+  assertValidAddress(project);
   const spinner = ora(`Scanning ${project} on ${options.chain}...`).start();
 
   try {

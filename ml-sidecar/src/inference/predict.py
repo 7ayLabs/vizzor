@@ -16,7 +16,7 @@ def load_all_models():
     lstm_path = MODEL_DIR / "lstm_predictor.pt"
     if lstm_path.exists():
         import torch
-        models["lstm"] = torch.load(lstm_path, weights_only=False)
+        models["lstm"] = torch.load(lstm_path, weights_only=True)
 
     clf_path = MODEL_DIR / "signal_classifier.joblib"
     if clf_path.exists():

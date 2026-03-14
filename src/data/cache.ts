@@ -72,7 +72,13 @@ export function getCached<T = unknown>(key: string): T | null {
     return null;
   }
 
-  return JSON.parse(row.value) as T;
+  try {
+    return JSON.parse(row.value) as T;
+  } catch {
+    // Corrupted cache entry — remove it
+    getDb().prepare('DELETE FROM cache WHERE key = ?').run(key);
+    return null;
+  }
 }
 
 /**

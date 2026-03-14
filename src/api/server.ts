@@ -20,11 +20,16 @@ export async function startApiServer(options: {
   port: number;
   host: string;
   enableAuth?: boolean;
+  corsOrigin?: string;
 }): Promise<void> {
   const server = Fastify({ logger: false });
+  const isProd = process.env['NODE_ENV'] === 'production';
+  const origin = options.corsOrigin ?? 'http://localhost:3000';
 
   // Plugins
-  await server.register(cors, { origin: true });
+  await server.register(cors, {
+    origin: isProd ? origin : true,
+  });
   await server.register(rateLimit, {
     max: 100,
     timeWindow: '1 minute',
@@ -34,7 +39,7 @@ export async function startApiServer(options: {
       info: {
         title: 'Vizzor API',
         description: 'AI-powered crypto intelligence REST API',
-        version: '0.7.0',
+        version: '0.10.5',
       },
       servers: [{ url: `http://${options.host}:${options.port}` }],
       components: {
@@ -48,25 +53,36 @@ export async function startApiServer(options: {
       },
     },
   });
-  await server.register(swaggerUi, {
-    routePrefix: '/docs',
-  });
 
-  // Auth middleware (optional)
-  if (options.enableAuth) {
+  // Only register Swagger UI in non-production
+  if (!isProd) {
+    await server.register(swaggerUi, {
+      routePrefix: '/docs',
+    });
+  }
+
+  // Auth middleware — enabled by default
+  if (options.enableAuth !== false) {
     server.addHook('onRequest', authMiddleware);
+  } else if (isProd) {
+    log.warn('API authentication is DISABLED in production — this is insecure');
   }
 
   // Error handler
   server.setErrorHandler(errorHandler);
 
-  // Health
-  server.get('/health', async () => ({
-    status: 'ok',
-    version: '0.7.0',
-    uptime: process.uptime(),
-    timestamp: new Date().toISOString(),
-  }));
+  // Health — minimal info in production
+  server.get('/health', async () => {
+    if (isProd) {
+      return { status: 'ok' };
+    }
+    return {
+      status: 'ok',
+      version: '0.10.5',
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString(),
+    };
+  });
 
   // Register route groups
   await server.register(registerMarketRoutes, { prefix: '/v1/market' });
@@ -75,5 +91,7 @@ export async function startApiServer(options: {
 
   await server.listen({ port: options.port, host: options.host });
   log.info(`Vizzor API listening on ${options.host}:${options.port}`);
-  log.info(`OpenAPI docs at http://${options.host}:${options.port}/docs`);
+  if (!isProd) {
+    log.info(`OpenAPI docs at http://${options.host}:${options.port}/docs`);
+  }
 }

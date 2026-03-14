@@ -61,13 +61,18 @@ export async function startDiscordBot(): Promise<void> {
     if (message.author.bot) return;
     if (!client.user || !message.mentions.has(client.user)) return;
 
-    const text = message.content.replace(/<@!?\d+>/g, '').trim();
+    let text = message.content.replace(/<@!?\d+>/g, '').trim();
     if (!text) {
       await message.reply(
         'Mention me with a question! e.g. `@Vizzor what is BTC price?`\n' +
           'Or use slash commands: `/scan` `/trends` `/track` `/ico` `/audit` `/help`',
       );
       return;
+    }
+
+    // Input length limit to prevent abuse
+    if (text.length > 2000) {
+      text = text.slice(0, 2000);
     }
 
     await message.reply('🔮 Analyzing...');
