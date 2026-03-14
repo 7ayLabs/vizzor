@@ -112,7 +112,7 @@ export async function fetchTickerPrice(symbol: string): Promise<TickerPrice> {
     symbol: string;
     lastPrice: string;
     priceChangePercent: string;
-  }>(`${BASE_URL}/ticker/24hr?symbol=${pair}`);
+  }>(`${BASE_URL}/ticker/24hr?symbol=${encodeURIComponent(pair)}`);
 
   return {
     symbol: symbol.toUpperCase(),
@@ -155,7 +155,7 @@ export async function fetchMultipleTickerPrices(
 export async function fetchKlines(symbol: string, interval: string, limit = 100): Promise<Kline[]> {
   const pair = resolvePair(symbol);
   const data = await fetchJson<(string | number)[][]>(
-    `${BASE_URL}/klines?symbol=${pair}&interval=${interval}&limit=${limit}`,
+    `${BASE_URL}/klines?symbol=${encodeURIComponent(pair)}&interval=${interval}&limit=${limit}`,
   );
 
   return data.map((k) => ({
@@ -181,7 +181,7 @@ export async function fetchOrderBookSummary(symbol: string): Promise<OrderBookSu
     bidQty: string;
     askPrice: string;
     askQty: string;
-  }>(`${BASE_URL}/ticker/bookTicker?symbol=${pair}`);
+  }>(`${BASE_URL}/ticker/bookTicker?symbol=${encodeURIComponent(pair)}`);
 
   const bid = parseFloat(data.bidPrice);
   const ask = parseFloat(data.askPrice);
@@ -208,7 +208,7 @@ export async function fetchFundingRate(symbol: string): Promise<FundingRate> {
   const pair = resolvePair(symbol);
   const data = await fetchJson<
     { symbol: string; fundingRate: string; fundingTime: number; markPrice: string }[]
-  >(`${FUTURES_URL}/premiumIndex?symbol=${pair}`);
+  >(`${FUTURES_URL}/premiumIndex?symbol=${encodeURIComponent(pair)}`);
 
   const item = data[0];
   if (!item) throw new Error(`No funding data for ${pair}`);
@@ -228,9 +228,11 @@ export async function fetchOpenInterest(symbol: string): Promise<OpenInterest> {
   const pair = resolvePair(symbol);
   const [oiData, tickerData] = await Promise.all([
     fetchJson<{ symbol: string; openInterest: string }>(
-      `${FUTURES_URL}/openInterest?symbol=${pair}`,
+      `${FUTURES_URL}/openInterest?symbol=${encodeURIComponent(pair)}`,
     ),
-    fetchJson<{ symbol: string; lastPrice: string }>(`${FUTURES_URL}/ticker/price?symbol=${pair}`),
+    fetchJson<{ symbol: string; lastPrice: string }>(
+      `${FUTURES_URL}/ticker/price?symbol=${encodeURIComponent(pair)}`,
+    ),
   ]);
 
   const oi = parseFloat(oiData.openInterest);
@@ -303,7 +305,7 @@ export async function fetchTopGainersLosers(limit = 10): Promise<{
 export async function isValidSymbol(symbol: string): Promise<boolean> {
   try {
     const pair = resolvePair(symbol);
-    await fetchJson(`${BASE_URL}/ticker/price?symbol=${pair}`);
+    await fetchJson(`${BASE_URL}/ticker/price?symbol=${encodeURIComponent(pair)}`);
     return true;
   } catch {
     return false;

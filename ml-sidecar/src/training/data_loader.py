@@ -9,7 +9,9 @@ import psycopg2
 
 def get_connection():
     """Create PostgreSQL connection from DATABASE_URL env var."""
-    url = os.getenv("DATABASE_URL", "postgres://vizzor:pass@localhost:5432/vizzor")
+    url = os.getenv("DATABASE_URL")
+    if not url:
+        raise RuntimeError("DATABASE_URL environment variable is required")
     return psycopg2.connect(url)
 
 
@@ -22,7 +24,7 @@ def load_ohlcv(symbol: str, timeframe: str = "4h", days: int = 90) -> pd.DataFra
     query = """
         SELECT time, open, high, low, close, volume, trades
         FROM ohlcv
-        WHERE symbol = %s AND timeframe = %s AND time >= NOW() - INTERVAL '%s days'
+        WHERE symbol = %s AND timeframe = %s AND time >= NOW() - make_interval(days => %s)
         ORDER BY time ASC
     """
     df = pd.read_sql(query, conn, params=(symbol, timeframe, days))
@@ -85,7 +87,7 @@ def load_signals_dataset(days: int = 90) -> pd.DataFrame:
             d.created_at,
             d.symbol
         FROM agent_decisions d
-        WHERE d.created_at >= EXTRACT(EPOCH FROM NOW() - INTERVAL '%s days') * 1000
+        WHERE d.created_at >= EXTRACT(EPOCH FROM NOW() - make_interval(days => %s)) * 1000
         ORDER BY d.created_at ASC
     """
     df = pd.read_sql(query, conn, params=(days,))

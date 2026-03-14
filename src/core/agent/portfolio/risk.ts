@@ -68,7 +68,9 @@ export async function calculatePositionSizeML(
       });
 
       if (result) {
-        const allocationPct = Math.min(result.position_size_pct, result.max_allocation_pct);
+        // Cap ML allocation against config limits
+        const mlPct = Math.min(result.position_size_pct, result.max_allocation_pct);
+        const allocationPct = Math.min(mlPct, config.maxPositionSizePct);
         const allocation = portfolio.totalValue * (allocationPct / 100);
         return {
           size: allocation / price,
@@ -131,7 +133,8 @@ export async function calculateStopLossML(
       });
 
       if (result) {
-        const multiplier = result.stop_loss_multiplier;
+        // Clamp multiplier to safe range [0.5, 5.0]
+        const multiplier = Math.max(0.5, Math.min(5.0, result.stop_loss_multiplier));
         return side === 'long' ? entryPrice - atr * multiplier : entryPrice + atr * multiplier;
       }
     } catch {

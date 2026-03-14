@@ -29,7 +29,7 @@ class LSTMPredictor:
             try:
                 import torch
 
-                self.model = torch.load(model_path, weights_only=False)
+                self.model = torch.load(model_path, weights_only=True)
                 self.is_loaded = True
                 self.last_trained = str(model_path.stat().st_mtime)
             except Exception:

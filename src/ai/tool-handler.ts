@@ -35,8 +35,14 @@ import {
 import { getMLClient, initMLClient } from '../ml/client.js';
 import { buildFeatureVector } from '../ml/feature-engineer.js';
 import { getStoreInstance } from '../data/store-factory.js';
+import { sanitizeToolResult } from './sanitize.js';
 
 export async function handleTool(name: string, input: unknown): Promise<unknown> {
+  const raw = await handleToolUnsafe(name, input);
+  return sanitizeToolResult(raw);
+}
+
+async function handleToolUnsafe(name: string, input: unknown): Promise<unknown> {
   const params = input as Record<string, unknown>;
 
   switch (name) {

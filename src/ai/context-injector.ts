@@ -14,6 +14,12 @@ import { checkTokenSecurity, checkAddressSecurity } from '../data/sources/goplus
 import { getConfig } from '../config/loader.js';
 import { KNOWN_SYMBOLS } from '../config/constants.js';
 import { getMLClient } from '../ml/client.js';
+import {
+  sanitizeExternalData,
+  sanitizeTokenName,
+  sanitizeHeadline,
+  wrapUntrustedData,
+} from './sanitize.js';
 
 // ---------------------------------------------------------------------------
 // Keyword patterns for detecting user intent
@@ -413,7 +419,8 @@ export async function buildContextBlock(userMessage: string): Promise<string> {
   output.push(...buildInstructions(queryType, hasSpecificToken, isComplexQuery));
   output.push('');
 
-  return output.join('\n');
+  const raw = output.join('\n');
+  return wrapUntrustedData('MARKET_CONTEXT', raw);
 }
 
 // ---------------------------------------------------------------------------
@@ -520,7 +527,7 @@ async function fetchTokenData(tokens: string[], address?: string): Promise<strin
       const pair = pairs[0];
       if (pair) {
         lines.push(
-          `${pair.baseToken.name} (${pair.baseToken.symbol}) on ${pair.chainId}:`,
+          `${sanitizeTokenName(pair.baseToken.name)} (${sanitizeTokenName(pair.baseToken.symbol)}) on ${pair.chainId}:`,
           `  Price: $${pair.priceUsd ?? '?'}`,
           `  24h Volume: $${(pair.volume?.h24 ?? 0).toLocaleString()}`,
           `  Liquidity: $${(pair.liquidity?.usd ?? 0).toLocaleString()}`,
@@ -609,7 +616,7 @@ async function fetchTokenData(tokens: string[], address?: string): Promise<strin
       const pair = pairs[0];
       if (pair) {
         lines.push(
-          `${pair.baseToken.name} (${pair.baseToken.symbol}) on ${pair.chainId}:`,
+          `${sanitizeTokenName(pair.baseToken.name)} (${sanitizeTokenName(pair.baseToken.symbol)}) on ${pair.chainId}:`,
           `  Price: $${pair.priceUsd ?? '?'}`,
           `  24h Volume: $${(pair.volume?.h24 ?? 0).toLocaleString()}`,
           `  24h Change: ${(pair.priceChange?.h24 ?? 0) > 0 ? '+' : ''}${(pair.priceChange?.h24 ?? 0).toFixed(2)}%`,
@@ -632,7 +639,7 @@ async function fetchTrendingData(): Promise<string | null> {
     const lines = ['## Trending Tokens (live)'];
     for (const t of trending.slice(0, 10)) {
       lines.push(
-        `- ${t.name} (${t.symbol}) on ${t.chain}: $${t.priceUsd} | 24h: ${t.priceChange24h > 0 ? '+' : ''}${t.priceChange24h.toFixed(1)}% | Vol: $${t.volume24h.toLocaleString()} [${t.source}]`,
+        `- ${sanitizeTokenName(t.name)} (${sanitizeTokenName(t.symbol)}) on ${t.chain}: $${t.priceUsd} | 24h: ${t.priceChange24h > 0 ? '+' : ''}${t.priceChange24h.toFixed(1)}% | Vol: $${t.volume24h.toLocaleString()} [${t.source}]`,
       );
     }
     return lines.join('\n');
@@ -661,7 +668,9 @@ async function fetchNewsData(symbol?: string): Promise<string | null> {
               const label = ml
                 ? `${ml.sentiment.toUpperCase()} (${(ml.confidence * 100).toFixed(0)}%)`
                 : n.sentiment.toUpperCase();
-              lines.push(`- [${label}] ${n.title} (${n.source.title}, ${n.publishedAt})`);
+              lines.push(
+                `- [${label}] ${sanitizeHeadline(n.title)} (${sanitizeTokenName(n.source.title)}, ${n.publishedAt})`,
+              );
             }
             // Aggregate ML sentiment score
             const avgScore = mlResults.reduce((s, r) => s + r.score, 0) / mlResults.length;
@@ -678,7 +687,7 @@ async function fetchNewsData(symbol?: string): Promise<string | null> {
       // Fallback: use CryptoPanic sentiment labels
       for (const n of headlines) {
         lines.push(
-          `- [${n.sentiment.toUpperCase()}] ${n.title} (${n.source.title}, ${n.publishedAt})`,
+          `- [${n.sentiment.toUpperCase()}] ${sanitizeHeadline(n.title)} (${sanitizeTokenName(n.source.title)}, ${n.publishedAt})`,
         );
       }
       return lines.join('\n');
@@ -737,7 +746,7 @@ async function fetchRaisesData(): Promise<string | null> {
         : 'undisclosed';
       const date = new Date(r.date * 1000).toISOString().split('T')[0];
       lines.push(
-        `- ${r.name} — ${r.round} (${amount}) on ${r.chains.join(', ') || 'multi-chain'} [${date}]${r.leadInvestors.length > 0 ? ` Led by: ${r.leadInvestors.join(', ')}` : ''}`,
+        `- ${sanitizeTokenName(r.name)} — ${sanitizeExternalData(r.round, 50)} (${amount}) on ${r.chains.join(', ') || 'multi-chain'} [${date}]${r.leadInvestors.length > 0 ? ` Led by: ${r.leadInvestors.map((inv) => sanitizeTokenName(inv)).join(', ')}` : ''}`,
       );
     }
     return lines.join('\n');
@@ -754,7 +763,9 @@ async function fetchPumpData(): Promise<string | null> {
     const lines = ['## Latest Pump.fun Launches (Solana)'];
     for (const c of coins) {
       const mcap = c.usd_market_cap ? `$${c.usd_market_cap.toFixed(0)}` : '?';
-      lines.push(`- ${c.name} (${c.symbol}) — MC: ${mcap} | Replies: ${c.reply_count}`);
+      lines.push(
+        `- ${sanitizeTokenName(c.name)} (${sanitizeTokenName(c.symbol)}) — MC: ${mcap} | Replies: ${c.reply_count}`,
+      );
     }
     return lines.join('\n');
   } catch {

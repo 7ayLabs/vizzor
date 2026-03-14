@@ -58,14 +58,14 @@ export const vizzorConfigSchema = z.object({
     .object({
       port: z.number().default(3000),
       host: z.string().default('0.0.0.0'),
-      enableAuth: z.boolean().default(false),
-      corsOrigin: z.string().default('*'),
+      enableAuth: z.boolean().default(true),
+      corsOrigin: z.string().default('http://localhost:3000'),
     })
     .default(() => ({
       port: 3000,
       host: '0.0.0.0',
-      enableAuth: false,
-      corsOrigin: '*',
+      enableAuth: true,
+      corsOrigin: 'http://localhost:3000',
     })),
   n8n: z
     .object({

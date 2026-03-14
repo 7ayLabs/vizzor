@@ -18,14 +18,17 @@ import { createLogger } from '../../utils/logger.js';
 const logger = createLogger('agent-engine');
 
 export class AgentEngine {
-  private timer: ReturnType<typeof setInterval> | null = null;
+  private timer: ReturnType<typeof setTimeout> | null = null;
+  private running = false;
   private state: AgentState;
   private strategy: AgentStrategy;
 
   constructor(config: AgentConfig) {
     this.strategy = getStrategy(config.strategy);
+    // Enforce minimum 30s interval to prevent API abuse
+    const interval = Math.max(30, config.interval);
     this.state = {
-      config,
+      config: { ...config, interval },
       status: 'idle',
       lastCycle: null,
       cycleCount: 0,
@@ -42,22 +45,37 @@ export class AgentEngine {
 
     this.state.status = 'running';
     this.state.error = null;
+    this.running = true;
     logger.info(`Agent ${this.state.config.name} started (${this.strategy.name})`);
 
-    // Run immediately, then at interval
-    void this.runCycle();
-    this.timer = setInterval(() => {
-      void this.runCycle();
-    }, this.state.config.interval * 1000);
+    // Use setTimeout chain to prevent overlapping cycles
+    void this.scheduleNextCycle(true);
   }
 
   stop(): void {
+    this.running = false;
     if (this.timer) {
-      clearInterval(this.timer);
+      clearTimeout(this.timer);
       this.timer = null;
     }
     this.state.status = 'stopped';
     logger.info(`Agent ${this.state.config.name} stopped`);
+  }
+
+  private async scheduleNextCycle(immediate = false): Promise<void> {
+    if (!this.running) return;
+
+    if (!immediate) {
+      await new Promise<void>((resolve) => {
+        this.timer = setTimeout(resolve, this.state.config.interval * 1000);
+      });
+    }
+
+    if (!this.running) return;
+    await this.runCycle();
+
+    // Schedule next only after current finishes (no overlap)
+    void this.scheduleNextCycle(false);
   }
 
   private async runCycle(): Promise<void> {

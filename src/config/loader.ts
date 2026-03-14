@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import yaml from 'yaml';
@@ -202,7 +202,9 @@ export function saveConfigValue(key: string, value: string): void {
   // Validate before saving
   vizzorConfigSchema.parse(raw);
 
-  writeFileSync(configPath, yaml.stringify(raw), 'utf-8');
+  writeFileSync(configPath, yaml.stringify(raw), { encoding: 'utf-8', mode: 0o600 });
+  // Ensure restrictive perms on existing files too
+  chmodSync(configPath, 0o600);
 
   // Invalidate cache so next getConfig() returns fresh data
   cachedConfig = null;

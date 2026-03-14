@@ -1,10 +1,12 @@
 """Vizzor ML Sidecar — FastAPI server for ML inference."""
 
+import os
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
-from pydantic import BaseModel
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field, ConfigDict
 
 from .models.lstm_predictor import LSTMPredictor
 from .models.signal_classifier import SignalClassifier
@@ -26,22 +28,24 @@ from .models.intent_classifier import IntentClassifier
 
 
 class FeatureVector(BaseModel):
-    rsi: float = 50.0
-    macdHistogram: float = 0.0
-    bollingerPercentB: float = 0.5
-    ema12: float = 0.0
-    ema26: float = 0.0
-    atr: float = 0.0
-    obv: float = 0.0
-    fundingRate: float = 0.0
-    fearGreed: float = 50.0
-    priceChange24h: float = 0.0
-    rsiSlope: float = 0.0
-    volumeRatio: float = 1.0
-    emaCrossoverPct: float = 0.0
-    atrPct: float = 0.0
-    symbol: str = "BTC"
-    timestamp: int = 0
+    model_config = ConfigDict(str_max_length=20)
+
+    rsi: float = Field(50.0, ge=0, le=100)
+    macdHistogram: float = Field(0.0, ge=-1e6, le=1e6)
+    bollingerPercentB: float = Field(0.5, ge=-5, le=5)
+    ema12: float = Field(0.0, ge=-1e9, le=1e9)
+    ema26: float = Field(0.0, ge=-1e9, le=1e9)
+    atr: float = Field(0.0, ge=0, le=1e9)
+    obv: float = Field(0.0, ge=-1e15, le=1e15)
+    fundingRate: float = Field(0.0, ge=-1, le=1)
+    fearGreed: float = Field(50.0, ge=0, le=100)
+    priceChange24h: float = Field(0.0, ge=-100, le=10000)
+    rsiSlope: float = Field(0.0, ge=-100, le=100)
+    volumeRatio: float = Field(1.0, ge=0, le=1000)
+    emaCrossoverPct: float = Field(0.0, ge=-100, le=100)
+    atrPct: float = Field(0.0, ge=0, le=100)
+    symbol: str = Field("BTC", max_length=20, pattern=r"^[A-Za-z0-9]{1,20}$")
+    timestamp: int = Field(0, ge=0)
 
 
 class PredictionResponse(BaseModel):
@@ -54,7 +58,7 @@ class PredictionResponse(BaseModel):
 
 
 class BatchRequest(BaseModel):
-    features: list[FeatureVector]
+    features: list[FeatureVector] = Field(max_length=100)
 
 
 class BatchResponse(BaseModel):
@@ -62,16 +66,18 @@ class BatchResponse(BaseModel):
 
 
 class TokenFlow(BaseModel):
-    symbol: str
-    amount: float
-    from_addr: str = ""
-    to_addr: str = ""
-    timestamp: int = 0
-    type: str = "transfer"
+    model_config = ConfigDict(str_max_length=100)
+
+    symbol: str = Field(max_length=20)
+    amount: float = Field(ge=0, le=1e18)
+    from_addr: str = Field("", max_length=100)
+    to_addr: str = Field("", max_length=100)
+    timestamp: int = Field(0, ge=0)
+    type: str = Field("transfer", max_length=30)
 
 
 class FlowRequest(BaseModel):
-    flows: list[TokenFlow]
+    flows: list[TokenFlow] = Field(max_length=500)
 
 
 class AnomalyResponse(BaseModel):
@@ -90,21 +96,21 @@ class AnomaliesResponse(BaseModel):
 
 
 class RugFeatures(BaseModel):
-    bytecode_size: int = 0
-    is_verified: int = 0
-    holder_concentration: float = 0.0
-    has_proxy: int = 0
-    has_mint: int = 0
-    has_pause: int = 0
-    has_blacklist: int = 0
-    liquidity_locked: int = 0
-    buy_tax: float = 0.0
-    sell_tax: float = 0.0
-    contract_age_days: int = 0
-    total_transfers: int = 0
-    owner_balance_pct: float = 0.0
-    is_open_source: int = 0
-    top10_holder_pct: float = 0.0
+    bytecode_size: int = Field(0, ge=0, le=10_000_000)
+    is_verified: int = Field(0, ge=0, le=1)
+    holder_concentration: float = Field(0.0, ge=0, le=100)
+    has_proxy: int = Field(0, ge=0, le=1)
+    has_mint: int = Field(0, ge=0, le=1)
+    has_pause: int = Field(0, ge=0, le=1)
+    has_blacklist: int = Field(0, ge=0, le=1)
+    liquidity_locked: int = Field(0, ge=0, le=1)
+    buy_tax: float = Field(0.0, ge=0, le=100)
+    sell_tax: float = Field(0.0, ge=0, le=100)
+    contract_age_days: int = Field(0, ge=0, le=100_000)
+    total_transfers: int = Field(0, ge=0, le=1_000_000_000)
+    owner_balance_pct: float = Field(0.0, ge=0, le=100)
+    is_open_source: int = Field(0, ge=0, le=1)
+    top10_holder_pct: float = Field(0.0, ge=0, le=100)
 
 
 class RugRiskFactor(BaseModel):
@@ -124,20 +130,20 @@ class RugResponse(BaseModel):
 
 
 class WalletFeatures(BaseModel):
-    tx_count: int = 0
-    avg_value_eth: float = 0.0
-    max_value_eth: float = 0.0
-    avg_gas_used: float = 0.0
-    unique_recipients: int = 0
-    unique_methods: int = 0
-    time_span_hours: float = 0.0
-    avg_interval_seconds: float = 3600.0
-    min_interval_seconds: float = 60.0
-    contract_interaction_pct: float = 0.0
-    self_transfer_pct: float = 0.0
-    high_value_tx_pct: float = 0.0
-    failed_tx_pct: float = 0.0
-    token_diversity: int = 0
+    tx_count: int = Field(0, ge=0, le=10_000_000)
+    avg_value_eth: float = Field(0.0, ge=0, le=1e12)
+    max_value_eth: float = Field(0.0, ge=0, le=1e12)
+    avg_gas_used: float = Field(0.0, ge=0, le=1e12)
+    unique_recipients: int = Field(0, ge=0, le=10_000_000)
+    unique_methods: int = Field(0, ge=0, le=100_000)
+    time_span_hours: float = Field(0.0, ge=0, le=1e8)
+    avg_interval_seconds: float = Field(3600.0, ge=0, le=1e9)
+    min_interval_seconds: float = Field(60.0, ge=0, le=1e9)
+    contract_interaction_pct: float = Field(0.0, ge=0, le=100)
+    self_transfer_pct: float = Field(0.0, ge=0, le=100)
+    high_value_tx_pct: float = Field(0.0, ge=0, le=100)
+    failed_tx_pct: float = Field(0.0, ge=0, le=100)
+    token_diversity: int = Field(0, ge=0, le=1_000_000)
 
 
 class WalletResponse(BaseModel):
@@ -153,11 +159,12 @@ class WalletResponse(BaseModel):
 
 
 class SentimentRequest(BaseModel):
-    text: str
+    text: str = Field(max_length=10_000)
 
 
 class SentimentBatchRequest(BaseModel):
-    texts: list[str]
+    texts: list[str] = Field(max_length=100)
+    # Each text max 10k chars enforced at handler level
 
 
 class SentimentResponse(BaseModel):
@@ -176,12 +183,12 @@ class SentimentBatchResponse(BaseModel):
 
 
 class TrendFeatures(BaseModel):
-    price_change_24h: float = 0.0
-    price_change_7d: float = 0.0
-    volume_24h: float = 0.0
-    market_cap: float = 0.0
-    volume_to_mcap_ratio: float = 0.0
-    rank: float = 0.0
+    price_change_24h: float = Field(0.0, ge=-100, le=100_000)
+    price_change_7d: float = Field(0.0, ge=-100, le=100_000)
+    volume_24h: float = Field(0.0, ge=0, le=1e15)
+    market_cap: float = Field(0.0, ge=0, le=1e15)
+    volume_to_mcap_ratio: float = Field(0.0, ge=0, le=1000)
+    rank: float = Field(0.0, ge=0, le=100_000)
 
 
 class TrendScoreResponse(BaseModel):
@@ -196,19 +203,19 @@ class TrendScoreResponse(BaseModel):
 
 
 class TAFeatures(BaseModel):
-    rsi: float = 50.0
-    macd_histogram: float = 0.0
-    macd_line: float = 0.0
-    macd_signal: float = 0.0
-    bb_percent_b: float = 0.5
-    bb_bandwidth: float = 0.0
-    ema12: float = 0.0
-    ema26: float = 0.0
-    ema_cross_pct: float = 0.0
-    atr: float = 0.0
-    atr_pct: float = 0.0
-    obv: float = 0.0
-    price_change: float = 0.0
+    rsi: float = Field(50.0, ge=0, le=100)
+    macd_histogram: float = Field(0.0, ge=-1e6, le=1e6)
+    macd_line: float = Field(0.0, ge=-1e6, le=1e6)
+    macd_signal: float = Field(0.0, ge=-1e6, le=1e6)
+    bb_percent_b: float = Field(0.5, ge=-5, le=5)
+    bb_bandwidth: float = Field(0.0, ge=0, le=1000)
+    ema12: float = Field(0.0, ge=-1e9, le=1e9)
+    ema26: float = Field(0.0, ge=-1e9, le=1e9)
+    ema_cross_pct: float = Field(0.0, ge=-100, le=100)
+    atr: float = Field(0.0, ge=0, le=1e9)
+    atr_pct: float = Field(0.0, ge=0, le=100)
+    obv: float = Field(0.0, ge=-1e15, le=1e15)
+    price_change: float = Field(0.0, ge=-100, le=100_000)
 
 
 class TASignal(BaseModel):
@@ -229,18 +236,20 @@ class TAResponse(BaseModel):
 
 
 class StrategyFeatures(BaseModel):
-    rsi: float = 50.0
-    macd_histogram: float = 0.0
-    ema12: float = 0.0
-    ema26: float = 0.0
-    bollinger_pct_b: float = 0.5
-    atr: float = 0.0
-    obv: float = 0.0
-    funding_rate: float = 0.0
-    fear_greed: float = 50.0
-    price_change_24h: float = 0.0
-    price: float = 0.0
-    regime: str = "ranging"
+    model_config = ConfigDict(str_max_length=30)
+
+    rsi: float = Field(50.0, ge=0, le=100)
+    macd_histogram: float = Field(0.0, ge=-1e6, le=1e6)
+    ema12: float = Field(0.0, ge=-1e9, le=1e9)
+    ema26: float = Field(0.0, ge=-1e9, le=1e9)
+    bollinger_pct_b: float = Field(0.5, ge=-5, le=5)
+    atr: float = Field(0.0, ge=0, le=1e9)
+    obv: float = Field(0.0, ge=-1e15, le=1e15)
+    funding_rate: float = Field(0.0, ge=-1, le=1)
+    fear_greed: float = Field(50.0, ge=0, le=100)
+    price_change_24h: float = Field(0.0, ge=-100, le=100_000)
+    price: float = Field(0.0, ge=0, le=1e9)
+    regime: str = Field("ranging", max_length=30)
 
 
 class StrategyResponse(BaseModel):
@@ -255,15 +264,15 @@ class StrategyResponse(BaseModel):
 
 
 class RegimeFeatures(BaseModel):
-    returns_1d: float = 0.0
-    returns_7d: float = 0.0
-    volatility_14d: float = 3.0
-    volume_ratio: float = 1.0
-    rsi: float = 50.0
-    bb_width: float = 0.0
-    fear_greed: float = 50.0
-    funding_rate: float = 0.0
-    price_vs_sma200: float = 0.0
+    returns_1d: float = Field(0.0, ge=-100, le=10000)
+    returns_7d: float = Field(0.0, ge=-100, le=10000)
+    volatility_14d: float = Field(3.0, ge=0, le=1000)
+    volume_ratio: float = Field(1.0, ge=0, le=10000)
+    rsi: float = Field(50.0, ge=0, le=100)
+    bb_width: float = Field(0.0, ge=0, le=1000)
+    fear_greed: float = Field(50.0, ge=0, le=100)
+    funding_rate: float = Field(0.0, ge=-1, le=1)
+    price_vs_sma200: float = Field(0.0, ge=-100, le=10000)
 
 
 class RegimeResponse(BaseModel):
@@ -277,22 +286,22 @@ class RegimeResponse(BaseModel):
 
 
 class ProjectRiskFeatures(BaseModel):
-    bytecode_size: int = 0
-    is_verified: int = 0
-    holder_concentration: float = 0.0
-    has_proxy: int = 0
-    has_mint: int = 0
-    has_pause: int = 0
-    has_blacklist: int = 0
-    liquidity_locked: int = 0
-    buy_tax: float = 0.0
-    sell_tax: float = 0.0
-    contract_age_days: int = 0
-    total_transfers: int = 0
-    owner_balance_pct: float = 0.0
-    is_open_source: int = 0
-    top10_holder_pct: float = 0.0
-    has_token_info: int = 1
+    bytecode_size: int = Field(0, ge=0, le=10_000_000)
+    is_verified: int = Field(0, ge=0, le=1)
+    holder_concentration: float = Field(0.0, ge=0, le=100)
+    has_proxy: int = Field(0, ge=0, le=1)
+    has_mint: int = Field(0, ge=0, le=1)
+    has_pause: int = Field(0, ge=0, le=1)
+    has_blacklist: int = Field(0, ge=0, le=1)
+    liquidity_locked: int = Field(0, ge=0, le=1)
+    buy_tax: float = Field(0.0, ge=0, le=100)
+    sell_tax: float = Field(0.0, ge=0, le=100)
+    contract_age_days: int = Field(0, ge=0, le=100_000)
+    total_transfers: int = Field(0, ge=0, le=1_000_000_000)
+    owner_balance_pct: float = Field(0.0, ge=0, le=100)
+    is_open_source: int = Field(0, ge=0, le=1)
+    top10_holder_pct: float = Field(0.0, ge=0, le=100)
+    has_token_info: int = Field(1, ge=0, le=1)
 
 
 class ProjectRiskResponse(BaseModel):
@@ -306,14 +315,16 @@ class ProjectRiskResponse(BaseModel):
 
 
 class PortfolioFeatures(BaseModel):
-    total_value: float = 10000.0
-    cash: float = 10000.0
-    win_rate: float = 0.5
-    max_drawdown: float = 0.0
-    avg_win: float = 0.05
-    avg_loss: float = 0.03
-    regime: str = "ranging"
-    atr_pct: float = 3.0
+    model_config = ConfigDict(str_max_length=30)
+
+    total_value: float = Field(10000.0, ge=0, le=1e15)
+    cash: float = Field(10000.0, ge=0, le=1e15)
+    win_rate: float = Field(0.5, ge=0, le=1)
+    max_drawdown: float = Field(0.0, ge=0, le=100)
+    avg_win: float = Field(0.05, ge=0, le=1e6)
+    avg_loss: float = Field(0.03, ge=0, le=1e6)
+    regime: str = Field("ranging", max_length=30)
+    atr_pct: float = Field(3.0, ge=0, le=100)
 
 
 class PortfolioOptResponse(BaseModel):
@@ -329,7 +340,7 @@ class PortfolioOptResponse(BaseModel):
 
 
 class IntentRequest(BaseModel):
-    text: str
+    text: str = Field(max_length=10_000)
 
 
 class IntentResponse(BaseModel):
@@ -345,16 +356,16 @@ class IntentResponse(BaseModel):
 
 
 class BytecodeFeatures(BaseModel):
-    bytecode_size: int = 0
-    is_verified: int = 0
-    has_selfdestruct: int = 0
-    has_delegatecall: int = 0
-    selector_count: int = 0
-    opcode_entropy: float = 0.0
-    has_mint: int = 0
-    has_pause: int = 0
-    has_blacklist: int = 0
-    has_proxy: int = 0
+    bytecode_size: int = Field(0, ge=0, le=10_000_000)
+    is_verified: int = Field(0, ge=0, le=1)
+    has_selfdestruct: int = Field(0, ge=0, le=1)
+    has_delegatecall: int = Field(0, ge=0, le=1)
+    selector_count: int = Field(0, ge=0, le=100_000)
+    opcode_entropy: float = Field(0.0, ge=0, le=10)
+    has_mint: int = Field(0, ge=0, le=1)
+    has_pause: int = Field(0, ge=0, le=1)
+    has_blacklist: int = Field(0, ge=0, le=1)
+    has_proxy: int = Field(0, ge=0, le=1)
 
 
 class BytecodeRiskResponse(BaseModel):
@@ -368,9 +379,9 @@ class BytecodeRiskResponse(BaseModel):
 
 
 class PortfolioPredFeatures(BaseModel):
-    returns_history: list[float] = []
-    sharpe_history: list[float] = []
-    drawdown_history: list[float] = []
+    returns_history: list[float] = Field(default_factory=list, max_length=1000)
+    sharpe_history: list[float] = Field(default_factory=list, max_length=1000)
+    drawdown_history: list[float] = Field(default_factory=list, max_length=1000)
 
 
 class PortfolioPredResponse(BaseModel):
@@ -426,6 +437,34 @@ app = FastAPI(
     version="0.11.0",
     lifespan=lifespan,
 )
+
+# ---------------------------------------------------------------------------
+# Security middleware — require ML_API_SECRET if set
+# ---------------------------------------------------------------------------
+
+ML_API_SECRET = os.getenv("ML_API_SECRET", "")
+
+
+@app.middleware("http")
+async def check_api_secret(request: Request, call_next):
+    if ML_API_SECRET and request.url.path != "/health":
+        token = request.headers.get("x-api-secret", "")
+        if token != ML_API_SECRET:
+            return JSONResponse(status_code=403, content={"detail": "Forbidden"})
+    return await call_next(request)
+
+
+# ---------------------------------------------------------------------------
+# Global exception handler — suppress stack traces in responses
+# ---------------------------------------------------------------------------
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(_request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal inference error"},
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -540,9 +579,11 @@ async def predict_sentiment(req: SentimentRequest) -> SentimentResponse:
 @app.post("/predict/sentiment/batch", response_model=SentimentBatchResponse)
 async def predict_sentiment_batch(req: SentimentBatchRequest) -> SentimentBatchResponse:
     global predictions_served
-    predictions_served += len(req.texts)
+    # Truncate individual texts to 10k chars
+    texts = [t[:10_000] for t in req.texts]
+    predictions_served += len(texts)
 
-    results = sentiment_analyzer.analyze_batch(req.texts)
+    results = sentiment_analyzer.analyze_batch(texts)
 
     return SentimentBatchResponse(
         results=[
