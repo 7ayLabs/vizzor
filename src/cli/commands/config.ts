@@ -66,7 +66,21 @@ export async function handleConfigSet(key: string, value: string): Promise<void>
   await loadConfig();
   const config = getConfig();
 
-  const updatedConfig = { ...config, [key]: value };
+  // Deep clone to avoid mutating cached config
+  const updatedConfig = JSON.parse(JSON.stringify(config)) as Record<string, unknown>;
+
+  // Handle dot-notation for nested keys (e.g. "ai.provider" -> config.ai.provider)
+  if (key.includes('.')) {
+    const [section, field] = key.split('.') as [string, string];
+    if (!updatedConfig[section] || typeof updatedConfig[section] !== 'object') {
+      updatedConfig[section] = {};
+    }
+    const parsed = field === 'maxTokens' ? Number(value) : value;
+    (updatedConfig[section] as Record<string, unknown>)[field] = parsed;
+  } else {
+    updatedConfig[key] = value;
+  }
+
   writeFileSync(configPath, yamlStringify(updatedConfig), 'utf-8');
 
   const displayValue = isSensitive ? maskKey(value) : value;
