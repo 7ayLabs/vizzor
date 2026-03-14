@@ -43,6 +43,17 @@ export const vizzorConfigSchema = z.object({
       url: z.string().optional(),
     })
     .default(() => ({ type: 'sqlite' as const })),
+  ml: z
+    .object({
+      enabled: z.boolean().default(false),
+      sidecarUrl: z.string().default('http://localhost:8000'),
+      fallbackToRules: z.boolean().default(true),
+    })
+    .default(() => ({
+      enabled: false,
+      sidecarUrl: 'http://localhost:8000',
+      fallbackToRules: true,
+    })),
   discordToken: z.string().optional(),
   discordGuildId: z.string().optional(),
   telegramToken: z.string().optional(),
