@@ -37,6 +37,12 @@ export const vizzorConfigSchema = z.object({
       contractCode: z.number().default(86400),
     })
     .default(() => ({ tokenInfo: 3600, marketData: 300, walletData: 600, contractCode: 86400 })),
+  database: z
+    .object({
+      type: z.enum(['sqlite', 'postgres']).default('sqlite'),
+      url: z.string().optional(),
+    })
+    .default(() => ({ type: 'sqlite' as const })),
   discordToken: z.string().optional(),
   discordGuildId: z.string().optional(),
   telegramToken: z.string().optional(),

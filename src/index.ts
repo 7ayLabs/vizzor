@@ -123,6 +123,26 @@ botCmd
     handleBotValidate();
   });
 
+const collectCmd = program.command('collect').description('Data collection pipeline');
+
+collectCmd
+  .command('start')
+  .description('Start background OHLCV data collection (requires PostgreSQL)')
+  .option('--symbols <symbols>', 'Comma-separated symbols to collect (default: 23 major pairs)')
+  .option('--interval <seconds>', 'Collection interval in seconds (default: 300)', parseInt)
+  .action(async (options: { symbols?: string; interval?: number }) => {
+    const { handleCollectStart } = await import('./cli/commands/collect.js');
+    await handleCollectStart(options);
+  });
+
+collectCmd
+  .command('status')
+  .description('Show data collection status')
+  .action(async () => {
+    const { handleCollectStatus } = await import('./cli/commands/collect.js');
+    handleCollectStatus();
+  });
+
 // If no arguments provided, launch interactive TUI
 const args = process.argv.slice(2);
 if (args.length === 0) {
