@@ -1,6 +1,6 @@
 {
   "name": "@vizzor/cli",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "AI-powered crypto chronovisor — on-chain intelligence for the future",
   "type": "module",
   "license": "BUSL-1.1",
