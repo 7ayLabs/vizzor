@@ -4,6 +4,7 @@
 
 import type { ChainAdapter } from './types.js';
 import { EvmAdapter } from './evm/adapter.js';
+import { ZkEvmAdapter, getZkChainIds } from './zk/adapter.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -28,6 +29,13 @@ const BUILTIN_EVM_CHAINS = ['ethereum', 'polygon', 'arbitrum', 'optimism', 'base
 
 for (const chainId of BUILTIN_EVM_CHAINS) {
   registry.set(chainId, evmFactory);
+}
+
+// ZK rollup chains (EVM-compatible)
+const zkFactory: ChainAdapterFactory = (chainId) => new ZkEvmAdapter(chainId);
+
+for (const chainId of getZkChainIds()) {
+  registry.set(chainId, zkFactory);
 }
 
 // ---------------------------------------------------------------------------
