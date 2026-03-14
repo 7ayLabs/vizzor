@@ -1,0 +1,294 @@
+{
+  "name": "09 — Model A/B Testing",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 6 * * *"
+            }
+          ]
+        }
+      },
+      "id": "c2b2c3d4-0009-4000-8000-000000000001",
+      "name": "Daily 06:00 UTC",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT p.model_name, p.model_version, COUNT(*) AS total, SUM(CASE WHEN p.correct THEN 1 ELSE 0 END) AS correct_count, ROUND(100.0 * SUM(CASE WHEN p.correct THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0), 2) AS accuracy, ROUND(AVG(ABS(p.predicted_change - p.actual_change)), 4) AS mae, ROUND(SQRT(AVG(POWER(p.predicted_change - p.actual_change, 2))), 4) AS rmse, ROUND(AVG(CASE WHEN p.correct AND p.direction = 'bullish' THEN p.actual_change ELSE 0 END), 4) AS avg_correct_gain, MIN(p.evaluated_at) AS eval_start, MAX(p.evaluated_at) AS eval_end FROM ml_predictions p WHERE p.evaluated_at >= NOW() - INTERVAL '24 hours' AND p.model_version IS NOT NULL GROUP BY p.model_name, p.model_version ORDER BY p.model_name, accuracy DESC;",
+        "additionalFields": {}
+      },
+      "id": "c2b2c3d4-0009-4000-8000-000000000002",
+      "name": "Query Per-Model Metrics",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [460, 300],
+      "credentials": {
+        "postgres": {
+          "id": "vizzor-pg",
+          "name": "Vizzor Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(i => i.json);\n\n// Group by model_name\nconst byModel = {};\nfor (const row of rows) {\n  if (!byModel[row.model_name]) byModel[row.model_name] = [];\n  byModel[row.model_name].push(row);\n}\n\nconst comparisons = [];\nfor (const [modelName, versions] of Object.entries(byModel)) {\n  if (versions.length < 2) continue;\n\n  // Sort by version, assume last two are A (current) and B (challenger)\n  versions.sort((a, b) => (a.model_version || '').localeCompare(b.model_version || ''));\n  const modelA = versions[versions.length - 2];\n  const modelB = versions[versions.length - 1];\n\n  const accDiff = (modelB.accuracy || 0) - (modelA.accuracy || 0);\n  const maeDiff = (modelA.mae || 0) - (modelB.mae || 0); // lower is better\n  const minSamples = 50;\n  const sufficientData = modelA.total >= minSamples && modelB.total >= minSamples;\n\n  // Model B is better if accuracy is higher AND mae is lower (or equal)\n  const bIsBetter = sufficientData && accDiff > 2 && maeDiff >= 0;\n\n  comparisons.push({\n    modelName,\n    modelA: { version: modelA.model_version, accuracy: modelA.accuracy, mae: modelA.mae, rmse: modelA.rmse, total: modelA.total },\n    modelB: { version: modelB.model_version, accuracy: modelB.accuracy, mae: modelB.mae, rmse: modelB.rmse, total: modelB.total },\n    accDiff: accDiff.toFixed(2),\n    maeDiff: maeDiff.toFixed(4),\n    bIsBetter,\n    sufficientData\n  });\n}\n\nreturn [{ json: { comparisons, hasPromotion: comparisons.some(c => c.bIsBetter) } }];"
+      },
+      "id": "c2b2c3d4-0009-4000-8000-000000000003",
+      "name": "Compare Models",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "b-is-better",
+              "leftValue": "={{ $json.hasPromotion }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "c2b2c3d4-0009-4000-8000-000000000004",
+      "name": "Model B Better?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const comparisons = $input.first().json.comparisons;\nconst toPromote = comparisons.filter(c => c.bIsBetter);\nreturn toPromote.map(c => ({ json: c }));"
+      },
+      "id": "c2b2c3d4-0009-4000-8000-000000000005",
+      "name": "Get Promotions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1140, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ml-sidecar:8000/models/promote",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model_name",
+              "value": "={{ $json.modelName }}"
+            },
+            {
+              "name": "version",
+              "value": "={{ $json.modelB.version }}"
+            },
+            {
+              "name": "reason",
+              "value": "ab-test-auto-promote"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "c2b2c3d4-0009-4000-8000-000000000006",
+      "name": "Promote Model B",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1360, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const comp = $('Get Promotions').first().json;\nconst promoteResult = $input.first().json;\n\nconst message = `MODEL PROMOTION\\n\\n` +\n  `Model: ${comp.modelName}\\n` +\n  `Promoted: ${comp.modelB.version} (was ${comp.modelA.version})\\n\\n` +\n  `Model A (old): Accuracy ${comp.modelA.accuracy}%, MAE ${comp.modelA.mae}, ${comp.modelA.total} samples\\n` +\n  `Model B (new): Accuracy ${comp.modelB.accuracy}%, MAE ${comp.modelB.mae}, ${comp.modelB.total} samples\\n\\n` +\n  `Accuracy diff: +${comp.accDiff}%\\n` +\n  `MAE improvement: ${comp.maeDiff}\\n\\n` +\n  `Status: ${promoteResult.success ? 'SUCCESS' : 'FAILED — ' + (promoteResult.error || 'unknown')}`;\n\nreturn [{ json: { message, chatId: process.env.TELEGRAM_ALERT_CHAT_ID || '' } }];"
+      },
+      "id": "c2b2c3d4-0009-4000-8000-000000000007",
+      "name": "Format Promotion Notice",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1580, 200]
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "c2b2c3d4-0009-4000-8000-000000000008",
+      "name": "Telegram Notify",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1800, 200],
+      "credentials": {
+        "telegramApi": {
+          "id": "vizzor-tg",
+          "name": "Vizzor Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const comparisons = $input.first().json.comparisons;\n\nlet message = `MODEL A/B REPORT (No Promotions)\\n\\n`;\nfor (const c of comparisons) {\n  message += `${c.modelName}:\\n`;\n  message += `  A (${c.modelA.version}): ${c.modelA.accuracy}% acc, ${c.modelA.mae} MAE\\n`;\n  message += `  B (${c.modelB.version}): ${c.modelB.accuracy}% acc, ${c.modelB.mae} MAE\\n`;\n  message += `  Sufficient data: ${c.sufficientData ? 'Yes' : 'No'}\\n\\n`;\n}\nif (comparisons.length === 0) message += 'No models with multiple versions to compare.';\n\nreturn [{ json: { message, chatId: process.env.TELEGRAM_ALERT_CHAT_ID || '' } }];"
+      },
+      "id": "c2b2c3d4-0009-4000-8000-000000000009",
+      "name": "Format No Promotion",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1140, 440]
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "c2b2c3d4-0009-4000-8000-000000000010",
+      "name": "Telegram No Change",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1380, 440],
+      "credentials": {
+        "telegramApi": {
+          "id": "vizzor-tg",
+          "name": "Vizzor Telegram Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Daily 06:00 UTC": {
+      "main": [
+        [
+          {
+            "node": "Query Per-Model Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Per-Model Metrics": {
+      "main": [
+        [
+          {
+            "node": "Compare Models",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compare Models": {
+      "main": [
+        [
+          {
+            "node": "Model B Better?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Model B Better?": {
+      "main": [
+        [
+          {
+            "node": "Get Promotions",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format No Promotion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Promotions": {
+      "main": [
+        [
+          {
+            "node": "Promote Model B",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Promote Model B": {
+      "main": [
+        [
+          {
+            "node": "Format Promotion Notice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Promotion Notice": {
+      "main": [
+        [
+          {
+            "node": "Telegram Notify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format No Promotion": {
+      "main": [
+        [
+          {
+            "node": "Telegram No Change",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "ml"
+    },
+    {
+      "name": "ab-testing"
+    }
+  ],
+  "pinData": {},
+  "versionId": "09-model-ab-testing-v1"
+}

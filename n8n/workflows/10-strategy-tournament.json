@@ -1,0 +1,152 @@
+{
+  "name": "10 — Strategy Tournament",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 0 * * 0"
+            }
+          ]
+        }
+      },
+      "id": "d2b2c3d4-0010-4000-8000-000000000001",
+      "name": "Weekly Sunday 00:00 UTC",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://vizzor-api:3000/v1/agents",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "d2b2c3d4-0010-4000-8000-000000000002",
+      "name": "Fetch Agents",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT d.agent_id, d.strategy, COUNT(*) AS total_decisions, SUM(CASE WHEN d.outcome = 'profit' THEN 1 ELSE 0 END) AS wins, SUM(CASE WHEN d.outcome = 'loss' THEN 1 ELSE 0 END) AS losses, ROUND(100.0 * SUM(CASE WHEN d.outcome = 'profit' THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0), 2) AS win_rate, ROUND(SUM(d.pnl_usd)::numeric, 2) AS total_pnl, ROUND(AVG(d.pnl_usd)::numeric, 4) AS avg_pnl, ROUND(MAX(d.pnl_usd)::numeric, 2) AS best_trade, ROUND(MIN(d.pnl_usd)::numeric, 2) AS worst_trade, ROUND(STDDEV(d.pnl_usd)::numeric, 4) AS pnl_stddev FROM agent_decisions d WHERE d.decided_at >= NOW() - INTERVAL '7 days' AND d.outcome IS NOT NULL GROUP BY d.agent_id, d.strategy ORDER BY total_pnl DESC;",
+        "additionalFields": {}
+      },
+      "id": "d2b2c3d4-0010-4000-8000-000000000003",
+      "name": "Query Decisions",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [460, 500],
+      "credentials": {
+        "postgres": {
+          "id": "vizzor-pg",
+          "name": "Vizzor Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const agents = $('Fetch Agents').first().json.agents || [];\nconst decisions = $('Query Decisions').all().map(i => i.json);\n\n// Merge agent info with decision metrics\nconst ranked = decisions.map((d, idx) => {\n  const agent = agents.find(a => a.id === d.agent_id);\n  const sharpe = d.pnl_stddev > 0 ? (d.avg_pnl / d.pnl_stddev) : 0;\n  const score = (d.total_pnl * 0.4) + (d.win_rate * 0.3) + (sharpe * 100 * 0.3);\n\n  return {\n    rank: idx + 1,\n    agentId: d.agent_id,\n    agentName: agent?.name || d.agent_id,\n    strategy: d.strategy,\n    totalDecisions: d.total_decisions,\n    wins: d.wins,\n    losses: d.losses,\n    winRate: d.win_rate,\n    totalPnl: d.total_pnl,\n    avgPnl: d.avg_pnl,\n    bestTrade: d.best_trade,\n    worstTrade: d.worst_trade,\n    sharpe: sharpe.toFixed(3),\n    compositeScore: score.toFixed(2)\n  };\n});\n\n// Sort by composite score\nranked.sort((a, b) => parseFloat(b.compositeScore) - parseFloat(a.compositeScore));\nranked.forEach((r, i) => r.rank = i + 1);\n\n// Build leaderboard\nconst weekEnd = new Date().toISOString().split('T')[0];\nconst weekStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];\n\nlet leaderboard = `STRATEGY TOURNAMENT\\n`;\nleaderboard += `Week: ${weekStart} to ${weekEnd}\\n`;\nleaderboard += `${'='.repeat(40)}\\n\\n`;\n\nconst medals = ['1st', '2nd', '3rd'];\nfor (const r of ranked) {\n  const medal = r.rank <= 3 ? ` ${medals[r.rank - 1]}` : '';\n  leaderboard += `#${r.rank}${medal} ${r.agentName}\\n`;\n  leaderboard += `  Strategy: ${r.strategy}\\n`;\n  leaderboard += `  Score: ${r.compositeScore} | PnL: $${r.totalPnl} | Win Rate: ${r.winRate}%\\n`;\n  leaderboard += `  Trades: ${r.totalDecisions} (W:${r.wins} L:${r.losses}) | Sharpe: ${r.sharpe}\\n`;\n  leaderboard += `  Best: $${r.bestTrade} | Worst: $${r.worstTrade}\\n\\n`;\n}\n\nif (ranked.length === 0) {\n  leaderboard += 'No agent decisions recorded this week.\\n';\n}\n\nreturn [{ json: { leaderboard, ranked, chatId: process.env.TELEGRAM_REPORT_CHAT_ID || '' } }];"
+      },
+      "id": "d2b2c3d4-0010-4000-8000-000000000004",
+      "name": "Rank Strategies",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [740, 400]
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.leaderboard }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "d2b2c3d4-0010-4000-8000-000000000005",
+      "name": "Telegram Leaderboard",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [960, 400],
+      "credentials": {
+        "telegramApi": {
+          "id": "vizzor-tg",
+          "name": "Vizzor Telegram Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Weekly Sunday 00:00 UTC": {
+      "main": [
+        [
+          {
+            "node": "Fetch Agents",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Query Decisions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Agents": {
+      "main": [
+        [
+          {
+            "node": "Rank Strategies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Decisions": {
+      "main": [
+        [
+          {
+            "node": "Rank Strategies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rank Strategies": {
+      "main": [
+        [
+          {
+            "node": "Telegram Leaderboard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "agents"
+    },
+    {
+      "name": "tournament"
+    }
+  ],
+  "pinData": {},
+  "versionId": "10-strategy-tournament-v1"
+}
