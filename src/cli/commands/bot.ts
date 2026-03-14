@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import { getConfig } from '../../config/loader.js';
-import { requireKey, hasKey, maskKey } from '../../config/keys.js';
+import { requireKey, hasKey } from '../../config/keys.js';
 
 export async function handleBotStart(options: {
   discord: boolean;
@@ -53,42 +53,12 @@ export function handleBotValidate(): void {
   console.log(chalk.bold('\nVizzor Bot Configuration Check\n'));
 
   const checks = [
-    {
-      label: 'Anthropic API Key',
-      isSet: hasKey(config.anthropicApiKey),
-      masked: maskKey(config.anthropicApiKey),
-      required: true,
-    },
-    {
-      label: 'Etherscan API Key',
-      isSet: hasKey(config.etherscanApiKey),
-      masked: maskKey(config.etherscanApiKey),
-      required: true,
-    },
-    {
-      label: 'Discord Token',
-      isSet: hasKey(config.discordToken),
-      masked: maskKey(config.discordToken),
-      required: false,
-    },
-    {
-      label: 'Discord Guild ID',
-      isSet: hasKey(config.discordGuildId),
-      masked: maskKey(config.discordGuildId),
-      required: false,
-    },
-    {
-      label: 'Telegram Token',
-      isSet: hasKey(config.telegramToken),
-      masked: maskKey(config.telegramToken),
-      required: false,
-    },
-    {
-      label: 'CryptoPanic Key',
-      isSet: hasKey(config.cryptopanicApiKey),
-      masked: maskKey(config.cryptopanicApiKey),
-      required: false,
-    },
+    { label: 'Anthropic API Key', isSet: hasKey(config.anthropicApiKey), required: true },
+    { label: 'Etherscan API Key', isSet: hasKey(config.etherscanApiKey), required: true },
+    { label: 'Discord Token', isSet: hasKey(config.discordToken), required: false },
+    { label: 'Discord Guild ID', isSet: hasKey(config.discordGuildId), required: false },
+    { label: 'Telegram Token', isSet: hasKey(config.telegramToken), required: false },
+    { label: 'CryptoPanic Key', isSet: hasKey(config.cryptopanicApiKey), required: false },
   ];
 
   let allRequired = true;
@@ -98,8 +68,7 @@ export function handleBotValidate(): void {
       : check.required
         ? chalk.red('MISSING')
         : chalk.yellow('NOT SET');
-    const display = check.isSet ? check.masked : chalk.dim('(not set)');
-    console.log(`  ${status.padEnd(18)} ${check.label.padEnd(20)} ${display}`);
+    console.log(`  ${status.padEnd(18)} ${check.label}`);
     if (check.required && !check.isSet) allRequired = false;
   }
 
