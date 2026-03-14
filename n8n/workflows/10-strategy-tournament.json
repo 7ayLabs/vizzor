@@ -1,5 +1,5 @@
 {
-  "name": "10 — Strategy Tournament",
+  "name": "10 \u2014 Strategy Tournament",
   "nodes": [
     {
       "parameters": {
@@ -16,7 +16,10 @@
       "name": "Weekly Sunday 00:00 UTC",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [240, 300]
+      "position": [
+        240,
+        300
+      ]
     },
     {
       "parameters": {
@@ -30,7 +33,10 @@
       "name": "Fetch Agents",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [460, 300]
+      "position": [
+        460,
+        400
+      ]
     },
     {
       "parameters": {
@@ -42,7 +48,10 @@
       "name": "Query Decisions",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [460, 500],
+      "position": [
+        680,
+        400
+      ],
       "credentials": {
         "postgres": {
           "id": "vizzor-pg",
@@ -58,7 +67,10 @@
       "name": "Rank Strategies",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [740, 400]
+      "position": [
+        900,
+        400
+      ]
     },
     {
       "parameters": {
@@ -73,7 +85,10 @@
       "name": "Telegram Leaderboard",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [960, 400],
+      "position": [
+        1120,
+        400
+      ],
       "credentials": {
         "telegramApi": {
           "id": "vizzor-tg",
@@ -90,11 +105,6 @@
             "node": "Fetch Agents",
             "type": "main",
             "index": 0
-          },
-          {
-            "node": "Query Decisions",
-            "type": "main",
-            "index": 0
           }
         ]
       ]
@@ -103,7 +113,7 @@
       "main": [
         [
           {
-            "node": "Rank Strategies",
+            "node": "Query Decisions",
             "type": "main",
             "index": 0
           }
@@ -148,5 +158,6 @@
     }
   ],
   "pinData": {},
-  "versionId": "10-strategy-tournament-v1"
+  "versionId": "10-strategy-tournament-v1",
+  "id": "110"
 }

@@ -1,5 +1,5 @@
 {
-  "name": "09 — Model A/B Testing",
+  "name": "09 \u2014 Model A/B Testing",
   "nodes": [
     {
       "parameters": {
@@ -16,7 +16,10 @@
       "name": "Daily 06:00 UTC",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [240, 300]
+      "position": [
+        240,
+        300
+      ]
     },
     {
       "parameters": {
@@ -28,7 +31,10 @@
       "name": "Query Per-Model Metrics",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [460, 300],
+      "position": [
+        460,
+        300
+      ],
       "credentials": {
         "postgres": {
           "id": "vizzor-pg",
@@ -44,7 +50,10 @@
       "name": "Compare Models",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [680, 300]
+      "position": [
+        680,
+        300
+      ]
     },
     {
       "parameters": {
@@ -72,7 +81,10 @@
       "name": "Model B Better?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [900, 300]
+      "position": [
+        900,
+        300
+      ]
     },
     {
       "parameters": {
@@ -82,7 +94,10 @@
       "name": "Get Promotions",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1140, 200]
+      "position": [
+        1140,
+        200
+      ]
     },
     {
       "parameters": {
@@ -113,17 +128,23 @@
       "name": "Promote Model B",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1360, 200]
+      "position": [
+        1360,
+        200
+      ]
     },
     {
       "parameters": {
-        "jsCode": "const comp = $('Get Promotions').first().json;\nconst promoteResult = $input.first().json;\n\nconst message = `MODEL PROMOTION\\n\\n` +\n  `Model: ${comp.modelName}\\n` +\n  `Promoted: ${comp.modelB.version} (was ${comp.modelA.version})\\n\\n` +\n  `Model A (old): Accuracy ${comp.modelA.accuracy}%, MAE ${comp.modelA.mae}, ${comp.modelA.total} samples\\n` +\n  `Model B (new): Accuracy ${comp.modelB.accuracy}%, MAE ${comp.modelB.mae}, ${comp.modelB.total} samples\\n\\n` +\n  `Accuracy diff: +${comp.accDiff}%\\n` +\n  `MAE improvement: ${comp.maeDiff}\\n\\n` +\n  `Status: ${promoteResult.success ? 'SUCCESS' : 'FAILED — ' + (promoteResult.error || 'unknown')}`;\n\nreturn [{ json: { message, chatId: process.env.TELEGRAM_ALERT_CHAT_ID || '' } }];"
+        "jsCode": "const comp = $('Get Promotions').first().json;\nconst promoteResult = $input.first().json;\n\nconst message = `MODEL PROMOTION\\n\\n` +\n  `Model: ${comp.modelName}\\n` +\n  `Promoted: ${comp.modelB.version} (was ${comp.modelA.version})\\n\\n` +\n  `Model A (old): Accuracy ${comp.modelA.accuracy}%, MAE ${comp.modelA.mae}, ${comp.modelA.total} samples\\n` +\n  `Model B (new): Accuracy ${comp.modelB.accuracy}%, MAE ${comp.modelB.mae}, ${comp.modelB.total} samples\\n\\n` +\n  `Accuracy diff: +${comp.accDiff}%\\n` +\n  `MAE improvement: ${comp.maeDiff}\\n\\n` +\n  `Status: ${promoteResult.success ? 'SUCCESS' : 'FAILED \u2014 ' + (promoteResult.error || 'unknown')}`;\n\nreturn [{ json: { message, chatId: process.env.TELEGRAM_ALERT_CHAT_ID || '' } }];"
       },
       "id": "c2b2c3d4-0009-4000-8000-000000000007",
       "name": "Format Promotion Notice",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1580, 200]
+      "position": [
+        1580,
+        200
+      ]
     },
     {
       "parameters": {
@@ -138,7 +159,10 @@
       "name": "Telegram Notify",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [1800, 200],
+      "position": [
+        1800,
+        200
+      ],
       "credentials": {
         "telegramApi": {
           "id": "vizzor-tg",
@@ -154,7 +178,10 @@
       "name": "Format No Promotion",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1140, 440]
+      "position": [
+        1140,
+        440
+      ]
     },
     {
       "parameters": {
@@ -169,7 +196,10 @@
       "name": "Telegram No Change",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [1380, 440],
+      "position": [
+        1380,
+        440
+      ],
       "credentials": {
         "telegramApi": {
           "id": "vizzor-tg",
@@ -290,5 +320,6 @@
     }
   ],
   "pinData": {},
-  "versionId": "09-model-ab-testing-v1"
+  "versionId": "09-model-ab-testing-v1",
+  "id": "109"
 }

@@ -216,8 +216,12 @@ export async function buildContextBlock(userMessage: string): Promise<string> {
   }
 
   // 6. Broad / general query — fetch everything for a full picture
+  //    BUT skip the broad dump when a specific token is mentioned (e.g. "bitcoin today"
+  //    should focus on Bitcoin, not dump trending meme coins and fundraising rounds).
   const isBroadQuery = matchesAny(lower, BROAD_KEYWORDS);
-  if (isBroadQuery) {
+  const hasSpecificIntent =
+    mentionedTokens.length > 0 || unknownTokens.length > 0 || !!addressMatch;
+  if (isBroadQuery && !hasSpecificIntent) {
     // Inject trending if not already queued
     if (!matchesAny(lower, TRENDING_KEYWORDS)) {
       tasks.push(
@@ -243,9 +247,19 @@ export async function buildContextBlock(userMessage: string): Promise<string> {
       );
     }
     // Inject top 3 market data if not already queued
-    if (!matchesAny(lower, PRICE_KEYWORDS) && mentionedTokens.length === 0 && !addressMatch) {
+    if (!matchesAny(lower, PRICE_KEYWORDS)) {
       tasks.push(
         fetchTokenData(['bitcoin', 'ethereum', 'solana']).then((data) => {
+          if (data) sections.push(data);
+        }),
+      );
+    }
+  } else if (isBroadQuery && hasSpecificIntent) {
+    // Token-specific broad query (e.g. "bitcoin today") — only fetch token-relevant news
+    if (!matchesAny(lower, NEWS_KEYWORDS)) {
+      const symbol = mentionedTokens[0]?.toUpperCase() || unknownTokens[0]?.toUpperCase();
+      tasks.push(
+        fetchNewsData(symbol).then((data) => {
           if (data) sections.push(data);
         }),
       );
@@ -662,7 +676,15 @@ async function fetchRaisesData(): Promise<string | null> {
 
     const lines = ['## Recent Crypto Fundraising Rounds (last 30 days)'];
     for (const r of raises.slice(0, 10)) {
-      const amount = r.amount ? `$${(r.amount / 1e6).toFixed(1)}M` : 'undisclosed';
+      const amount = r.amount
+        ? r.amount >= 1e9
+          ? `$${(r.amount / 1e9).toFixed(1)}B`
+          : r.amount >= 1e6
+            ? `$${(r.amount / 1e6).toFixed(1)}M`
+            : r.amount >= 1e3
+              ? `$${(r.amount / 1e3).toFixed(0)}K`
+              : `$${r.amount.toLocaleString()}`
+        : 'undisclosed';
       const date = new Date(r.date * 1000).toISOString().split('T')[0];
       lines.push(
         `- ${r.name} — ${r.round} (${amount}) on ${r.chains.join(', ') || 'multi-chain'} [${date}]${r.leadInvestors.length > 0 ? ` Led by: ${r.leadInvestors.join(', ')}` : ''}`,

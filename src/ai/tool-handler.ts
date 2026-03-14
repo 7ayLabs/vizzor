@@ -29,7 +29,7 @@ import {
   getAgentStatus,
   getRecentDecisions,
 } from '../core/agent/index.js';
-import { getMLClient } from '../ml/client.js';
+import { getMLClient, initMLClient } from '../ml/client.js';
 import { buildFeatureVector } from '../ml/feature-engineer.js';
 import { getStoreInstance } from '../data/store-factory.js';
 
@@ -354,7 +354,17 @@ export async function handleTool(name: string, input: unknown): Promise<unknown>
 
     case 'get_ml_prediction': {
       const symbol = String(params['symbol'] ?? 'BTC');
-      const mlClient = getMLClient();
+      let mlClient = getMLClient();
+      if (!mlClient) {
+        try {
+          const cfg = getConfig();
+          if (cfg.ml?.enabled && cfg.ml.sidecarUrl) {
+            mlClient = initMLClient(cfg.ml.sidecarUrl);
+          }
+        } catch {
+          // Config not loaded
+        }
+      }
       if (!mlClient) {
         // Fallback to rule-based prediction
         const prediction = await generatePrediction(symbol);

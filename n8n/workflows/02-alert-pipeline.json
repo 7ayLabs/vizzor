@@ -1,5 +1,5 @@
 {
-  "name": "02 — Alert Pipeline (Anomaly Detection)",
+  "name": "02 \u2014 Alert Pipeline (Anomaly Detection)",
   "nodes": [
     {
       "parameters": {
@@ -16,7 +16,10 @@
       "name": "Every 15 Minutes",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [240, 300]
+      "position": [
+        240,
+        300
+      ]
     },
     {
       "parameters": {
@@ -43,7 +46,10 @@
       "name": "Fetch Anomalies",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [460, 300]
+      "position": [
+        460,
+        300
+      ]
     },
     {
       "parameters": {
@@ -53,7 +59,10 @@
       "name": "Split Anomalies",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [680, 300]
+      "position": [
+        680,
+        300
+      ]
     },
     {
       "parameters": {
@@ -81,17 +90,23 @@
       "name": "Score > 0.75?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [900, 300]
+      "position": [
+        900,
+        300
+      ]
     },
     {
       "parameters": {
-        "jsCode": "const a = $input.first().json;\nconst severity = a.score >= 0.9 ? '🔴 CRITICAL' : a.score >= 0.8 ? '🟠 HIGH' : '🟡 MEDIUM';\nconst pctChange = (a.priceChange * 100).toFixed(2);\n\nconst message = `${severity} Anomaly Detected\\n\\n` +\n  `Pair: ${a.pair}\\n` +\n  `Score: ${a.score.toFixed(3)}\\n` +\n  `Type: ${a.type}\\n` +\n  `Price Change: ${pctChange}%\\n` +\n  `Volume Spike: ${a.volumeSpike ? 'Yes' : 'No'}\\n` +\n  `Detected At: ${a.detectedAt}\\n\\n` +\n  `Details: ${a.description || 'N/A'}`;\n\nreturn [{ json: { message, chatId: process.env.TELEGRAM_ALERT_CHAT_ID || '' } }];"
+        "jsCode": "const a = $input.first().json;\nconst severity = a.score >= 0.9 ? '\ud83d\udd34 CRITICAL' : a.score >= 0.8 ? '\ud83d\udfe0 HIGH' : '\ud83d\udfe1 MEDIUM';\nconst pctChange = (a.priceChange * 100).toFixed(2);\n\nconst message = `${severity} Anomaly Detected\\n\\n` +\n  `Pair: ${a.pair}\\n` +\n  `Score: ${a.score.toFixed(3)}\\n` +\n  `Type: ${a.type}\\n` +\n  `Price Change: ${pctChange}%\\n` +\n  `Volume Spike: ${a.volumeSpike ? 'Yes' : 'No'}\\n` +\n  `Detected At: ${a.detectedAt}\\n\\n` +\n  `Details: ${a.description || 'N/A'}`;\n\nreturn [{ json: { message, chatId: process.env.TELEGRAM_ALERT_CHAT_ID || '' } }];"
       },
       "id": "b1b2c3d4-0002-4000-8000-000000000005",
       "name": "Format Alert",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1140, 200]
+      "position": [
+        1140,
+        200
+      ]
     },
     {
       "parameters": {
@@ -106,7 +121,10 @@
       "name": "Telegram Alert",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [1360, 200],
+      "position": [
+        1360,
+        200
+      ],
       "credentials": {
         "telegramApi": {
           "id": "vizzor-tg",
@@ -188,5 +206,6 @@
     }
   ],
   "pinData": {},
-  "versionId": "02-alert-pipeline-v1"
+  "versionId": "02-alert-pipeline-v1",
+  "id": "102"
 }

@@ -1,5 +1,5 @@
 {
-  "name": "03 — ML Retraining Pipeline",
+  "name": "03 \u2014 ML Retraining Pipeline",
   "nodes": [
     {
       "parameters": {
@@ -16,7 +16,10 @@
       "name": "Weekly Sunday 03:00 UTC",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [240, 300]
+      "position": [
+        240,
+        300
+      ]
     },
     {
       "parameters": {
@@ -28,7 +31,10 @@
       "name": "Query Model Accuracy",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [460, 300],
+      "position": [
+        460,
+        300
+      ],
       "credentials": {
         "postgres": {
           "id": "vizzor-pg",
@@ -44,7 +50,10 @@
       "name": "Check Accuracy",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [680, 300]
+      "position": [
+        680,
+        300
+      ]
     },
     {
       "parameters": {
@@ -72,7 +81,10 @@
       "name": "Accuracy < 60%?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [900, 300]
+      "position": [
+        900,
+        300
+      ]
     },
     {
       "parameters": {
@@ -103,7 +115,10 @@
       "name": "Trigger Retrain",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1140, 200]
+      "position": [
+        1140,
+        200
+      ]
     },
     {
       "parameters": {
@@ -113,7 +128,10 @@
       "name": "Poll Health",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1360, 200]
+      "position": [
+        1360,
+        200
+      ]
     },
     {
       "parameters": {
@@ -123,7 +141,10 @@
       "name": "Format Notification",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1580, 200]
+      "position": [
+        1580,
+        200
+      ]
     },
     {
       "parameters": {
@@ -138,7 +159,10 @@
       "name": "Telegram Notify",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [1800, 200],
+      "position": [
+        1800,
+        200
+      ],
       "credentials": {
         "telegramApi": {
           "id": "vizzor-tg",
@@ -150,7 +174,7 @@
       "parameters": {
         "operation": "sendMessage",
         "chatId": "={{ process.env.TELEGRAM_ALERT_CHAT_ID || '' }}",
-        "text": "ML Retraining Check — All models above 60% accuracy. No retraining needed this week.",
+        "text": "ML Retraining Check \u2014 All models above 60% accuracy. No retraining needed this week.",
         "additionalFields": {
           "parse_mode": "Markdown"
         }
@@ -159,7 +183,10 @@
       "name": "Telegram Skip Notice",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [1140, 440],
+      "position": [
+        1140,
+        440
+      ],
       "credentials": {
         "telegramApi": {
           "id": "vizzor-tg",
@@ -269,5 +296,6 @@
     }
   ],
   "pinData": {},
-  "versionId": "03-ml-retraining-v1"
+  "versionId": "03-ml-retraining-v1",
+  "id": "103"
 }
