@@ -428,6 +428,168 @@ export async function handleTool(name: string, input: unknown): Promise<unknown>
       };
     }
 
+    case 'get_rug_ml_analysis': {
+      const address = String(params['address'] ?? '');
+      const chain = String(params['chain'] ?? DEFAULT_CHAIN);
+      // Run both bytecode analysis + ML
+      const adapter = getAdapter(chain);
+      await adapter.connect(undefined, getConfig().etherscanApiKey);
+      const indicators = await detectRugIndicators(address, adapter);
+
+      // Also get GoPlus security data for enrichment
+      let goplus = null;
+      try {
+        goplus = await checkTokenSecurity(address, chain);
+      } catch {
+        /* GoPlus unavailable */
+      }
+
+      // Call ML rug detector directly with enriched features
+      let mlClient = getMLClient();
+      if (!mlClient) {
+        try {
+          const cfg = getConfig();
+          if (cfg.ml?.enabled && cfg.ml.sidecarUrl) {
+            mlClient = initMLClient(cfg.ml.sidecarUrl);
+          }
+        } catch {
+          /* config not loaded */
+        }
+      }
+
+      let mlResult = indicators.mlAnalysis ?? null;
+      if (!mlResult && mlClient && goplus) {
+        mlResult =
+          (await mlClient.predictRug({
+            bytecode_size: 0,
+            is_verified: goplus.isOpenSource ? 1 : 0,
+            holder_concentration: (goplus.creatorPercent ?? 0) + (goplus.ownerPercent ?? 0),
+            has_proxy: goplus.isProxy ? 1 : 0,
+            has_mint: goplus.isMintable ? 1 : 0,
+            has_pause: indicators.ownerCanPause ? 1 : 0,
+            has_blacklist: indicators.hasBlacklist ? 1 : 0,
+            liquidity_locked: 0,
+            buy_tax: goplus.buyTax ?? 0,
+            sell_tax: goplus.sellTax ?? 0,
+            contract_age_days: 0,
+            total_transfers: 0,
+            owner_balance_pct: goplus.ownerPercent ?? 0,
+            is_open_source: goplus.isOpenSource ? 1 : 0,
+            top10_holder_pct: 0,
+          })) ?? null;
+      }
+
+      return {
+        address,
+        chain,
+        ruleBasedRiskScore: indicators.riskScore,
+        mlAnalysis: mlResult ?? { note: 'ML sidecar not available' },
+        indicators: {
+          isHoneypot: indicators.isHoneypot,
+          ownerCanMint: indicators.ownerCanMint,
+          ownerCanPause: indicators.ownerCanPause,
+          hasBlacklist: indicators.hasBlacklist,
+          highSellTax: indicators.highSellTax,
+        },
+        details: indicators.details,
+        goplus: goplus
+          ? {
+              riskLevel: goplus.riskLevel,
+              buyTax: goplus.buyTax,
+              sellTax: goplus.sellTax,
+              isHoneypot: goplus.isHoneypot,
+              isMintable: goplus.isMintable,
+              holderCount: goplus.holderCount,
+            }
+          : null,
+      };
+    }
+
+    case 'get_wallet_behavior': {
+      const address = String(params['address'] ?? '');
+      const chain = String(params['chain'] ?? DEFAULT_CHAIN);
+      const adapter = getAdapter(chain);
+      await adapter.connect(undefined, getConfig().etherscanApiKey);
+      const analysis = await analyzeWallet(address, adapter);
+      return {
+        address: analysis.address,
+        chain: analysis.chain,
+        balance: analysis.balance.toString(),
+        transactionCount: analysis.transactionCount,
+        riskLevel: analysis.riskLevel,
+        patterns: analysis.patterns,
+        mlBehavior: analysis.mlBehavior ?? { note: 'ML sidecar not available' },
+      };
+    }
+
+    case 'analyze_news_sentiment': {
+      const symbol = String(params['symbol'] ?? '');
+      let mlClient = getMLClient();
+      if (!mlClient) {
+        try {
+          const cfg = getConfig();
+          if (cfg.ml?.enabled && cfg.ml.sidecarUrl) {
+            mlClient = initMLClient(cfg.ml.sidecarUrl);
+          }
+        } catch {
+          /* config not loaded */
+        }
+      }
+
+      const news = await fetchCryptoNews(symbol || undefined, getConfig().cryptopanicApiKey);
+      if (news.length === 0) {
+        return { symbol, sentiment: 'neutral', note: 'No news found' };
+      }
+
+      const headlines = news.slice(0, 10).map((n) => n.title);
+
+      if (mlClient) {
+        const results = await mlClient.analyzeSentimentBatch(headlines);
+        if (results.length > 0) {
+          const avgScore = results.reduce((s, r) => s + r.score, 0) / results.length;
+          const avgConf = results.reduce((s, r) => s + r.confidence, 0) / results.length;
+          const allTopics = [...new Set(results.flatMap((r) => r.key_topics))];
+          return {
+            symbol,
+            sentiment: avgScore > 0.2 ? 'bullish' : avgScore < -0.2 ? 'bearish' : 'neutral',
+            score: Math.round(avgScore * 1000) / 1000,
+            confidence: Math.round(avgConf * 100),
+            topics: allTopics.slice(0, 5),
+            headlines: results.map((r, i) => ({
+              title: headlines[i],
+              sentiment: r.sentiment,
+              score: r.score,
+              confidence: r.confidence,
+            })),
+            model: results[0]?.model ?? 'unknown',
+            articleCount: news.length,
+          };
+        }
+      }
+
+      // Fallback: vote-based sentiment
+      let pos = 0;
+      let neg = 0;
+      for (const n of news) {
+        if (n.sentiment === 'positive') pos++;
+        else if (n.sentiment === 'negative') neg++;
+      }
+      const score = news.length > 0 ? (pos - neg) / news.length : 0;
+      return {
+        symbol,
+        sentiment: score > 0.2 ? 'bullish' : score < -0.2 ? 'bearish' : 'neutral',
+        score,
+        confidence: 50,
+        topics: [],
+        headlines: headlines.map((h, i) => ({
+          title: h,
+          sentiment: news[i]?.sentiment ?? 'neutral',
+        })),
+        model: 'vote-count-fallback',
+        articleCount: news.length,
+      };
+    }
+
     case 'create_agent': {
       const agentName = String(params['name'] ?? '');
       const strategy = String(params['strategy'] ?? 'momentum');

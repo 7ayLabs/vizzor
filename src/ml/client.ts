@@ -9,6 +9,11 @@ import type {
   AnomalyResult,
   ModelHealth,
   TokenFlow,
+  RugMLFeatures,
+  RugMLResult,
+  WalletMLFeatures,
+  WalletMLResult,
+  SentimentMLResult,
 } from './types.js';
 
 const log = createLogger('ml-client');
@@ -81,6 +86,71 @@ export class MLClient {
     } catch {
       this.healthy = false;
       return false;
+    }
+  }
+
+  async predictRug(features: RugMLFeatures): Promise<RugMLResult | null> {
+    try {
+      const res = await fetch(`${this.baseUrl}/predict/rug`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(features),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!res.ok) return null;
+      return (await res.json()) as RugMLResult;
+    } catch (err) {
+      log.debug(`ML rug predict failed: ${err instanceof Error ? err.message : String(err)}`);
+      return null;
+    }
+  }
+
+  async classifyWallet(features: WalletMLFeatures): Promise<WalletMLResult | null> {
+    try {
+      const res = await fetch(`${this.baseUrl}/predict/wallet`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(features),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!res.ok) return null;
+      return (await res.json()) as WalletMLResult;
+    } catch (err) {
+      log.debug(`ML wallet classify failed: ${err instanceof Error ? err.message : String(err)}`);
+      return null;
+    }
+  }
+
+  async analyzeSentiment(text: string): Promise<SentimentMLResult | null> {
+    try {
+      const res = await fetch(`${this.baseUrl}/predict/sentiment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!res.ok) return null;
+      return (await res.json()) as SentimentMLResult;
+    } catch (err) {
+      log.debug(`ML sentiment failed: ${err instanceof Error ? err.message : String(err)}`);
+      return null;
+    }
+  }
+
+  async analyzeSentimentBatch(texts: string[]): Promise<SentimentMLResult[]> {
+    try {
+      const res = await fetch(`${this.baseUrl}/predict/sentiment/batch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texts }),
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!res.ok) return [];
+      const data = (await res.json()) as { results: SentimentMLResult[] };
+      return data.results;
+    } catch (err) {
+      log.debug(`ML sentiment batch failed: ${err instanceof Error ? err.message : String(err)}`);
+      return [];
     }
   }
 

@@ -63,3 +63,62 @@ export interface TokenFlow {
   timestamp: number;
   type: 'transfer' | 'swap' | 'bridge';
 }
+
+export interface RugMLFeatures {
+  bytecode_size: number;
+  is_verified: number;
+  holder_concentration: number;
+  has_proxy: number;
+  has_mint: number;
+  has_pause: number;
+  has_blacklist: number;
+  liquidity_locked: number;
+  buy_tax: number;
+  sell_tax: number;
+  contract_age_days: number;
+  total_transfers: number;
+  owner_balance_pct: number;
+  is_open_source: number;
+  top10_holder_pct: number;
+}
+
+export interface RugMLResult {
+  rug_probability: number;
+  risk_level: 'low' | 'medium' | 'high' | 'critical';
+  risk_factors: { factor: string; importance: number; value: number }[];
+  model: string;
+}
+
+export interface WalletMLFeatures {
+  tx_count: number;
+  avg_value_eth: number;
+  max_value_eth: number;
+  avg_gas_used: number;
+  unique_recipients: number;
+  unique_methods: number;
+  time_span_hours: number;
+  avg_interval_seconds: number;
+  min_interval_seconds: number;
+  contract_interaction_pct: number;
+  self_transfer_pct: number;
+  high_value_tx_pct: number;
+  failed_tx_pct: number;
+  token_diversity: number;
+}
+
+export interface WalletMLResult {
+  behavior_type: string;
+  confidence: number;
+  risk_score: number;
+  secondary_type: string | null;
+  indicators: string[];
+  model: string;
+}
+
+export interface SentimentMLResult {
+  sentiment: 'bullish' | 'bearish' | 'neutral';
+  confidence: number;
+  score: number;
+  key_topics: string[];
+  model: string;
+}

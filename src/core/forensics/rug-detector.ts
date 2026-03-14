@@ -5,6 +5,9 @@ import {
   hasBlacklistFunction,
   scanBytecode,
 } from './bytecode-scanner.js';
+import { getMLClient, initMLClient } from '../../ml/client.js';
+import { getConfig } from '../../config/loader.js';
+import type { RugMLResult } from '../../ml/types.js';
 
 export interface RugIndicators {
   isHoneypot: boolean;
@@ -15,6 +18,7 @@ export interface RugIndicators {
   highSellTax: boolean;
   riskScore: number;
   details: RugDetail[];
+  mlAnalysis?: RugMLResult;
 }
 
 export interface RugDetail {
@@ -121,6 +125,46 @@ export async function detectRugIndicators(
 
   const riskScore = calculateRugRisk(details);
 
+  // ML enhancement — call rug detector model if available
+  let mlAnalysis: RugMLResult | undefined;
+  try {
+    let mlClient = getMLClient();
+    if (!mlClient) {
+      try {
+        const cfg = getConfig();
+        if (cfg.ml?.enabled && cfg.ml.sidecarUrl) {
+          mlClient = initMLClient(cfg.ml.sidecarUrl);
+        }
+      } catch {
+        /* config not loaded */
+      }
+    }
+    if (mlClient) {
+      const mlResult = await mlClient.predictRug({
+        bytecode_size: hasCode ? code.length : 0,
+        is_verified: hasCode ? 1 : 0,
+        holder_concentration: 0,
+        has_proxy: 0,
+        has_mint: canMint ? 1 : 0,
+        has_pause: canPause ? 1 : 0,
+        has_blacklist: hasBlacklist_ ? 1 : 0,
+        liquidity_locked: 0,
+        buy_tax: 0,
+        sell_tax: 0,
+        contract_age_days: 0,
+        total_transfers: 0,
+        owner_balance_pct: 0,
+        is_open_source: hasCode ? 1 : 0,
+        top10_holder_pct: 0,
+      });
+      if (mlResult) {
+        mlAnalysis = mlResult;
+      }
+    }
+  } catch {
+    /* ML unavailable — continue with rule-based */
+  }
+
   return {
     isHoneypot: canPause || hasBlacklist_,
     hasLiquidityLock: false,
@@ -128,8 +172,11 @@ export async function detectRugIndicators(
     ownerCanPause: canPause,
     hasBlacklist: hasBlacklist_,
     highSellTax: false,
-    riskScore,
+    riskScore: mlAnalysis
+      ? Math.round(riskScore * 0.4 + mlAnalysis.rug_probability * 100 * 0.6)
+      : riskScore,
     details,
+    mlAnalysis,
   };
 }
 

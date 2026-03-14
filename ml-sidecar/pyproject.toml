@@ -1,7 +1,7 @@
 [project]
 name = "vizzor-ml-sidecar"
-version = "0.6.0"
-description = "ML sidecar for Vizzor — LSTM, Random Forest, Isolation Forest models"
+version = "0.10.0"
+description = "ML sidecar for Vizzor — LSTM, RF, Isolation Forest, Rug Detection, Wallet Classification, Sentiment NLP"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115.0",
@@ -12,6 +12,7 @@ dependencies = [
     "numpy>=2.1.0",
     "pandas>=2.2.0",
     "joblib>=1.4.0",
+    "transformers>=4.40.0",
 ]
 
 [project.optional-dependencies]
