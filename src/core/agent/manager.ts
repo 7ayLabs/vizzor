@@ -8,6 +8,7 @@ import type { AgentConfig, AgentState, AgentStrategy, AgentCycleResult } from '.
 import { AgentEngine } from './engine.js';
 import { momentumStrategy } from './strategies/momentum.js';
 import { trendFollowingStrategy } from './strategies/trend-following.js';
+import { mlAdaptiveStrategy } from './strategies/ml-adaptive.js';
 
 // ---------------------------------------------------------------------------
 // Strategy registry
@@ -16,6 +17,7 @@ import { trendFollowingStrategy } from './strategies/trend-following.js';
 const STRATEGIES: Record<string, AgentStrategy> = {
   momentum: momentumStrategy,
   'trend-following': trendFollowingStrategy,
+  'ml-adaptive': mlAdaptiveStrategy,
 };
 
 export function getStrategy(name: string): AgentStrategy {
