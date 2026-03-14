@@ -4,7 +4,7 @@
 
 import type { AgentStrategy, AgentSignals, AgentDecision } from '../types.js';
 import { getMLClient } from '../../../ml/client.js';
-import { buildFeatureVector } from '../../../ml/feature-engineer.js';
+import { detectMarketRegime } from '../../trends/regime.js';
 
 export const mlAdaptiveStrategy: AgentStrategy = {
   name: 'ml-adaptive',
@@ -127,40 +127,60 @@ export async function evaluateWithML(
   if (!mlClient) return evaluateWithRules(signals);
 
   try {
-    const features = await buildFeatureVector(symbol);
-    const prediction = await mlClient.predict(features);
-    if (!prediction) return evaluateWithRules(signals);
+    // Step 1: detect market regime
+    const regime = await detectMarketRegime(symbol, {
+      returns_1d: signals.priceChange24h ?? 0,
+      returns_7d: 0,
+      volatility_14d:
+        signals.atr !== null && signals.price !== null && signals.price > 0
+          ? (signals.atr / signals.price) * 100
+          : 3,
+      volume_ratio: 1,
+      rsi: signals.rsi ?? 50,
+      bb_width: 0,
+      fear_greed: signals.fearGreed ?? 50,
+      funding_rate: signals.fundingRate ?? 0,
+      price_vs_sma200: 0,
+    });
 
-    const reasoning = [
-      `ML (${prediction.model}): ${prediction.direction} with ${(prediction.probability * 100).toFixed(0)}% probability`,
-    ];
+    // Step 2: call strategy bandit with regime context
+    const strategyResult = await mlClient.evaluateStrategy({
+      rsi: signals.rsi ?? 50,
+      macd_histogram: signals.macdHistogram ?? 0,
+      ema12: signals.ema12 ?? 0,
+      ema26: signals.ema26 ?? 0,
+      bollinger_pct_b: signals.bollingerPercentB ?? 0.5,
+      atr: signals.atr ?? 0,
+      obv: signals.obv ?? 0,
+      funding_rate: signals.fundingRate ?? 0,
+      fear_greed: signals.fearGreed ?? 50,
+      price_change_24h: signals.priceChange24h ?? 0,
+      price: signals.price ?? 0,
+      regime: regime.regime,
+    });
 
-    if (prediction.probability >= 0.7) {
-      const action =
-        prediction.direction === 'up'
-          ? ('buy' as const)
-          : prediction.direction === 'down'
-            ? ('sell' as const)
-            : ('hold' as const);
+    if (strategyResult && strategyResult.confidence > 30) {
       return {
-        action,
-        confidence: Math.round(prediction.probability * 100),
-        reasoning,
+        action: strategyResult.action,
+        confidence: Math.round(strategyResult.confidence),
+        reasoning: [
+          `Regime: ${regime.regime} (${regime.confidence.toFixed(0)}% confidence)`,
+          ...strategyResult.reasoning,
+        ],
       };
     }
 
     // Low ML confidence — blend with rules
     const ruleDecision = evaluateWithRules(signals);
-    const blendedReasoning = [
-      ...reasoning,
-      '(Low ML confidence — blending with rules)',
-      ...ruleDecision.reasoning,
-    ];
-
     return {
       action: ruleDecision.action,
-      confidence: Math.round((prediction.confidence + ruleDecision.confidence) / 2),
-      reasoning: blendedReasoning,
+      confidence: Math.round(((strategyResult?.confidence ?? 0) + ruleDecision.confidence) / 2),
+      reasoning: [
+        `Regime: ${regime.regime}`,
+        ...(strategyResult?.reasoning ?? []),
+        '(Low ML confidence — blending with rules)',
+        ...ruleDecision.reasoning,
+      ],
     };
   } catch {
     return evaluateWithRules(signals);

@@ -14,6 +14,7 @@ import {
   calculateATR,
   calculateOBV,
 } from './indicators.js';
+import { getMLClient } from '../../ml/client.js';
 
 /**
  * Run full technical analysis on a symbol using Binance kline data.
@@ -75,6 +76,71 @@ export async function analyzeTechnicals(
   // SMA
   const sma20 = calculateSMA(closes, 20);
 
+  const currentPrice = closes[closes.length - 1]!;
+  const prevPrice = closes.length >= 2 ? closes[closes.length - 2]! : currentPrice;
+  const priceChange = currentPrice - prevPrice;
+  const ema12Val = ema12.length > 0 ? ema12[ema12.length - 1]! : 0;
+  const ema26Val = ema26.length > 0 ? ema26[ema26.length - 1]! : 0;
+  const emaCrossPct = ema26Val !== 0 ? ((ema12Val - ema26Val) / ema26Val) * 100 : 0;
+  const atrPct = atr !== null && currentPrice > 0 ? (atr / currentPrice) * 100 : 0;
+  const bbBandwidth = bb !== null && bb.middle > 0 ? ((bb.upper - bb.lower) / bb.middle) * 100 : 0;
+
+  // ML: try ML TA interpreter for signals + weights + composite
+  const mlClient = getMLClient();
+  if (mlClient) {
+    try {
+      const mlResult = await mlClient.interpretTA({
+        rsi: rsi ?? 50,
+        macd_histogram: macd?.histogram ?? 0,
+        macd_line: macd?.macd ?? 0,
+        macd_signal: macd?.signal ?? 0,
+        bb_percent_b: bb?.percentB ?? 0.5,
+        bb_bandwidth: bbBandwidth,
+        ema12: ema12Val,
+        ema26: ema26Val,
+        ema_cross_pct: emaCrossPct,
+        atr: atr ?? 0,
+        atr_pct: atrPct,
+        obv: obv ?? 0,
+        price_change: priceChange,
+      });
+      if (mlResult) {
+        // Map ML signals to TechnicalSignal format
+        const mlSignals: TechnicalSignal[] = mlResult.signals.map((s) => ({
+          name: s.name,
+          value: 0,
+          signal: s.direction as SignalDirection,
+          strength: s.strength,
+          description: s.description,
+        }));
+
+        return {
+          symbol: symbol.toUpperCase(),
+          timeframe,
+          signals: mlSignals,
+          composite: {
+            direction: mlResult.composite.direction as SignalDirection,
+            score: mlResult.composite.score,
+            confidence: mlResult.composite.confidence,
+          },
+          indicators: {
+            rsi: rsi,
+            macd: macd,
+            bollingerBands: bb,
+            ema12: ema12Val || null,
+            ema26: ema26Val || null,
+            sma20: sma20.length > 0 ? sma20[sma20.length - 1]! : null,
+            atr: atr,
+            obv: obv,
+          },
+          timestamp: Date.now(),
+        };
+      }
+    } catch {
+      // ML unavailable — fall through to rule-based
+    }
+  }
+
   // Composite score: weighted average of signal strengths
   const composite = calculateComposite(signals);
 
@@ -87,8 +153,8 @@ export async function analyzeTechnicals(
       rsi: rsi,
       macd: macd,
       bollingerBands: bb,
-      ema12: ema12.length > 0 ? ema12[ema12.length - 1]! : null,
-      ema26: ema26.length > 0 ? ema26[ema26.length - 1]! : null,
+      ema12: ema12Val || null,
+      ema26: ema26Val || null,
       sma20: sma20.length > 0 ? sma20[sma20.length - 1]! : null,
       atr: atr,
       obv: obv,
