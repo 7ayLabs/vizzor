@@ -55,43 +55,52 @@ export function handleBotValidate(): void {
   const checks = [
     {
       label: 'Anthropic API Key',
-      value: config.anthropicApiKey,
+      isSet: hasKey(config.anthropicApiKey),
+      masked: maskKey(config.anthropicApiKey),
       required: true,
-      key: 'anthropicApiKey',
     },
     {
       label: 'Etherscan API Key',
-      value: config.etherscanApiKey,
+      isSet: hasKey(config.etherscanApiKey),
+      masked: maskKey(config.etherscanApiKey),
       required: true,
-      key: 'etherscanApiKey',
     },
-    { label: 'Discord Token', value: config.discordToken, required: false, key: 'discordToken' },
+    {
+      label: 'Discord Token',
+      isSet: hasKey(config.discordToken),
+      masked: maskKey(config.discordToken),
+      required: false,
+    },
     {
       label: 'Discord Guild ID',
-      value: config.discordGuildId,
+      isSet: hasKey(config.discordGuildId),
+      masked: maskKey(config.discordGuildId),
       required: false,
-      key: 'discordGuildId',
     },
-    { label: 'Telegram Token', value: config.telegramToken, required: false, key: 'telegramToken' },
+    {
+      label: 'Telegram Token',
+      isSet: hasKey(config.telegramToken),
+      masked: maskKey(config.telegramToken),
+      required: false,
+    },
     {
       label: 'CryptoPanic Key',
-      value: config.cryptopanicApiKey,
+      isSet: hasKey(config.cryptopanicApiKey),
+      masked: maskKey(config.cryptopanicApiKey),
       required: false,
-      key: 'cryptopanicApiKey',
     },
   ];
 
   let allRequired = true;
   for (const check of checks) {
-    const set = hasKey(check.value);
-    const status = set
+    const status = check.isSet
       ? chalk.green('OK')
       : check.required
         ? chalk.red('MISSING')
         : chalk.yellow('NOT SET');
-    const masked = set ? maskKey(check.value) : chalk.dim('(not set)');
-    console.log(`  ${status.padEnd(18)} ${check.label.padEnd(20)} ${masked}`);
-    if (check.required && !set) allRequired = false;
+    const display = check.isSet ? check.masked : chalk.dim('(not set)');
+    console.log(`  ${status.padEnd(18)} ${check.label.padEnd(20)} ${display}`);
+    if (check.required && !check.isSet) allRequired = false;
   }
 
   console.log();
