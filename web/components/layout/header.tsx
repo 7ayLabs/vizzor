@@ -1,62 +1,91 @@
 'use client';
 
+import { useRef, useEffect, useState } from 'react';
 import { useApi } from '@/hooks/use-api';
 import { formatUsd, formatPct } from '@/lib/utils';
 import { ThemeToggle } from './theme-toggle';
 import { CryptoIcon } from '@/components/ui/crypto-icon';
+import { VizzorLogo } from '@/components/ui/vizzor-logo';
 import type { MarketPrice, MLHealth } from '@/lib/types';
 
+// prettier-ignore
 const SYMBOLS = [
-  'BTC',
-  'ETH',
-  'SOL',
-  'BNB',
-  'XRP',
-  'ADA',
-  'DOGE',
-  'AVAX',
-  'DOT',
-  'MATIC',
-  'LINK',
-  'UNI',
-  'ATOM',
-  'LTC',
-  'FIL',
-  'APT',
-  'NEAR',
-  'ARB',
-  'OP',
-  'IMX',
-  'INJ',
-  'SEI',
-  'SUI',
-  'TIA',
-  'AAVE',
-  'MKR',
-  'RENDER',
-  'FET',
-  'GRT',
-  'STX',
+  'BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'ADA', 'DOGE', 'AVAX', 'DOT', 'MATIC',
+  'LINK', 'UNI', 'ATOM', 'LTC', 'FIL', 'APT', 'NEAR', 'ARB', 'OP', 'IMX',
+  'INJ', 'SEI', 'SUI', 'TIA', 'AAVE', 'MKR', 'RENDER', 'FET', 'GRT', 'STX',
+  'TRX', 'TON', 'SHIB', 'BCH', 'DAI', 'LEO', 'ETC', 'HBAR', 'KAS', 'OKB',
+  'CRO', 'ALGO', 'VET', 'FTM', 'RUNE', 'SAND', 'MANA', 'AXS', 'THETA', 'XTZ',
+  'EOS', 'FLOW', 'NEO', 'KAVA', 'IOTA', 'ZEC', 'EGLD', 'XEC', 'MINA', 'SNX',
+  'CHZ', 'LRC', 'ENJ', 'BAT', 'COMP', 'YFI', 'CRV', '1INCH', 'SUSHI', 'CELO',
+  'ZIL', 'QTUM', 'ICX', 'ONT', 'ZRX', 'ANKR', 'SKL', 'STORJ', 'KNC', 'BNT',
+  'RSR', 'REN', 'CELR', 'DENT', 'HOT', 'SC', 'IOST', 'OMG', 'WAVES', 'DASH',
+  'XLM', 'ICP', 'FLR', 'JASMY', 'PEPE', 'WIF', 'BONK', 'FLOKI', 'WLD', 'JUP',
 ];
 
-function TickerItem({ symbol }: { symbol: string }) {
-  const { data } = useApi<MarketPrice>(`/v1/market/price/${symbol}`, { refreshInterval: 15000 });
-  const change = data?.priceChange24h ?? 0;
-  const isUp = change >= 0;
+const SYMBOLS_QUERY = SYMBOLS.join(',');
+const TICKER_SPEED = 80;
+
+function Ticker() {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [duration, setDuration] = useState(0);
+  const { data } = useApi<{ prices: Record<string, MarketPrice> }>(
+    `/v1/market/prices?symbols=${SYMBOLS_QUERY}`,
+    { refreshInterval: 15000 },
+  );
+  const prices = data?.prices;
+
+  useEffect(() => {
+    const el = trackRef.current;
+    if (!el) return;
+    const measure = () => {
+      const halfWidth = el.scrollWidth / 2;
+      if (halfWidth > 0) setDuration(halfWidth / TICKER_SPEED);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   return (
-    <span className="inline-flex items-center gap-1 sm:gap-2 px-2 sm:px-4 whitespace-nowrap">
-      <CryptoIcon symbol={symbol} size={14} className="opacity-90" />
-      <span className="text-[var(--foreground)] font-medium text-[10px] sm:text-xs">{symbol}</span>
-      <span className="text-[10px] sm:text-xs font-mono">
-        {data ? formatUsd(data.price) : '---'}
-      </span>
-      <span
-        className={`text-[10px] sm:text-xs font-mono ${isUp ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}
+    <div className="flex-1 overflow-hidden">
+      <div
+        ref={trackRef}
+        className="flex"
+        style={
+          duration > 0
+            ? {
+                animation: `ticker-scroll ${duration}s linear infinite`,
+              }
+            : undefined
+        }
       >
-        {data ? formatPct(change) : '---'}
-      </span>
-    </span>
+        {[...SYMBOLS, ...SYMBOLS].map((sym, i) => {
+          const d = prices?.[sym];
+          const change = d?.priceChange24h ?? 0;
+          const isUp = change >= 0;
+          return (
+            <span
+              key={`${sym}-${i}`}
+              className="inline-flex items-center gap-1 sm:gap-2 px-2 sm:px-4 whitespace-nowrap"
+            >
+              <CryptoIcon symbol={sym} size={14} className="opacity-90" />
+              <span className="text-[var(--foreground)] font-medium text-[10px] sm:text-xs">
+                {sym}
+              </span>
+              <span className="text-[10px] sm:text-xs font-mono">
+                {d ? formatUsd(d.price) : '---'}
+              </span>
+              <span
+                className={`text-[10px] sm:text-xs font-mono ${isUp ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}
+              >
+                {d ? formatPct(change) : '---'}
+              </span>
+            </span>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -96,18 +125,12 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
         <i className="fa-solid fa-bars text-sm" />
       </button>
       <span className="text-sm font-bold text-[var(--primary)] glow-cyan md:hidden">
-        <i className="fa-solid fa-diamond text-xs mr-1" />
+        <VizzorLogo size={22} className="inline-block mr-1" />
         vizzor
       </span>
 
       {/* Center: ticker */}
-      <div className="flex-1 overflow-hidden">
-        <div className="ticker-scroll flex">
-          {[...SYMBOLS, ...SYMBOLS].map((sym, i) => (
-            <TickerItem key={`${sym}-${i}`} symbol={sym} />
-          ))}
-        </div>
-      </div>
+      <Ticker />
 
       {/* Right: health + theme */}
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">

@@ -3,10 +3,11 @@
 import type { ChatMessage } from '@/lib/types';
 import { renderMarkdown } from '@/lib/markdown';
 import { ToolResultCard } from './tool-result-card';
+import { VizzorLogo } from '@/components/ui/vizzor-logo';
 
-/** Vizzor brand avatar — FA diamond */
+/** Vizzor brand avatar */
 function VizzorIcon() {
-  return <i className="fa-solid fa-diamond text-[var(--primary)] text-[10px]" />;
+  return <VizzorLogo size={20} />;
 }
 
 /** User avatar — FA user */

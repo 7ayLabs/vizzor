@@ -398,22 +398,28 @@ vizzor api start --port 3100
 vizzor api key create "my-app"
 
 # Endpoints
-GET  /health              # Health check (public)
-GET  /docs                # OpenAPI/Swagger UI (dev only)
-POST /scan                # Token security scan
-POST /trends              # Market trends
-POST /track               # Wallet forensics
-POST /predict             # AI prediction
-POST /audit               # Contract audit
-POST /v1/backtest         # Historical backtest
-GET  /v1/agents           # List agents
-POST /v1/agents           # Create agent
-POST /v1/agents/:name/start  # Start agent
-POST /v1/agents/:name/stop   # Stop agent
-GET  /v1/portfolio/:id    # Agent portfolio
+GET  /health                    # Health check (public)
+GET  /docs                      # OpenAPI/Swagger UI (dev only)
+POST /scan                      # Token security scan
+POST /trends                    # Market trends
+POST /track                     # Wallet forensics
+POST /predict                   # AI prediction
+POST /audit                     # Contract audit
+GET  /v1/market/price/:symbol   # Single symbol price
+GET  /v1/market/prices?symbols= # Batch prices (comma-separated)
+GET  /v1/market/trending        # Trending tokens
+GET  /v1/market/fear-greed      # Fear & Greed Index
+GET  /v1/market/ml-health       # ML sidecar status
+POST /v1/chat                   # AI chat (SSE streaming)
+POST /v1/backtest               # Historical backtest
+GET  /v1/agents                 # List agents
+POST /v1/agents                 # Create agent
+POST /v1/agents/:name/start    # Start agent
+POST /v1/agents/:name/stop     # Stop agent
+GET  /v1/portfolio/:id          # Agent portfolio
 ```
 
-All endpoints require `X-API-Key` header. Rate limited to 100 req/min per key. Keys are hashed with scrypt and stored locally.
+All endpoints require `X-API-Key` header. Rate limited to 300 req/min per key. Keys are hashed with scrypt and stored locally.
 
 ### Autonomous Agents v2
 
@@ -534,11 +540,21 @@ Live market data via Binance WebSocket streams:
 
 Next.js 15 web dashboard at `http://localhost:3001`:
 
-- **Dashboard** — market overview, ML status, agent summary
-- **Predictions** — candlestick charts with price predictions
-- **Agents** — create, start/stop, and monitor agents
+- **AI Chat** — full conversational interface with streaming responses, tool result cards, and all 47 CLI tools available via natural language
+- **Dashboard** — market overview with Fear & Greed, ML predictions (Chronovisor), sentiment intelligence, regime detection, trending tokens, news feed, agent summary, and ML model status
+- **Markets** — market analysis with symbol selector, wallet analyzer, and on-chain intelligence
+- **Agents** — create, start/stop, and monitor autonomous trading agents
 - **Portfolio** — positions, trade history, performance metrics
-- **Settings** — API configuration
+- **Settings** — API and provider configuration
+- **Docs** — interactive documentation for all AI tools and chat commands
+
+**UI features:**
+- Dark/light/system theme with automatic switching
+- Live crypto ticker (top 100 coins) with batch price fetching
+- Cryptocurrency icons (CDN + letter fallback for newer tokens)
+- Custom Vizzor branding with theme-aware logo
+- API and ML health indicators
+- Responsive mobile layout with collapsible sidebar
 
 ```bash
 docker compose up web           # Start dashboard on port 3001

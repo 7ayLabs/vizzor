@@ -94,18 +94,8 @@ body {
   }
 }
 
-.ticker-scroll {
-  animation: ticker-scroll 20s linear infinite;
-}
-
 .ticker-scroll:hover {
   animation-play-state: paused;
-}
-
-@media (max-width: 640px) {
-  .ticker-scroll {
-    animation-duration: 10s;
-  }
 }
 
 /* Pulse dot for live indicators */

@@ -20,6 +20,39 @@ export async function registerMarketRoutes(server: FastifyInstance): Promise<voi
     },
   });
 
+  server.get('/prices', {
+    schema: {
+      tags: ['Market'],
+      summary: 'Get prices for multiple symbols in one call',
+      querystring: {
+        type: 'object',
+        properties: { symbols: { type: 'string', description: 'Comma-separated symbols' } },
+        required: ['symbols'],
+      },
+    },
+    handler: async (request) => {
+      const { symbols } = request.query as { symbols: string };
+      const list = symbols
+        .split(',')
+        .map((s) => s.trim().toUpperCase())
+        .filter(Boolean)
+        .slice(0, 100);
+      const results = await Promise.allSettled(
+        list.map((symbol) =>
+          handleTool('get_market_data', { symbol }).then((data) => ({ symbol, ...data })),
+        ),
+      );
+      const prices: Record<string, unknown> = {};
+      for (const r of results) {
+        if (r.status === 'fulfilled' && r.value) {
+          const { symbol, ...rest } = r.value as { symbol: string } & Record<string, unknown>;
+          prices[symbol] = rest;
+        }
+      }
+      return { prices };
+    },
+  });
+
   server.get('/trending', {
     schema: {
       tags: ['Market'],

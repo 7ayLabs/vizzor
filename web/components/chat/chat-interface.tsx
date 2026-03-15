@@ -4,6 +4,7 @@ import { useRef, useEffect } from 'react';
 import { useChat } from '@/hooks/use-chat';
 import { ChatInput } from './chat-input';
 import { MessageBubble } from './message-bubble';
+import { VizzorLogo } from '@/components/ui/vizzor-logo';
 
 const SUGGESTIONS = [
   {
@@ -50,9 +51,7 @@ export function ChatInterface() {
           <div className="flex flex-col items-center justify-center h-full px-4 sm:px-6">
             <div className="flex flex-col items-center gap-5 max-w-lg w-full text-center animate-fade-up">
               {/* Vizzor diamond logo */}
-              <div className="flex size-14 sm:size-16 items-center justify-center rounded-2xl bg-[var(--primary)]/10 ring-1 ring-[var(--primary)]/20 animate-breathe">
-                <i className="fa-solid fa-diamond text-[var(--primary)] text-xl sm:text-2xl" />
-              </div>
+              <VizzorLogo size={56} className="sm:w-16 sm:h-16" />
 
               <div>
                 <h2 className="text-base sm:text-lg font-bold mb-1.5">

@@ -1,9 +1,10 @@
 'use client';
 
-const CDN = 'https://cdn.jsdelivr.net/npm/cryptocurrency-icons@0.18.1/svg/color';
-const FALLBACK = `${CDN}/generic.svg`;
+import { useState } from 'react';
 
-/** Map chain IDs and alternative names to icon file names */
+const CDN = 'https://cdn.jsdelivr.net/npm/cryptocurrency-icons@0.18.1/svg/color';
+
+/** Map chain IDs, alternative names, and missing tokens */
 const ALIASES: Record<string, string> = {
   // Chain IDs → native token
   ethereum: 'eth',
@@ -22,12 +23,16 @@ const ALIASES: Record<string, string> = {
   'usd-coin': 'usdc',
   weth: 'eth',
   wbtc: 'btc',
-  // Tokens without icons → fallback
-  sui: 'generic',
-  aptos: 'generic',
-  ton: 'generic',
-  multi: 'generic',
 };
+
+/** Symbols known to be missing from cryptocurrency-icons@0.18.1 */
+// prettier-ignore
+const MISSING = new Set([
+  'sui', 'apt', 'ton', 'tia', 'sei', 'inj', 'arb', 'op', 'imx', 'render',
+  'fet', 'stx', 'kas', 'okb', 'ftm', 'rune', 'axs', 'flow', 'kava', 'iota',
+  'egld', 'xec', 'mina', 'celo', 'rsr', 'celr', 'flr', 'jasmy', 'pepe',
+  'wif', 'bonk', 'floki', 'wld', 'jup', 'multi', 'near', 'hbar', 'leo',
+]);
 
 export function CryptoIcon({
   symbol,
@@ -40,6 +45,18 @@ export function CryptoIcon({
 }) {
   const key = symbol.toLowerCase();
   const resolved = ALIASES[key] ?? key;
+  const [failed, setFailed] = useState(() => MISSING.has(resolved));
+
+  if (failed) {
+    return (
+      <span
+        className={`inline-flex items-center justify-center shrink-0 rounded-full bg-[var(--border)] text-[var(--muted)] font-bold ${className}`}
+        style={{ width: size, height: size, fontSize: size * 0.45 }}
+      >
+        {symbol.slice(0, 2).toUpperCase()}
+      </span>
+    );
+  }
 
   return (
     <img
@@ -48,9 +65,7 @@ export function CryptoIcon({
       width={size}
       height={size}
       className={`inline-block shrink-0 rounded-full ${className}`}
-      onError={(e) => {
-        (e.target as HTMLImageElement).src = FALLBACK;
-      }}
+      onError={() => setFailed(true)}
     />
   );
 }

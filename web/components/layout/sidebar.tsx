@@ -49,10 +49,8 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
   const nav = (
     <aside className="w-56 bg-[var(--background)] border-r border-[var(--border)] flex flex-col h-full">
       {/* Brand */}
-      <div className="px-4 py-4 hidden md:block">
-        <h1 className="text-lg font-bold text-[var(--primary)] glow-cyan">
-          <i className="fa-solid fa-diamond text-sm mr-1.5" /> vizzor
-        </h1>
+      <div className="px-4 py-4 hidden md:flex flex-col items-center">
+        <h1 className="text-lg font-bold text-[var(--foreground)]">vizzor</h1>
         <p className="text-[10px] text-[var(--muted)] uppercase tracking-widest">
           AI crypto chronovisor
         </p>

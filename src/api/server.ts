@@ -35,7 +35,7 @@ export async function startApiServer(options: {
     origin: isProd ? origin : true,
   });
   await server.register(rateLimit, {
-    max: 100,
+    max: 300,
     timeWindow: '1 minute',
   });
   await server.register(swagger, {
