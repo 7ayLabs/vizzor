@@ -23,6 +23,8 @@ export default {
         'agent',
         'n8n',
         'security',
+        'web',
+        'backtest',
       ],
     ],
     'type-enum': [
