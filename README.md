@@ -1,8 +1,8 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="vizzor_lighticon.png">
-    <source media="(prefers-color-scheme: light)" srcset="vizzor_icon.png">
-    <img alt="Vizzor" src="vizzor_icon.png" width="120">
+    <source media="(prefers-color-scheme: dark)" srcset="vizzor_logoicon.png">
+    <source media="(prefers-color-scheme: light)" srcset="vizzor_logodarkicon.png">
+    <img alt="Vizzor" src="vizzor_logodarkicon.png" width="120">
   </picture>
 </p>
 
