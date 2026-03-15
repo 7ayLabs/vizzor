@@ -42,7 +42,7 @@ export class OpenAIProvider implements AIProvider {
   readonly supportsTools = true;
 
   private client: OpenAI | undefined;
-  private model = DEFAULT_MODELS['openai']!;
+  private model = DEFAULT_MODELS['openai'] ?? 'gpt-4o';
   private maxTokens = 4096;
 
   // -----------------------------------------------------------------------

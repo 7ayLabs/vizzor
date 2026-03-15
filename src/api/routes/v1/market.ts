@@ -39,7 +39,10 @@ export async function registerMarketRoutes(server: FastifyInstance): Promise<voi
         .slice(0, 100);
       const results = await Promise.allSettled(
         list.map((symbol) =>
-          handleTool('get_market_data', { symbol }).then((data) => ({ symbol, ...data })),
+          handleTool('get_market_data', { symbol }).then((data) => ({
+            symbol,
+            ...(data as Record<string, unknown>),
+          })),
         ),
       );
       const prices: Record<string, unknown> = {};

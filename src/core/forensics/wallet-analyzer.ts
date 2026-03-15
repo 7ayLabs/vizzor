@@ -123,15 +123,18 @@ function buildWalletFeatures(txHistory: TxRecord[]) {
   const gasValues = txHistory.map((tx) => Number(tx.gasUsed ?? 21000));
   const recipients = new Set(txHistory.map((tx) => tx.to));
   const methods = new Set(
-    txHistory.filter((tx) => tx.input && tx.input.length > 10).map((tx) => tx.input!.slice(0, 10)),
+    txHistory
+      .filter((tx) => tx.input && tx.input.length > 10)
+      .map((tx) => (tx.input ?? '').slice(0, 10)),
   );
 
   const timestamps = txHistory.map((tx) => tx.timestamp).sort((a, b) => a - b);
-  const timeSpan = timestamps.length > 1 ? (timestamps.at(-1)! - timestamps[0]!) / 3600 : 0;
+  const timeSpan =
+    timestamps.length > 1 ? ((timestamps.at(-1) ?? 0) - (timestamps[0] ?? 0)) / 3600 : 0;
 
   const intervals: number[] = [];
   for (let i = 1; i < timestamps.length; i++) {
-    intervals.push(timestamps[i]! - timestamps[i - 1]!);
+    intervals.push((timestamps[i] ?? 0) - (timestamps[i - 1] ?? 0));
   }
 
   const selfTxs = txHistory.filter((tx) => tx.from === tx.to).length;
@@ -176,7 +179,7 @@ function detectPatterns(txHistory: TxRecord[]): WalletPattern[] {
     const timestamps = txHistory.map((tx) => tx.timestamp).sort((a, b) => a - b);
     const intervals: number[] = [];
     for (let i = 1; i < timestamps.length; i++) {
-      intervals.push(timestamps[i]! - timestamps[i - 1]!);
+      intervals.push((timestamps[i] ?? 0) - (timestamps[i - 1] ?? 0));
     }
     const minInterval = Math.min(...intervals);
     if (minInterval < 5) {

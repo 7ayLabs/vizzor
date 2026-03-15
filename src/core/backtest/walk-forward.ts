@@ -30,8 +30,8 @@ export async function runWalkForward(config: WalkForwardConfig): Promise<WalkFor
 
     const engine = new BacktestEngine({
       ...config.base,
-      from: windowStart.toISOString().split('T')[0]!,
-      to: windowEnd.toISOString().split('T')[0]!,
+      from: windowStart.toISOString().split('T')[0] ?? '',
+      to: windowEnd.toISOString().split('T')[0] ?? '',
     });
 
     const result = await engine.run();

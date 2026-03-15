@@ -81,7 +81,7 @@ function detectRegimeHeuristic(features: RegimeMLFeatures): RegimeResult {
     capitulation: 0.05,
   };
   probabilities[regime] = confidence / 100;
-  const remaining = 1.0 - probabilities[regime]!;
+  const remaining = 1.0 - (probabilities[regime] ?? 0);
   const others = Object.keys(probabilities).filter((k) => k !== regime);
   for (const k of others) {
     probabilities[k] = remaining / others.length;

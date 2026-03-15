@@ -100,12 +100,13 @@ export class BacktestEngine {
 
     // Close any remaining position at last price
     if (position && filtered.length > 0) {
-      const lastPrice = filtered[filtered.length - 1]!.close;
+      const lastCandle = filtered[filtered.length - 1];
+      const lastPrice = lastCandle?.close ?? 0;
       const exitValue = position.size * lastPrice;
       const pnl = exitValue - position.size * position.entryPrice;
       trades.push({
         entryTime: position.entryTime,
-        exitTime: filtered[filtered.length - 1]!.openTime,
+        exitTime: lastCandle?.openTime ?? 0,
         side: position.side,
         entryPrice: position.entryPrice,
         exitPrice: lastPrice,

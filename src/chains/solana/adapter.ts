@@ -66,7 +66,8 @@ export class SolanaAdapter implements ChainAdapter {
       value: { account: { data: { parsed: { info: { tokenAmount: { amount: string } } } } } }[];
     };
     if (result.value.length === 0) return 0n;
-    return BigInt(result.value[0]!.account.data.parsed.info.tokenAmount.amount);
+    const firstAccount = result.value[0];
+    return BigInt(firstAccount?.account.data.parsed.info.tokenAmount.amount ?? '0');
   }
 
   async getTransactionHistory(address: string, options?: TxHistoryOptions): Promise<Transaction[]> {

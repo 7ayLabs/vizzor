@@ -57,7 +57,7 @@ export class GeminiProvider implements AIProvider {
   readonly supportsTools = true;
 
   private genAI: GoogleGenerativeAI | undefined;
-  private model = DEFAULT_MODELS['gemini']!;
+  private model = DEFAULT_MODELS['gemini'] ?? 'gemini-2.5-flash';
   private maxTokens = 4096;
 
   // -----------------------------------------------------------------------

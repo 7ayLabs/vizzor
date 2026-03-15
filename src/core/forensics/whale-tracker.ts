@@ -62,11 +62,14 @@ export async function trackWhales(
         if (result) {
           const behavior = result.behavior_type;
           if (behavior === 'whale' || behavior === 'normal_trader') {
-            whales[idx]!.recentActivity = 'holding';
+            const whale = whales[idx];
+            if (whale) whale.recentActivity = 'holding';
           } else if (behavior === 'sniper' || behavior === 'bot') {
-            whales[idx]!.recentActivity = 'accumulating';
+            const whale = whales[idx];
+            if (whale) whale.recentActivity = 'accumulating';
           } else if (behavior === 'mixer_user' || behavior === 'rug_deployer') {
-            whales[idx]!.recentActivity = 'distributing';
+            const whale = whales[idx];
+            if (whale) whale.recentActivity = 'distributing';
           }
         }
       } catch {

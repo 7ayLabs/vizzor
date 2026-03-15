@@ -15,7 +15,7 @@ export class AnthropicProvider implements AIProvider {
   readonly supportsTools = true;
 
   private client: Anthropic | undefined;
-  private model = DEFAULT_MODELS['anthropic']!;
+  private model = DEFAULT_MODELS['anthropic'] ?? 'claude-sonnet-4-20250514';
   private maxTokens = 8192;
 
   // -------------------------------------------------------------------------

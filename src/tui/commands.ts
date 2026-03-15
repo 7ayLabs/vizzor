@@ -436,12 +436,16 @@ function handleAgent(args: string[]): CommandResult {
         const intervalIdx = args.indexOf('--interval');
 
         const strategy =
-          stratIdx !== -1 && stratIdx + 1 < args.length ? args[stratIdx + 1]! : 'momentum';
+          stratIdx !== -1 && stratIdx + 1 < args.length
+            ? (args[stratIdx + 1] ?? 'momentum')
+            : 'momentum';
         const pairsRaw =
-          pairsIdx !== -1 && pairsIdx + 1 < args.length ? args[pairsIdx + 1]! : 'BTC,ETH';
+          pairsIdx !== -1 && pairsIdx + 1 < args.length
+            ? (args[pairsIdx + 1] ?? 'BTC,ETH')
+            : 'BTC,ETH';
         const interval =
           intervalIdx !== -1 && intervalIdx + 1 < args.length
-            ? parseInt(args[intervalIdx + 1]!, 10)
+            ? parseInt(args[intervalIdx + 1] ?? '60', 10)
             : 60;
 
         const pairs = pairsRaw.split(',').map((p) => p.trim().toUpperCase());
@@ -579,11 +583,11 @@ async function handleBacktest(args: string[]): Promise<CommandResult> {
   const toIdx = args.indexOf('--to');
   const tfIdx = args.indexOf('--timeframe');
 
-  const strategy = stratIdx !== -1 && stratIdx + 1 < args.length ? args[stratIdx + 1]! : '';
-  const pair = pairIdx !== -1 && pairIdx + 1 < args.length ? args[pairIdx + 1]! : '';
-  const from = fromIdx !== -1 && fromIdx + 1 < args.length ? args[fromIdx + 1]! : '';
-  const to = toIdx !== -1 && toIdx + 1 < args.length ? args[toIdx + 1]! : '';
-  const timeframe = tfIdx !== -1 && tfIdx + 1 < args.length ? args[tfIdx + 1]! : '4h';
+  const strategy = stratIdx !== -1 && stratIdx + 1 < args.length ? (args[stratIdx + 1] ?? '') : '';
+  const pair = pairIdx !== -1 && pairIdx + 1 < args.length ? (args[pairIdx + 1] ?? '') : '';
+  const from = fromIdx !== -1 && fromIdx + 1 < args.length ? (args[fromIdx + 1] ?? '') : '';
+  const to = toIdx !== -1 && toIdx + 1 < args.length ? (args[toIdx + 1] ?? '') : '';
+  const timeframe = tfIdx !== -1 && tfIdx + 1 < args.length ? (args[tfIdx + 1] ?? '4h') : '4h';
 
   if (!strategy || !pair || !from || !to) {
     return {
