@@ -300,6 +300,28 @@ export async function fetchTopGainersLosers(limit = 10): Promise<{
 }
 
 /**
+ * Fetch ticker price with real-time WebSocket cache fallback.
+ * Checks the WS price cache first, falls back to REST.
+ */
+export async function fetchTickerPriceRT(symbol: string): Promise<TickerPrice> {
+  // Try WebSocket cache first
+  const { getWSManager } = await import('./ws-manager.js');
+  const wsManager = getWSManager();
+  if (wsManager) {
+    const wsPrice = wsManager.getLatestPrice(symbol);
+    if (wsPrice !== null) {
+      return {
+        symbol: symbol.toUpperCase(),
+        price: wsPrice,
+        change24h: 0, // WS cache doesn't track 24h change
+      };
+    }
+  }
+  // Fallback to REST
+  return fetchTickerPrice(symbol);
+}
+
+/**
  * Check if a symbol exists on Binance.
  */
 export async function isValidSymbol(symbol: string): Promise<boolean> {

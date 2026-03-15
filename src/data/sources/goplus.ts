@@ -69,6 +69,9 @@ const CHAIN_IDS: Record<string, string> = {
   base: '8453',
   avalanche: '43114',
   solana: 'solana',
+  sui: 'sui',
+  aptos: 'aptos',
+  ton: 'ton',
 };
 
 function resolveChainId(chain: string): string {

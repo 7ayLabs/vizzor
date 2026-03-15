@@ -437,6 +437,62 @@ export const VIZZOR_TOOLS: AITool[] = [
     },
   },
   {
+    name: 'get_ml_model_health',
+    description:
+      'Get health status of all ML models in the sidecar including loaded status, version, last training date, accuracy, uptime, and total predictions served.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: 'classify_user_intent',
+    description:
+      'Classify a user message into an intent category (e.g. price_check, token_analysis, prediction, news, portfolio, agent_management) using ML NLP. Returns intent, confidence, detected tokens, and detected addresses.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        text: {
+          type: 'string',
+          description: 'The user message text to classify.',
+        },
+      },
+      required: ['text'],
+    },
+  },
+  {
+    name: 'run_backtest',
+    description:
+      'Run a historical backtest for a trading strategy. Simulates strategy execution on historical kline data and returns trades, metrics (return, win rate, Sharpe, drawdown), and equity curve.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        strategy: {
+          type: 'string',
+          description: 'Strategy name: "momentum", "trend-following", or "ml-adaptive".',
+        },
+        pair: {
+          type: 'string',
+          description: 'Trading pair (e.g. "BTCUSDT").',
+        },
+        from: {
+          type: 'string',
+          description: 'Start date (YYYY-MM-DD).',
+        },
+        to: {
+          type: 'string',
+          description: 'End date (YYYY-MM-DD).',
+        },
+        timeframe: {
+          type: 'string',
+          description: 'Candle timeframe: "1h", "4h", "1d". Defaults to "4h".',
+        },
+      },
+      required: ['strategy', 'pair', 'from', 'to'],
+    },
+  },
+  {
     name: 'create_agent',
     description:
       'Create an autonomous trading agent that monitors crypto pairs using a strategy (momentum or trend-following). Returns the created agent config.',
