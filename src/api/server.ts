@@ -7,6 +7,7 @@ import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import { createLogger } from '../utils/logger.js';
 import { registerMarketRoutes } from './routes/v1/market.js';
 import { registerAnalysisRoutes } from './routes/v1/analysis.js';
@@ -26,9 +27,25 @@ export async function startApiServer(options: {
   enableAuth?: boolean;
   corsOrigin?: string;
 }): Promise<void> {
-  const server = Fastify({ logger: false });
+  const server = Fastify({
+    logger: false,
+    bodyLimit: 1_048_576, // 1MB payload limit
+  });
   const isProd = process.env['NODE_ENV'] === 'production';
   const origin = options.corsOrigin ?? 'http://localhost:3000';
+
+  // Security headers
+  server.addHook(
+    'onSend',
+    async (_request: FastifyRequest, reply: FastifyReply, payload: unknown) => {
+      void reply.header('Content-Security-Policy', "default-src 'self'; script-src 'none'");
+      void reply.header('X-Frame-Options', 'DENY');
+      void reply.header('X-Content-Type-Options', 'nosniff');
+      void reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+      void reply.header('X-XSS-Protection', '1; mode=block');
+      return payload;
+    },
+  );
 
   // Plugins
   await server.register(cors, {
@@ -43,7 +60,7 @@ export async function startApiServer(options: {
       info: {
         title: 'Vizzor API',
         description: 'AI-powered crypto intelligence REST API',
-        version: '0.11.0',
+        version: '0.12.0',
       },
       servers: [{ url: `http://${options.host}:${options.port}` }],
       components: {
@@ -82,7 +99,7 @@ export async function startApiServer(options: {
     }
     return {
       status: 'ok',
-      version: '0.11.0',
+      version: '0.12.0',
       uptime: process.uptime(),
       timestamp: new Date().toISOString(),
     };

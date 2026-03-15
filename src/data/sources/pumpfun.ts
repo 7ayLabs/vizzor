@@ -3,6 +3,14 @@
 // https://frontend-api-v3.pump.fun
 // ---------------------------------------------------------------------------
 
+// Real-time WebSocket listener available at ./launchpad-ws.ts
+// Use LaunchpadWSListener for real-time migration event tracking
+export {
+  LaunchpadWSListener,
+  type MigrationEvent,
+  type MigrationCallback,
+} from './launchpad-ws.js';
+
 const BASE_URL = 'https://frontend-api-v3.pump.fun';
 
 // ---------------------------------------------------------------------------
