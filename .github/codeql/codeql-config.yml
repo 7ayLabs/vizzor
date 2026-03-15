@@ -3,12 +3,3 @@ name: "Vizzor CodeQL Config"
 paths-ignore:
   # One-time API key display — key cannot be retrieved after creation
   - src/cli/commands/api.ts
-
-query-filters:
-  # FALSE POSITIVE: CodeQL js/missing-rate-limiting only recognizes the
-  # deprecated 'fastify-rate-limit' package, not '@fastify/rate-limit'
-  # (the current scoped package we use). Rate limiting IS applied globally
-  # via @fastify/rate-limit in src/api/server.ts (300 req/min).
-  # See: https://github.com/github/codeql/blob/main/javascript/ql/lib/semmle/javascript/security/dataflow/MissingRateLimiting.qll
-  - exclude:
-      id: js/missing-rate-limiting

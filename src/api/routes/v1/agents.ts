@@ -1,9 +1,9 @@
 // ---------------------------------------------------------------------------
 // API: /v1/agents — Agent CRUD and control
-// Rate-limited globally by @fastify/rate-limit registered in server.ts
 // ---------------------------------------------------------------------------
 
 import type { FastifyInstance } from 'fastify';
+import { RateLimiterMemory } from 'rate-limiter-flexible';
 import {
   createAgent,
   listAgents,
@@ -14,7 +14,17 @@ import {
   deleteAgent as removeAgent,
 } from '../../../core/agent/index.js';
 
+const limiter = new RateLimiterMemory({ points: 100, duration: 60 });
+
 export async function agentRoutes(fastify: FastifyInstance): Promise<void> {
+  fastify.addHook('onRequest', async (request, reply) => {
+    try {
+      await limiter.consume(request.ip);
+    } catch {
+      reply.status(429).send({ error: 'Too Many Requests' });
+    }
+  });
+
   fastify.get('/v1/agents', async () => {
     const agents = listAgents();
     return {
