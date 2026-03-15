@@ -311,3 +311,24 @@ export interface PortfolioPredMLResult {
   confidence: number;
   model: string;
 }
+
+export interface TrainResult {
+  model: string;
+  status: 'success' | 'failed';
+  metrics: Record<string, number>;
+  duration_seconds: number;
+  artifact_path: string;
+}
+
+export interface EvalResult {
+  model: string;
+  metrics: {
+    accuracy: number;
+    precision: number;
+    recall: number;
+    f1: number;
+    auc_roc: number;
+  };
+  confusion_matrix: number[][];
+  test_samples: number;
+}

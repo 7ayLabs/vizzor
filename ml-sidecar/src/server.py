@@ -21,6 +21,10 @@ from .models.strategy_bandit import StrategyBandit
 from .models.project_risk_scorer import ProjectRiskScorer
 from .models.portfolio_optimizer import PortfolioOptimizer
 from .models.intent_classifier import IntentClassifier
+from .training.train_rug import RugTrainer
+from .training.train_trend import TrendTrainer
+from .training.train_regime import RegimeTrainer
+from .training.train_sentiment import SentimentTrainer
 
 # ---------------------------------------------------------------------------
 # Request / Response models
@@ -392,6 +396,47 @@ class PortfolioPredResponse(BaseModel):
     model: str
 
 
+# --- Training Pipeline ---
+
+
+class TrainRequest(BaseModel):
+    model_config = ConfigDict(str_max_length=50)
+
+    model_name: str = Field(
+        ...,
+        max_length=50,
+        pattern=r"^(rug_detector|trend_scorer|regime_detector|sentiment_nlp)$",
+        description="Model to train: rug_detector, trend_scorer, regime_detector, sentiment_nlp",
+    )
+
+
+class TrainResponse(BaseModel):
+    model: str
+    status: str
+    metrics: dict | None = None
+    duration_seconds: float
+    artifact_path: str
+    error: str | None = None
+
+
+class EvaluateRequest(BaseModel):
+    model_config = ConfigDict(str_max_length=50)
+
+    model_name: str = Field(
+        ...,
+        max_length=50,
+        pattern=r"^(rug_detector|trend_scorer|regime_detector|sentiment_nlp)$",
+        description="Model to evaluate: rug_detector, trend_scorer, regime_detector, sentiment_nlp",
+    )
+
+
+class EvaluateResponse(BaseModel):
+    model: str
+    status: str
+    metrics: dict | None = None
+    error: str | None = None
+
+
 # ---------------------------------------------------------------------------
 # Model instances
 # ---------------------------------------------------------------------------
@@ -728,6 +773,69 @@ async def predict_portfolio_forward(features: PortfolioPredFeatures) -> Portfoli
     predictions_served += 1
     result = portfolio_optimizer.forecast(features.model_dump())
     return PortfolioPredResponse(**result)
+
+
+# --- Training Pipeline Endpoints ---
+
+
+TRAINERS = {
+    "rug_detector": RugTrainer,
+    "trend_scorer": TrendTrainer,
+    "regime_detector": RegimeTrainer,
+    "sentiment_nlp": SentimentTrainer,
+}
+
+
+@app.post("/train", response_model=TrainResponse)
+async def train_model(req: TrainRequest) -> TrainResponse:
+    trainer_cls = TRAINERS.get(req.model_name)
+    if not trainer_cls:
+        return TrainResponse(
+            model=req.model_name,
+            status="failed",
+            duration_seconds=0,
+            artifact_path="",
+            error=f"Unknown model: {req.model_name}. Available: {', '.join(TRAINERS.keys())}",
+        )
+    trainer = trainer_cls()
+    result = trainer.run()
+    return TrainResponse(
+        model=result["model"],
+        status=result["status"],
+        metrics=result.get("metrics"),
+        duration_seconds=result["duration_seconds"],
+        artifact_path=result["artifact_path"],
+        error=result.get("error"),
+    )
+
+
+@app.post("/evaluate", response_model=EvaluateResponse)
+async def evaluate_model(req: EvaluateRequest) -> EvaluateResponse:
+    trainer_cls = TRAINERS.get(req.model_name)
+    if not trainer_cls:
+        return EvaluateResponse(
+            model=req.model_name,
+            status="failed",
+            error=f"Unknown model: {req.model_name}. Available: {', '.join(TRAINERS.keys())}",
+        )
+    trainer = trainer_cls()
+    try:
+        data = trainer.load_data()
+        splits = trainer.preprocess(data)
+        X_train, X_val, X_test, y_train, y_val, y_test = splits
+        model = trainer.train(X_train, y_train, X_val, y_val)
+        metrics = trainer.evaluate(model, X_test, y_test)
+        return EvaluateResponse(
+            model=req.model_name,
+            status="success",
+            metrics=metrics,
+        )
+    except Exception as e:
+        return EvaluateResponse(
+            model=req.model_name,
+            status="failed",
+            error=str(e),
+        )
 
 
 @app.get("/health")
