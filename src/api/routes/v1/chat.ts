@@ -84,15 +84,18 @@ export async function registerChatRoutes(server: FastifyInstance): Promise<void>
         return reply.status(400).send({ error: 'messages array cannot be empty' });
       }
 
-      // Set SSE headers — include CORS since reply.raw bypasses Fastify
-      const origin = request.headers.origin ?? '*';
+      // Set SSE headers — include CORS since reply.raw bypasses Fastify's plugin
+      const isProd = process.env['NODE_ENV'] === 'production';
+      const allowedOrigin = isProd
+        ? (process.env['CORS_ORIGIN'] ?? 'http://localhost:3000')
+        : (request.headers.origin ?? '*');
       reply.raw.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         Connection: 'keep-alive',
         'X-Accel-Buffering': 'no',
-        'Access-Control-Allow-Origin': origin,
-        'Access-Control-Allow-Credentials': 'true',
+        'Access-Control-Allow-Origin': allowedOrigin,
+        ...(isProd ? {} : { 'Access-Control-Allow-Credentials': 'true' }),
       });
 
       const write = (event: string, data: unknown) => {

@@ -4,3 +4,8 @@ name: "Vizzor CodeQL Config"
 # src/cli/commands/api.ts: One-time API key display (key cannot be retrieved after creation).
 paths-ignore:
   - src/cli/commands/api.ts
+
+# Load custom queries that extend built-in rate-limiting recognition
+# to cover @fastify/rate-limit (CodeQL only ships the deprecated name).
+packs:
+  - ./.github/codeql/custom-queries

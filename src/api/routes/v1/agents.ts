@@ -1,9 +1,9 @@
 // ---------------------------------------------------------------------------
 // API: /v1/agents — Agent CRUD and control
+// Rate-limited globally by @fastify/rate-limit registered in server.ts
 // ---------------------------------------------------------------------------
 
 import type { FastifyInstance } from 'fastify';
-import rateLimit from '@fastify/rate-limit';
 import {
   createAgent,
   listAgents,
@@ -15,8 +15,6 @@ import {
 } from '../../../core/agent/index.js';
 
 export async function agentRoutes(fastify: FastifyInstance): Promise<void> {
-  await fastify.register(rateLimit, { max: 100, timeWindow: '1 minute' });
-
   fastify.get('/v1/agents', async () => {
     const agents = listAgents();
     return {
