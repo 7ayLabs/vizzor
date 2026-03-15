@@ -4,6 +4,61 @@
 
 import type { RiskConfig, PortfolioState, Position } from './types.js';
 import { getMLClient } from '../../../ml/client.js';
+import { stopAllAgents } from '../manager.js';
+import { logAuditEvent } from '../../../security/audit.js';
+import { createLogger } from '../../../utils/logger.js';
+
+const log = createLogger('risk');
+
+// ---------------------------------------------------------------------------
+// Kill switch state
+// ---------------------------------------------------------------------------
+
+let killSwitchActive = false;
+
+/**
+ * Check whether the global kill switch is currently active.
+ */
+export function isKillSwitchActive(): boolean {
+  return killSwitchActive;
+}
+
+/**
+ * Trigger an emergency stop across all agents and positions.
+ * - Stops all running agents
+ * - Logs audit event
+ * - Activates the kill switch flag
+ *
+ * Returns the number of agents stopped.
+ */
+export function triggerEmergencyStop(reason: string): number {
+  killSwitchActive = true;
+
+  // Stop all running agents
+  const stopped = stopAllAgents();
+
+  // Log audit event
+  logAuditEvent({
+    type: 'emergency_stop',
+    actor: 'system',
+    resource: 'all-agents',
+    action: `Emergency stop triggered: ${reason}`,
+    metadata: { agentsStopped: stopped, reason },
+  });
+
+  log.warn(`EMERGENCY STOP: ${reason} — ${stopped} agent(s) halted`);
+
+  return stopped;
+}
+
+/**
+ * Alias for triggerEmergencyStop for external consumers.
+ */
+export const emergencyStopAll = triggerEmergencyStop;
+
+// ---------------------------------------------------------------------------
+// Position sizing
+// ---------------------------------------------------------------------------
 
 export function calculatePositionSize(
   config: RiskConfig,
@@ -172,6 +227,7 @@ export function shouldTriggerKillSwitch(config: RiskConfig, portfolio: Portfolio
 }
 
 export function canOpenPosition(config: RiskConfig, portfolio: PortfolioState): boolean {
+  if (killSwitchActive) return false;
   if (portfolio.positions.length >= config.maxOpenPositions) return false;
   if (shouldTriggerKillSwitch(config, portfolio)) return false;
   if (portfolio.cash <= 0) return false;

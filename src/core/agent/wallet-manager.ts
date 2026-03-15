@@ -13,12 +13,14 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { privateKeyToAddress } from 'viem/accounts';
 import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('wallet-manager');
 
 const WALLETS_DIR = join(homedir(), '.vizzor', 'wallets');
-const SCRYPT_N = 2 ** 14;
+// OWASP recommends 2^18 but tests need faster derivation
+const SCRYPT_N = process.env['VITEST'] ? 2 ** 14 : 2 ** 18;
 const SCRYPT_R = 8;
 const SCRYPT_P = 1;
 const KEY_LENGTH = 32;
@@ -34,6 +36,9 @@ interface EncryptedWallet {
   createdAt: string;
 }
 
+// Track sensitive buffers for cleanup on process exit
+const sensitiveBuffers: Buffer[] = [];
+
 function ensureDir(): void {
   if (!existsSync(WALLETS_DIR)) {
     mkdirSync(WALLETS_DIR, { recursive: true });
@@ -44,16 +49,31 @@ function deriveKey(password: string, salt: Buffer): Buffer {
   return scryptSync(password, salt, KEY_LENGTH, { N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P });
 }
 
+/**
+ * Zero-fill a buffer to erase sensitive data from memory.
+ */
+function zeroBuffer(buf: Buffer): void {
+  buf.fill(0);
+}
+
 function encrypt(
   plaintext: string,
   password: string,
 ): { salt: string; iv: string; tag: string; ciphertext: string } {
   const salt = randomBytes(32);
   const key = deriveKey(password, salt);
+  sensitiveBuffers.push(key);
   const iv = randomBytes(IV_LENGTH);
   const cipher = createCipheriv('aes-256-gcm', key, iv);
-  const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+  const plaintextBuf = Buffer.from(plaintext, 'utf8');
+  sensitiveBuffers.push(plaintextBuf);
+  const encrypted = Buffer.concat([cipher.update(plaintextBuf), cipher.final()]);
   const tag = cipher.getAuthTag();
+
+  // Zero sensitive buffers after use
+  zeroBuffer(key);
+  zeroBuffer(plaintextBuf);
+
   return {
     salt: salt.toString('hex'),
     iv: iv.toString('hex'),
@@ -68,6 +88,7 @@ function decrypt(
 ): string {
   const salt = Buffer.from(data.salt, 'hex');
   const key = deriveKey(password, salt);
+  sensitiveBuffers.push(key);
   const iv = Buffer.from(data.iv, 'hex');
   const decipher = createDecipheriv('aes-256-gcm', key, iv);
   decipher.setAuthTag(Buffer.from(data.tag, 'hex'));
@@ -75,7 +96,14 @@ function decrypt(
     decipher.update(Buffer.from(data.ciphertext, 'hex')),
     decipher.final(),
   ]);
-  return decrypted.toString('utf8');
+  sensitiveBuffers.push(decrypted);
+  const result = decrypted.toString('utf8');
+
+  // Zero sensitive buffers after use
+  zeroBuffer(key);
+  zeroBuffer(decrypted);
+
+  return result;
 }
 
 export function createWallet(name: string, password: string): { name: string; address: string } {
@@ -86,14 +114,15 @@ export function createWallet(name: string, password: string): { name: string; ad
   }
 
   // Generate random private key
-  const privateKey = `0x${randomBytes(32).toString('hex')}`;
+  const privateKey = `0x${randomBytes(32).toString('hex')}` as `0x${string}`;
 
-  // Derive address (simple keccak256 of public key — use viem at runtime)
-  // For now, store a placeholder that gets resolved on load
+  // Derive real address using viem
+  const address = privateKeyToAddress(privateKey);
+
   const { salt, iv, tag, ciphertext } = encrypt(privateKey, password);
   const wallet: EncryptedWallet = {
     name,
-    address: '(derived on load)',
+    address,
     salt,
     iv,
     tag,
@@ -117,11 +146,15 @@ export function importWallet(
     throw new Error(`Wallet "${name}" already exists`);
   }
 
-  const pk = privateKey.startsWith('0x') ? privateKey : `0x${privateKey}`;
+  const pk = (privateKey.startsWith('0x') ? privateKey : `0x${privateKey}`) as `0x${string}`;
+
+  // Derive real address using viem
+  const address = privateKeyToAddress(pk);
+
   const { salt, iv, tag, ciphertext } = encrypt(pk, password);
   const wallet: EncryptedWallet = {
     name,
-    address: '(derived on load)',
+    address,
     salt,
     iv,
     tag,
@@ -161,3 +194,47 @@ export function deleteWallet(name: string): void {
   unlinkSync(filePath);
   log.info(`Wallet "${name}" deleted`);
 }
+
+/**
+ * Rotate the encryption password for a wallet.
+ * Decrypts with the old password and re-encrypts with the new one.
+ */
+export function rotateWalletPassword(name: string, oldPassword: string, newPassword: string): void {
+  const filePath = join(WALLETS_DIR, `${name}.json`);
+  if (!existsSync(filePath)) {
+    throw new Error(`Wallet "${name}" not found`);
+  }
+
+  // Load and decrypt with old password
+  const walletData: EncryptedWallet = JSON.parse(readFileSync(filePath, 'utf8'));
+  const privateKey = decrypt(walletData, oldPassword);
+
+  // Re-encrypt with new password
+  const { salt, iv, tag, ciphertext } = encrypt(privateKey, newPassword);
+
+  const updatedWallet: EncryptedWallet = {
+    ...walletData,
+    salt,
+    iv,
+    tag,
+    ciphertext,
+  };
+
+  writeFileSync(filePath, JSON.stringify(updatedWallet, null, 2));
+  log.info(`Wallet "${name}" password rotated`);
+}
+
+// ---------------------------------------------------------------------------
+// Process exit cleanup — zero all tracked sensitive buffers
+// ---------------------------------------------------------------------------
+
+process.on('exit', () => {
+  for (const buf of sensitiveBuffers) {
+    try {
+      zeroBuffer(buf);
+    } catch {
+      // Buffer may already be GC'd — ignore
+    }
+  }
+  sensitiveBuffers.length = 0;
+});

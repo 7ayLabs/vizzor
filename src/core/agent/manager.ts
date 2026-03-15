@@ -42,6 +42,12 @@ const engines = new Map<string, AgentEngine>();
 // DB helpers
 // ---------------------------------------------------------------------------
 
+const DEFAULT_RISK_CONFIG = {
+  maxDailyLoss: 500,
+  maxPositionValue: 1000,
+  maxDrawdownPct: 10,
+};
+
 function ensureAgentTables(): void {
   const db = getDb();
 
@@ -70,6 +76,22 @@ function ensureAgentTables(): void {
       FOREIGN KEY (agent_id) REFERENCES agents(id)
     )
   `);
+
+  // Migration: add new columns for v0.12.0 agent system v2
+  const migrations = [
+    { column: 'chains', sql: 'ALTER TABLE agents ADD COLUMN chains TEXT DEFAULT \'["ethereum"]\'' },
+    { column: 'mode', sql: "ALTER TABLE agents ADD COLUMN mode TEXT DEFAULT 'paper'" },
+    { column: 'wallet_id', sql: 'ALTER TABLE agents ADD COLUMN wallet_id TEXT' },
+    { column: 'risk_config', sql: 'ALTER TABLE agents ADD COLUMN risk_config TEXT' },
+  ];
+
+  for (const migration of migrations) {
+    try {
+      db.exec(migration.sql);
+    } catch {
+      // Column already exists — safe to ignore
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -81,6 +103,7 @@ export function createAgent(
   strategy: string,
   pairs: string[],
   interval = 60,
+  options?: { walletId?: string; chains?: string[]; mode?: 'paper' | 'live' },
 ): AgentConfig {
   ensureAgentTables();
 
@@ -95,95 +118,106 @@ export function createAgent(
 
   const id = randomUUID();
   const now = Date.now();
+  const mode = options?.mode ?? 'paper';
+  // Default to testnet chains for paper/test trading; mainnet requires explicit opt-in
+  const chains = options?.chains ?? (mode === 'live' ? ['ethereum'] : ['sepolia']);
+  const walletId = options?.walletId ?? '';
+  const riskConfig = DEFAULT_RISK_CONFIG;
 
   getDb()
     .prepare(
-      `INSERT INTO agents (id, name, strategy, pairs, interval_seconds, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO agents (id, name, strategy, pairs, interval_seconds, chains, mode, wallet_id, risk_config, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run(id, name, strategy, JSON.stringify(pairs), interval, now, now);
+    .run(
+      id,
+      name,
+      strategy,
+      JSON.stringify(pairs),
+      interval,
+      JSON.stringify(chains),
+      mode,
+      walletId,
+      JSON.stringify(riskConfig),
+      now,
+      now,
+    );
 
-  return { id, name, strategy, pairs, interval, createdAt: now, updatedAt: now };
+  return {
+    id,
+    name,
+    strategy,
+    pairs,
+    interval,
+    chains,
+    mode,
+    walletId,
+    riskConfig,
+    createdAt: now,
+    updatedAt: now,
+  };
 }
 
-export function listAgents(): AgentConfig[] {
-  ensureAgentTables();
+interface AgentRow {
+  id: string;
+  name: string;
+  strategy: string;
+  pairs: string;
+  interval_seconds: number;
+  chains: string | null;
+  mode: string | null;
+  wallet_id: string | null;
+  risk_config: string | null;
+  created_at: number;
+  updated_at: number;
+}
 
-  const rows = getDb().prepare('SELECT * FROM agents ORDER BY created_at DESC').all() as {
-    id: string;
-    name: string;
-    strategy: string;
-    pairs: string;
-    interval_seconds: number;
-    created_at: number;
-    updated_at: number;
-  }[];
-
-  return rows.map((r) => ({
+function rowToConfig(r: AgentRow): AgentConfig {
+  return {
     id: r.id,
     name: r.name,
     strategy: r.strategy,
     pairs: JSON.parse(r.pairs) as string[],
     interval: r.interval_seconds,
+    chains: r.chains ? (JSON.parse(r.chains) as string[]) : ['ethereum'],
+    mode: (r.mode as 'paper' | 'live') ?? 'paper',
+    walletId: r.wallet_id ?? '',
+    riskConfig: r.risk_config
+      ? (JSON.parse(r.risk_config) as AgentConfig['riskConfig'])
+      : DEFAULT_RISK_CONFIG,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
-  }));
+  };
+}
+
+export function listAgents(): AgentConfig[] {
+  ensureAgentTables();
+
+  const rows = getDb().prepare('SELECT * FROM agents ORDER BY created_at DESC').all() as AgentRow[];
+
+  return rows.map(rowToConfig);
 }
 
 export function getAgentById(id: string): AgentConfig | null {
   ensureAgentTables();
 
-  const row = getDb().prepare('SELECT * FROM agents WHERE id = ?').get(id) as
-    | {
-        id: string;
-        name: string;
-        strategy: string;
-        pairs: string;
-        interval_seconds: number;
-        created_at: number;
-        updated_at: number;
-      }
-    | undefined;
+  const row = getDb().prepare('SELECT * FROM agents WHERE id = ?').get(id) as AgentRow | undefined;
 
   if (!row) return null;
 
-  return {
-    id: row.id,
-    name: row.name,
-    strategy: row.strategy,
-    pairs: JSON.parse(row.pairs) as string[],
-    interval: row.interval_seconds,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
+  return rowToConfig(row);
 }
 
 export function getAgentByName(name: string): AgentConfig | null {
   ensureAgentTables();
 
   const row = getDb().prepare('SELECT * FROM agents WHERE name = ?').get(name) as
-    | {
-        id: string;
-        name: string;
-        strategy: string;
-        pairs: string;
-        interval_seconds: number;
-        created_at: number;
-        updated_at: number;
-      }
+    | AgentRow
     | undefined;
 
   if (!row) return null;
 
-  return {
-    id: row.id,
-    name: row.name,
-    strategy: row.strategy,
-    pairs: JSON.parse(row.pairs) as string[],
-    interval: row.interval_seconds,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
+  return rowToConfig(row);
 }
 
 export function deleteAgent(id: string): boolean {
@@ -236,6 +270,23 @@ export function stopAgent(id: string): AgentState {
 
   engine.stop();
   return engine.getState();
+}
+
+/**
+ * Stop all running agent engines. Used by emergency stop / kill switch.
+ * Returns the number of agents stopped.
+ */
+export function stopAllAgents(): number {
+  let stopped = 0;
+  for (const [id, engine] of engines) {
+    const state = engine.getState();
+    if (state.status === 'running') {
+      engine.stop();
+      stopped++;
+    }
+    engines.delete(id);
+  }
+  return stopped;
 }
 
 export function getAgentStatus(id: string): AgentState | null {

@@ -45,11 +45,17 @@ export class PortfolioManager {
     const losses = this.trades.filter((t) => t.pnl < 0).length;
     const total = wins + losses;
 
+    const realizedPnl = this.trades.reduce((sum, t) => sum + t.pnl, 0) + unrealized;
+
     return {
       totalValue,
       cash: this.cash,
       positions: [...this.positions],
-      realizedPnl: this.trades.reduce((sum, t) => sum + t.pnl, 0) + unrealized,
+      realizedPnl,
+      totalReturnPct:
+        this.initialCapital > 0
+          ? ((totalValue - this.initialCapital) / this.initialCapital) * 100
+          : 0,
       maxDrawdown: drawdown,
       winRate: total > 0 ? wins / total : 0,
       sharpeRatio: this.calculateSharpe(),
