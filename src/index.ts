@@ -181,10 +181,46 @@ apiKeyCmd
     handleApiKeyRevoke(id);
   });
 
+apiCmd
+  .command('start')
+  .description('Start the REST API server')
+  .option('--port <port>', 'Server port', (v: string) => parseInt(v, 10), 3000)
+  .option('--host <host>', 'Server host', '0.0.0.0')
+  .option('--auth', 'Enable API key authentication', false)
+  .action(async (options: { port: number; host: string; auth: boolean }) => {
+    const { handleServe } = await import('./cli/commands/serve.js');
+    await handleServe(options);
+  });
+
+// Register the backtest CLI command
+const { registerBacktestCommand } = await import('./cli/commands/backtest.js');
+registerBacktestCommand(program);
+
+// Register the wallet CLI command
+const { registerWalletCommand } = await import('./cli/commands/wallet.js');
+registerWalletCommand(program);
+
 // If no arguments provided, launch interactive TUI
 const args = process.argv.slice(2);
 if (args.length === 0) {
   await loadConfig();
+
+  // Start WebSocket manager if realtime is enabled
+  const { getConfig } = await import('./config/loader.js');
+  try {
+    const config = getConfig();
+    if (config.realtime?.enabled) {
+      const { initWSManager } = await import('./data/sources/ws-manager.js');
+      const wsManager = initWSManager();
+      for (const symbol of config.realtime.symbols) {
+        wsManager.subscribe(symbol);
+      }
+      wsManager.start();
+    }
+  } catch {
+    // Config may not have realtime section — that's fine
+  }
+
   const { startTUI } = await import('./tui/app.js');
   startTUI();
 } else {

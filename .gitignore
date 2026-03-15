@@ -64,5 +64,17 @@ logs/
 *.seed
 *.pid.lock
 
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.pkl
+
+# ML Models (trained artifacts)
+ml-sidecar/models/
+
+# Next.js
+.next/
+
 # Docker
 docker-compose.override.yml

@@ -73,6 +73,23 @@ export const vizzorConfigSchema = z.object({
       webhookUrl: z.string().optional(),
     })
     .default(() => ({ enabled: false })),
+  realtime: z
+    .object({
+      enabled: z.boolean().default(false),
+      provider: z.enum(['binance']).default('binance'),
+      symbols: z.array(z.string()).default([]),
+    })
+    .optional(),
+  trading: z
+    .object({
+      enabled: z.boolean().default(false),
+      maxSlippage: z.number().default(0.5),
+      gasMultiplier: z.number().default(1.2),
+      confirmBeforeExecute: z.boolean().default(true),
+      dryRun: z.boolean().default(true),
+      walletName: z.string().optional(),
+    })
+    .optional(),
   discordToken: z.string().optional(),
   discordGuildId: z.string().optional(),
   telegramToken: z.string().optional(),
