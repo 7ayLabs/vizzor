@@ -65,7 +65,7 @@ vi.mock('@/ai/tool-handler.js', () => ({
 }));
 
 vi.mock('@/ai/context-injector.js', () => ({
-  buildContextBlock: vi.fn(async () => ''),
+  buildContextBlock: vi.fn(async () => ({ contextText: '', tokenData: [], queriedSymbols: [] })),
 }));
 
 vi.mock('@/ai/providers/registry.js', () => ({

@@ -6,13 +6,35 @@ import type { WritableChainAdapter } from '@/chains/types.js';
 // ---------------------------------------------------------------------------
 const mockSwap = vi.fn();
 const mockGetWethAddress = vi.fn().mockReturnValue('0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2');
+const mockGetRouterAddress = vi.fn().mockReturnValue('0xE592427A0AEce92De3Edee1F18E0157C05861564');
 
 // Mock the DexRouter before importing TradeExecutor
 vi.mock('@/core/agent/dex/router.js', () => {
   return {
     DexRouter: vi.fn(function (this: Record<string, unknown>) {
       this.getWethAddress = mockGetWethAddress;
+      this.getRouterAddress = mockGetRouterAddress;
       this.swap = mockSwap;
+    }),
+  };
+});
+
+// Mock TxSimulator — simulation always passes
+vi.mock('@/core/agent/tx-simulator.js', () => {
+  return {
+    TxSimulator: vi.fn(function (this: Record<string, unknown>) {
+      this.simulateSwap = vi.fn().mockResolvedValue({ success: true, estimatedOutput: 1000n });
+    }),
+  };
+});
+
+// Mock ApprovalManager — approvals always pass
+vi.mock('@/core/agent/approval-manager.js', () => {
+  return {
+    ApprovalManager: vi.fn(function (this: Record<string, unknown>) {
+      this.hasApproval = vi.fn().mockReturnValue(true);
+      this.grantApproval = vi.fn();
+      this.revokeApproval = vi.fn();
     }),
   };
 });
@@ -86,7 +108,7 @@ describe('TradeExecutor', () => {
       const result = await executor.executeBuy(
         '0xTokenAddress',
         1000000000000000000n,
-        '0xRecipient',
+        '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045',
       );
 
       expect(result.success).toBe(true);
@@ -108,7 +130,7 @@ describe('TradeExecutor', () => {
       const result = await executor.executeSell(
         '0xTokenAddress',
         500000000000000000n,
-        '0xRecipient',
+        '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045',
       );
 
       expect(result.success).toBe(true);
@@ -132,7 +154,7 @@ describe('TradeExecutor', () => {
       const result = await executor.executeBuy(
         '0xTokenAddress',
         1000000000000000000n,
-        '0xRecipient',
+        '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045',
       );
 
       expect(result.dryRun).toBe(false);
@@ -147,7 +169,7 @@ describe('TradeExecutor', () => {
         tokenOut: '0xTokenAddress',
         amountIn: 1000000000000000000n,
         slippageBps: 50,
-        recipient: '0xRecipient',
+        recipient: '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045',
       });
     });
 
@@ -172,7 +194,7 @@ describe('TradeExecutor', () => {
       const result = await executor.executeSell(
         '0xTokenAddress',
         500000000000000000n,
-        '0xRecipient',
+        '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045',
       );
 
       expect(result.dryRun).toBe(false);
@@ -184,7 +206,7 @@ describe('TradeExecutor', () => {
         tokenOut: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
         amountIn: 500000000000000000n,
         slippageBps: 50,
-        recipient: '0xRecipient',
+        recipient: '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045',
       });
     });
 
@@ -197,7 +219,7 @@ describe('TradeExecutor', () => {
       const result = await executor.executeBuy(
         '0xTokenAddress',
         1000000000000000000n,
-        '0xRecipient',
+        '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045',
       );
 
       expect(result.success).toBe(false);
@@ -213,7 +235,11 @@ describe('TradeExecutor', () => {
       const adapter = freshAdapter();
       const executor = new TradeExecutor(adapter);
 
-      const result = await executor.executeBuy('0xTokenAddress', 1000n, '0xRecipient');
+      const result = await executor.executeBuy(
+        '0xTokenAddress',
+        1000n,
+        '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045',
+      );
 
       expect(result.dryRun).toBe(true);
       expect(result.success).toBe(true);
@@ -234,7 +260,7 @@ describe('TradeExecutor', () => {
       const result = await executor.executeBuy(
         '0xTokenAddress',
         2000000000000000000n,
-        '0xRecipient',
+        '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045',
       );
 
       expect(result.dryRun).toBe(false);

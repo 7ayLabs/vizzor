@@ -75,7 +75,7 @@ describe('API Routes', () => {
     // Add a health endpoint like the real server
     server.get('/health', async () => ({
       status: 'ok',
-      version: '0.11.0',
+      version: '0.12.0',
     }));
 
     await server.ready();

@@ -154,17 +154,19 @@ Then just ask:
 
 ### Multi-Signal Composite
 
-Vizzor builds predictions from 5 weighted signal dimensions:
+Vizzor builds predictions from 5 weighted signal dimensions via the **ChronoVisor engine** (v0.12):
 
 ```
-Technical Analysis ........... 40%    RSI, MACD, Bollinger, EMA, ATR, OBV
-Market Sentiment ............. 20%    Fear & Greed, news sentiment, buy/sell ratio
-Derivatives Positioning ...... 20%    Funding rate, open interest, long/short
-Trend Momentum ............... 15%    24h/7d price action, volume trends
-Macro Cycle ................... 5%    Fear & Greed extremes as contrarian signals
+On-Chain Intelligence ........ 30%    Whale tracking, exchange flow, LP delta
+ML Ensemble .................. 25%    14 trained models (LSTM, GBM, RF, HMM, etc.)
+Prediction Markets ........... 20%    CLOB odds + momentum from prediction platforms
+Social / Narrative ........... 15%    News feeds, NLP sentiment, narrative detection
+Pattern Reverse Engineering .. 10%    Cosine similarity against historical patterns
                               ----
 Composite Score        -100 to +100
 ```
+
+Weights are **learned via Bayesian updating** — the engine tracks accuracy per signal category and adjusts weights over time.
 
 Signals are computed from raw data before the AI sees them. The AI presents and contextualizes the pre-computed analysis -- it doesn't invent numbers.
 
@@ -295,7 +297,7 @@ vizzor bot validate                 # Check bot token configuration
 
 ## AI Tools
 
-Vizzor exposes **17+ tools** to the AI. During conversation, the AI autonomously calls whichever tools it needs to build a complete prediction.
+Vizzor exposes **20+ tools** to the AI. During conversation, the AI autonomously calls whichever tools it needs to build a complete prediction.
 
 | Tool | What It Provides |
 |------|------------------|
@@ -322,6 +324,9 @@ Vizzor exposes **17+ tools** to the AI. During conversation, the AI autonomously
 | `get_ml_regime` | Market regime classification |
 | `get_ml_model_health` | ML sidecar health and model status |
 | `classify_user_intent` | AI-powered query intent detection |
+| `get_chronovisor_prediction` | ChronoVisor ensemble prediction (v0.12) |
+| `scan_trenches` | Real-time memecoin migration scanner (v0.12) |
+| `preview_trade` | Trade preview with safety checks (v0.12) |
 
 ### AI Providers
 
@@ -378,6 +383,9 @@ A Python FastAPI sidecar enhances predictions with trained models:
 | **Rug Detector** | GBM | Scam token identification |
 | **Wallet Classifier** | LSTM | Wallet behavior profiling |
 | **Sentiment NLP** | DistilBERT | News headline sentiment |
+| **Pump Detector** | CUSUM + GBM | Pump/dump anomaly detection (v0.12) |
+| **Narrative Detector** | TF-IDF + RF | Crypto narrative identification (v0.12) |
+| **Divergence Detector** | Statistical | Prediction market vs price divergence (v0.12) |
 
 Models fall back to heuristic scoring when the sidecar is unavailable. Start with Docker:
 
@@ -417,26 +425,50 @@ POST /v1/agents                 # Create agent
 POST /v1/agents/:name/start    # Start agent
 POST /v1/agents/:name/stop     # Stop agent
 GET  /v1/portfolio/:id          # Agent portfolio
+GET  /v1/market/trenches        # Trenches scanner results (v0.12)
+GET  /v1/chronovisor/:symbol    # ChronoVisor prediction (v0.12)
+POST /v1/chat/thread            # Threaded chat reply (v0.12)
+POST /v1/agents/emergency-stop  # Global kill switch (v0.12)
+WS   /ws                        # WebSocket real-time push (v0.12)
 ```
 
 All endpoints require `X-API-Key` header. Rate limited to 300 req/min per key. Keys are hashed with scrypt and stored locally.
 
-### Autonomous Agents v2
+### Autonomous Agents v2 (v0.12)
 
-Portfolio-aware trading agents with risk management:
+Portfolio-aware trading agents with HD wallets and paper/live execution:
 
+- **HD Wallet System** — BIP-44 derivation via `@scure/bip32`, per-agent wallet isolation, memory zeroing
+- **Paper Trading Engine** — realistic simulation with slippage model (top-50/mid-cap/small-cap tiers), DEX fees, gas estimation
+- **Live Execution** — 7-step safety pipeline (validate → prepare → simulate → approve → execute → record → cleanup)
 - **Portfolio Manager** — tracks positions, calculates P&L, manages allocation limits
-- **Risk System** — Kelly criterion position sizing, ATR-based stop losses, drawdown limits
-- **ML-Adaptive Strategy** — combines RSI, MACD, EMA, Bollinger, funding rate with ML regime detection
+- **Risk System** — Kelly criterion position sizing, ATR-based stop losses, drawdown limits, global kill switch
+- **Spending Limits** — per-agent daily/weekly caps with rolling window enforcement
+- **ML-Adaptive Strategy** — combines RSI, MACD, EMA, Bollinger, funding rate with ML regime detection and ChronoVisor signals
 - **Strategy Registry** — pluggable strategy system, easy to add custom strategies
 
-### Security & ZK
+### Trenches Scanner (v0.12)
 
-- **AES-256-GCM encryption** for sensitive data at rest
+Real-time memecoin detection with sub-minute alpha window:
+
+- **Launchpad WebSocket** — Solana blockSubscribe for token migration events
+- **DEX Pair Tracker** — new pair detection and liquidity tracking across chains
+- **Migration Tracker** — bonding curve progress monitor with velocity calculation
+- **Smart Money Tracker** — wallet clustering and creator reputation scoring
+- **Pump Detector** — CUSUM anomaly detection on 1-minute micro-timeframes
+- **Pre-Trade Safety Gate** — mandatory 4-check pipeline (on-chain security, ML rug detection, honeypot simulation, creator reputation)
+
+### Security
+
+- **AES-256-GCM encryption** for sensitive data at rest (scrypt N=2^18 OWASP)
 - **HMAC signatures** for API request integrity
-- **Audit logging** for security-critical operations
-- **ZK-proof chain adapters** for privacy-preserving verification
+- **Persistent audit logging** — SQLite-backed event log with 100-event memory buffer (v0.12)
+- **Prompt injection defense** — Unicode escape, Base64, HTML entity bypass detection (v0.12)
+- **Per-key API rate limiting** — per-API-key rate limits from database (v0.12)
+- **Security headers** — CSP, X-Frame-Options, HSTS, X-Content-Type-Options (v0.12)
+- **Global circuit breaker** — emergency stop across all agents with audit trail (v0.12)
 - **Input sanitization** across all user-facing surfaces
+- **Supply chain security** — pinned crypto dependencies, `pnpm audit` in CI (v0.12)
 
 ### n8n Workflow Automation
 
@@ -473,7 +505,7 @@ v0.10 adds 7 new Python models to the sidecar:
 | **Portfolio Optimizer** | Mean-Variance | Dynamic position sizing |
 | **Intent Classifier** | DistilBERT | User query intent detection |
 
-All 13 models integrated across 14 TypeScript modules with graceful fallback to heuristics. v0.11 adds model training pipeline (`POST /train`, `POST /evaluate`) and wires remaining ML modules.
+All 16 models integrated across 17 TypeScript modules with graceful fallback to heuristics. v0.11 adds model training pipeline (`POST /train`, `POST /evaluate`) and wires remaining ML modules. v0.12 adds pump detection, narrative detection, and prediction market divergence detection.
 
 ---
 
@@ -497,15 +529,19 @@ Autonomous prediction agents that run a continuous **think -> analyze -> decide 
 
 > Agents can run in **alert-only mode** or with **live trade execution** via DEX integration.
 
-### Trade Execution (v0.11)
+### Trade Execution (v0.11, enhanced v0.12)
 
-On-chain trade execution with safety controls:
+On-chain trade execution with 7-step safety pipeline:
 
-- **Wallet Manager** — encrypted private key storage (AES-256-GCM + scrypt) at `~/.vizzor/wallets/`
-- **DEX Router** — Uniswap V3 SwapRouter02 integration for token swaps
-- **Slippage Protection** — configurable max slippage (default 0.5%)
-- **Dry-Run Mode** — simulate trades without executing (default: on)
-- **Gas Estimation** — automatic gas estimation with configurable multiplier
+- **HD Wallet System** — BIP-44 per-agent wallet derivation with memory zeroing (v0.12)
+- **Wallet Manager** — encrypted private key storage (AES-256-GCM + scrypt N=2^18) at `~/.vizzor/wallets/`
+- **DEX Router** — Uniswap V3 SwapRouter02 + Quoter V2 for real `amountOutMinimum` (v0.12)
+- **Paper Trading** — realistic simulation with market-cap-tier slippage model (v0.12)
+- **Slippage Protection** — on-chain quote-based slippage (replaces static default)
+- **Tx Simulator** — `eth_call` simulation before execution (v0.12)
+- **Spending Limits** — per-agent rolling 24h/7d caps (v0.12)
+- **Approval Manager** — ERC-20 approval tracking with exact amounts (v0.12)
+- **Balance Monitor** — periodic low-balance alerts (v0.12)
 
 ```bash
 vizzor wallet create           # Create encrypted wallet
@@ -536,23 +572,27 @@ Live market data via Binance WebSocket streams:
 - In-memory price cache for instant access
 - Agent engine prefers WebSocket data over REST polling
 
-### Web Dashboard (v0.11)
+### Web Dashboard (v0.11, redesigned v0.12)
 
 Next.js 15 web dashboard at `http://localhost:3001`:
 
-- **AI Chat** — full conversational interface with streaming responses, tool result cards, and all 47 CLI tools available via natural language
-- **Dashboard** — market overview with Fear & Greed, ML predictions (Chronovisor), sentiment intelligence, regime detection, trending tokens, news feed, agent summary, and ML model status
+- **AI Chat** — full conversational interface with streaming responses, tool result cards, threaded replies, and inline trade action cards (BUY/SELL with confirmation modal)
+- **Dashboard** — market overview with Fear & Greed, ChronoVisor signal breakdown, sentiment intelligence, regime detection, trending tokens, news feed, agent summary, and per-model ML accuracy metrics
 - **Markets** — market analysis with symbol selector, wallet analyzer, and on-chain intelligence
-- **Agents** — create, start/stop, and monitor autonomous trading agents
-- **Portfolio** — positions, trade history, performance metrics
+- **Agents** — create, start/stop, and monitor autonomous trading agents with paper/live mode
+- **Portfolio** — positions, trade history, performance metrics with total return tracking
 - **Settings** — API and provider configuration
 - **Docs** — interactive documentation for all AI tools and chat commands
 
-**UI features:**
-- Dark/light/system theme with automatic switching
+**UI features (v0.12 glass redesign):**
+- Gray/white glass morphism design system — no colored accents (green/red only for profit/loss)
+- `backdrop-blur-xl` glass card pattern across all components
+- Inter font family (variable weight)
+- Skeleton loaders with shimmer animation
+- WebSocket real-time push (price, agent decisions, trenches alerts, ML predictions)
 - Live crypto ticker (top 100 coins) with batch price fetching
 - Cryptocurrency icons (CDN + letter fallback for newer tokens)
-- Custom Vizzor branding with theme-aware logo
+- Custom Vizzor branding
 - API and ML health indicators
 - Responsive mobile layout with collapsible sidebar
 

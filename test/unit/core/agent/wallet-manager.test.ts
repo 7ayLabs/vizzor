@@ -67,7 +67,7 @@ describe('createWallet', () => {
     const result = createWallet('test-wallet', 'mypassword');
 
     expect(result.name).toBe('test-wallet');
-    expect(result.address).toBe('(derived on load)');
+    expect(result.address).toMatch(/^0x[0-9a-fA-F]{40}$/);
 
     const filePath = join(WALLETS_DIR, 'test-wallet.json');
     expect(existsSync(filePath)).toBe(true);
@@ -117,9 +117,19 @@ describe('importWallet', () => {
   });
 
   it('throws when wallet name already exists', () => {
-    importWallet('existing', '0x1234', 'pass');
+    importWallet(
+      'existing',
+      '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+      'pass',
+    );
 
-    expect(() => importWallet('existing', '0x5678', 'pass')).toThrow('already exists');
+    expect(() =>
+      importWallet(
+        'existing',
+        '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+        'pass',
+      ),
+    ).toThrow('already exists');
   });
 });
 
