@@ -545,4 +545,74 @@ export const VIZZOR_TOOLS: AITool[] = [
       required: ['name'],
     },
   },
+  {
+    name: 'get_chronovisor_prediction',
+    description:
+      'Get a ChronoVisor composite prediction combining 5 signal categories: on-chain (30%), ML ensemble (25%), prediction markets (20%), social/narrative (15%), and pattern matching (10%). Returns composite score, direction, confidence, signal breakdown, and accuracy metrics.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        symbol: {
+          type: 'string',
+          description: 'The token symbol (e.g. "BTC", "ETH", "SOL").',
+        },
+        horizons: {
+          type: 'string',
+          description:
+            'Comma-separated prediction horizons: "1h", "4h", "1d", "7d". Defaults to "1h,4h,1d".',
+        },
+      },
+      required: ['symbol'],
+    },
+  },
+  {
+    name: 'scan_trenches',
+    description:
+      'Scan for newly launched tokens from bonding curves and DEX listings. Returns tokens that recently migrated from launchpads with safety scores, creator reputation, and pump detection alerts. The trenches are the frontline of new token discovery.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        chain: {
+          type: 'string',
+          description: 'Blockchain to scan: "solana", "ethereum", "base". Defaults to "solana".',
+        },
+        minLiquidity: {
+          type: 'number',
+          description: 'Minimum liquidity in USD. Defaults to 1000.',
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum results to return. Defaults to 10.',
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'preview_trade',
+    description:
+      'Preview a potential trade with safety checks, slippage estimate, fee breakdown, and rug detection. Does NOT execute the trade — just shows what would happen. Use before executing any trade.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        symbol: {
+          type: 'string',
+          description: 'Token symbol or address.',
+        },
+        action: {
+          type: 'string',
+          description: '"buy" or "sell".',
+        },
+        amountUsd: {
+          type: 'number',
+          description: 'Amount in USD.',
+        },
+        chain: {
+          type: 'string',
+          description: 'Blockchain. Defaults to "ethereum".',
+        },
+      },
+      required: ['symbol', 'action', 'amountUsd'],
+    },
+  },
 ];

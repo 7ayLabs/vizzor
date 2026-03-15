@@ -93,7 +93,7 @@ export async function analyze(
   if (!p.supportsTools) {
     // Inject real-time data into the prompt for providers without tool use
     const { OLLAMA_SYSTEM_PROMPT } = await import('./prompts/chat.js');
-    const context = await buildContextBlock(userMessage);
+    const { contextText: context } = await buildContextBlock(userMessage);
     const enrichedPrompt = OLLAMA_SYSTEM_PROMPT + (context ? '\n' + context : '');
     return p.analyze(enrichedPrompt, userMessage);
   }

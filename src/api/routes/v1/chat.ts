@@ -123,9 +123,23 @@ export async function registerChatRoutes(server: FastifyInstance): Promise<void>
         if (!provider.supportsTools) {
           // Non-tool provider: inject context and do single pass
           const { OLLAMA_SYSTEM_PROMPT } = await import('../../../ai/prompts/chat.js');
-          const context = await buildContextBlock(userMessage);
+          const {
+            contextText,
+            tokenData: allTokens,
+            queriedSymbols,
+          } = await buildContextBlock(userMessage, { compact: true });
+
+          // Emit structured token data — filter to queried tokens only (no baseline noise)
+          const tokens =
+            queriedSymbols.length > 0
+              ? allTokens.filter((t) => queriedSymbols.includes(t.symbol))
+              : allTokens;
+          if (tokens.length > 0) {
+            write('token_data', { tokens });
+          }
+
           const enrichedPrompt =
-            OLLAMA_SYSTEM_PROMPT + (context ? '\n' + context : '') + contextBlock;
+            OLLAMA_SYSTEM_PROMPT + (contextText ? '\n' + contextText : '') + contextBlock;
 
           const callbacks: StreamCallbacks = {
             onText: (delta) => write('text', { delta }),
@@ -173,5 +187,20 @@ export async function registerChatRoutes(server: FastifyInstance): Promise<void>
 
       reply.raw.end();
     },
+  });
+
+  // POST /v1/chat/thread
+  server.post('/thread', async (request, reply) => {
+    const body = request.body as { parentMessageId: string; message: string; apiKey?: string };
+    if (!body.parentMessageId || !body.message) {
+      return reply.status(400).send({ error: 'parentMessageId and message are required' });
+    }
+    // Thread replies use the same chat flow but include parent context
+    // For now, return a placeholder that integrates with existing chat SSE
+    return {
+      threadId: body.parentMessageId,
+      message: body.message,
+      status: 'queued',
+    };
   });
 }

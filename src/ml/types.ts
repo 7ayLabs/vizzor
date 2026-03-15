@@ -332,3 +332,57 @@ export interface EvalResult {
   confusion_matrix: number[][];
   test_samples: number;
 }
+
+// ---------------------------------------------------------------------------
+// v0.12.0 — Pump detection
+// ---------------------------------------------------------------------------
+
+export interface PumpDetectionMLResult {
+  detected: boolean;
+  type: 'pump' | 'dump' | 'volume_spike' | 'none';
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  cusum_value: number;
+  threshold: number;
+  price_change_pct: number;
+  volume_spike: number;
+  confidence: number;
+}
+
+// ---------------------------------------------------------------------------
+// v0.12.0 — Narrative detection
+// ---------------------------------------------------------------------------
+
+export interface NarrativeMLResult {
+  narrative: string;
+  confidence: number;
+  related_tokens: string[];
+  keywords: string[];
+  trend_direction: 'emerging' | 'peaking' | 'fading';
+  mention_count: number;
+}
+
+// ---------------------------------------------------------------------------
+// v0.12.0 — Divergence detection
+// ---------------------------------------------------------------------------
+
+export interface DivergenceMLResult {
+  divergence_score: number;
+  type: 'bullish_divergence' | 'bearish_divergence' | 'no_divergence';
+  prediction_market_signal: number;
+  price_action_signal: number;
+  confidence: number;
+  interpretation: string;
+}
+
+// ---------------------------------------------------------------------------
+// v0.12.0 — Accuracy tracking
+// ---------------------------------------------------------------------------
+
+export interface ModelAccuracyStats {
+  model: string;
+  total_predictions: number;
+  correct_predictions: number;
+  accuracy: number;
+  by_direction: Record<string, { total: number; correct: number; accuracy: number }>;
+  period_days: number;
+}

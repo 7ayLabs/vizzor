@@ -9,7 +9,8 @@ import type { AIProvider, AITool, StreamCallbacks, ToolHandler } from './types.j
 // ---------------------------------------------------------------------------
 // Assistant prefill — forces the model to start answering instead of refusing.
 // Local models have strong safety filters that trigger on words like "predict".
-// By pre-filling the assistant turn, we bypass the refusal mechanism.
+// By pre-filling the assistant turn with confident, data-driven text, we bypass
+// the refusal mechanism and force the model to continue in prediction mode.
 // ---------------------------------------------------------------------------
 
 const PREDICTION_TRIGGERS = [
@@ -23,6 +24,18 @@ const PREDICTION_TRIGGERS = [
   'should i buy',
   'should i sell',
   'going to pump',
+  'predic', // Spanish: predicción, predecir
+  'pronóstico',
+  'precio objetivo',
+  'va a subir',
+  'va a bajar',
+  'debería comprar',
+  'debería vender',
+  'qué precio',
+  'cuánto va',
+  'precio mañana',
+  'apertura',
+  'opening',
 ];
 
 const ANALYSIS_TRIGGERS = [
@@ -39,8 +52,18 @@ const ANALYSIS_TRIGGERS = [
   'tokenomics',
 ];
 
-const NEWS_TRIGGERS = ['news', 'headlines', 'latest', 'happening', 'update'];
-const TRENDS_TRIGGERS = ['trending', 'hot', 'popular', 'market', 'overview', 'today', 'right now'];
+const NEWS_TRIGGERS = ['news', 'headlines', 'latest', 'happening', 'update', 'noticias'];
+const TRENDS_TRIGGERS = [
+  'trending',
+  'hot',
+  'popular',
+  'market',
+  'overview',
+  'today',
+  'right now',
+  'mercado',
+  'tendencia',
+];
 
 function buildAssistantPrefill(userMessage: string): string {
   const lower = userMessage.toLowerCase();
@@ -49,11 +72,23 @@ function buildAssistantPrefill(userMessage: string): string {
   const isNews = NEWS_TRIGGERS.some((t) => lower.includes(t));
   const isTrends = TRENDS_TRIGGERS.some((t) => lower.includes(t));
 
+  // Detect Spanish to match response language
+  const isSpanish =
+    /\b(precio|mercado|mañana|apertura|comprar|vender|predic|cuánto|debería|qué|cómo|hoy|ahora)\b/i.test(
+      lower,
+    );
+
   if (isPrediction) {
-    return 'Based on the real-time market data, here is my price analysis and projection:\n\n';
+    if (isSpanish) {
+      return 'Basándome en los datos de mercado en tiempo real, aquí está mi predicción con precios exactos:\n\n';
+    }
+    return 'Based on real-time market data, here is my prediction with exact price targets:\n\n';
   }
   if (isAnalysis) {
-    return 'Here is my analysis based on the real-time data:\n\n';
+    if (isSpanish) {
+      return 'Aquí está mi análisis basado en datos en tiempo real:\n\n';
+    }
+    return 'Here is my analysis based on real-time data:\n\n';
   }
   if (isNews) {
     return 'Here is the latest from the crypto markets:\n\n';
@@ -65,23 +100,29 @@ function buildAssistantPrefill(userMessage: string): string {
 }
 
 /**
- * Reframe the user message to avoid triggering safety filters.
- * "predict price" → "provide data-driven price scenario analysis"
- * This is needed because local models refuse on "predict" as a keyword.
+ * Reframe the user message to avoid triggering safety filters while
+ * KEEPING the prediction intent strong. We want the model to predict,
+ * not just "analyze". We replace words that trigger refusal but use
+ * equally strong synonyms that demand concrete numbers.
  */
 function reframeForSafety(userMessage: string): string {
   let msg = userMessage;
-  // Reframe prediction language to analysis language
+  // Replace words that trigger refusal, but keep the intent demanding exact prices
   msg = msg.replace(
     /\bpredict(?:ion)?\s+(?:the\s+)?price/gi,
-    'provide a data-driven price scenario analysis for',
+    'give me the exact price projection with dollar values for',
   );
-  msg = msg.replace(/\bpredict\b/gi, 'analyze and project');
-  msg = msg.replace(/\bforecast\b/gi, 'project scenarios for');
+  msg = msg.replace(/\bpredict\b/gi, 'give your exact price projection for');
+  msg = msg.replace(/\bforecast\b/gi, 'compute exact price scenarios for');
   msg = msg.replace(
     /\bwill it (?:go|pump|dump|moon|crash)\b/gi,
-    'what are the likely scenarios based on data',
+    'what are the exact price targets based on the data',
   );
+  // Spanish triggers
+  msg = msg.replace(/\bpredice?\b/gi, 'proyecta con precios exactos');
+  msg = msg.replace(/\bpredecir\b/gi, 'proyectar con precios exactos');
+  msg = msg.replace(/\bpredicción\b/gi, 'proyección con precios exactos');
+  msg = msg.replace(/\bpronóstico\b/gi, 'proyección con valores exactos');
   return msg;
 }
 

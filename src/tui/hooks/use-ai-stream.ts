@@ -73,7 +73,7 @@ export function useAIStream(): UseAIStreamResult {
     // For providers without tool support, inject real-time data into prompt
     const startStream = async (): Promise<void> => {
       if (!provider.supportsTools) {
-        const context = await buildContextBlock(message);
+        const { contextText: context } = await buildContextBlock(message);
         const systemPrompt = OLLAMA_SYSTEM_PROMPT + (context ? '\n' + context : '');
         await provider.analyzeStream(systemPrompt, message, callbacks);
       } else {

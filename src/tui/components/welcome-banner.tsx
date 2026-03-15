@@ -12,7 +12,7 @@ export function WelcomeBanner(): React.JSX.Element {
           vizzor
         </Text>
         <Text bold color="cyan">
-          {' v0.11.0'}
+          {' v0.12.0'}
         </Text>
         <Text dimColor> — AI-powered crypto chronovisor</Text>
       </Box>

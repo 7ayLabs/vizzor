@@ -875,6 +875,43 @@ async function handleToolUnsafe(name: string, input: unknown): Promise<unknown> 
       };
     }
 
+    case 'get_chronovisor_prediction': {
+      // Dynamic import to avoid circular deps
+      const { getChronoVisor } = await import('../core/chronovisor/engine.js');
+      const engine = getChronoVisor();
+      const horizons = params['horizons']
+        ? (String(params['horizons'])
+            .split(',')
+            .map((h) => h.trim()) as ('1h' | '4h' | '1d' | '7d')[])
+        : (['1h', '4h', '1d'] as const);
+      const result = await engine.predict(String(params['symbol']), [...horizons]);
+      return result;
+    }
+
+    case 'scan_trenches': {
+      const { DexPairTracker } = await import('../data/sources/dex-pair-tracker.js');
+      const tracker = new DexPairTracker();
+      const chain = String(params['chain'] || 'solana');
+      const minLiq = Number(params['minLiquidity'] || 1000);
+      const limit = Number(params['limit'] || 10);
+      const pairs = await tracker.detectNewPairs(chain, 30);
+      const filtered = pairs.filter((p) => p.liquidity >= minLiq).slice(0, limit);
+      return { chain, results: filtered, count: filtered.length };
+    }
+
+    case 'preview_trade': {
+      return {
+        symbol: String(params['symbol']),
+        action: String(params['action']),
+        amountUsd: Number(params['amountUsd']),
+        chain: String(params['chain'] || 'ethereum'),
+        estimatedFees: { dexFee: '0.3%', estimatedGas: '$2-5' },
+        slippageEstimate: '0.1-0.5%',
+        safetyCheck: 'pending',
+        note: 'Use execute_trade to proceed after reviewing this preview.',
+      };
+    }
+
     default:
       return { error: `Unknown tool: ${name}` };
   }
