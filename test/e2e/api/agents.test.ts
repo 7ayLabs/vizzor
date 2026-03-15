@@ -125,7 +125,6 @@ vi.mock('@/api/middleware/error-handler.js', () => ({
 // Source imports
 // ---------------------------------------------------------------------------
 
-import rateLimit from '@fastify/rate-limit';
 import { agentRoutes } from '@/api/routes/v1/agents.js';
 
 // ---------------------------------------------------------------------------
@@ -137,7 +136,6 @@ describe('E2E: Agents API routes', () => {
 
   beforeAll(async () => {
     server = Fastify({ logger: false });
-    await server.register(rateLimit, { max: 300, timeWindow: '1 minute' });
     await server.register(agentRoutes);
     await server.ready();
   });
