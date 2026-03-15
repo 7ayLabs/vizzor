@@ -11,7 +11,7 @@ import {
   type Address,
   type Abi,
 } from 'viem';
-import { mainnet, polygon, arbitrum, optimism, base } from 'viem/chains';
+import { mainnet, polygon, arbitrum, optimism, base, bsc, avalanche } from 'viem/chains';
 import { assertValidAddress } from '../../utils/validate.js';
 
 import type {
@@ -40,6 +40,8 @@ const CHAIN_MAP: Record<string, Chain> = {
   arbitrum: arbitrum,
   optimism: optimism,
   base: base,
+  bsc: bsc,
+  avalanche: avalanche,
 };
 
 // ---------------------------------------------------------------------------
