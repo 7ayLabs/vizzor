@@ -1,8 +1,7 @@
 'use client';
 
 import useSWR, { type KeyedMutator } from 'swr';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
+import { API_BASE } from '@/lib/constants';
 
 const fetcher = async (path: string) => {
   const res = await fetch(`${API_BASE}${path}`);

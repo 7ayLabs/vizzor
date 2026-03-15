@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { CryptoIcon } from '@/components/ui/crypto-icon';
 import { SymbolSelector } from '@/components/markets/symbol-selector';
 import { PredictionPanel } from '@/components/markets/prediction-panel';
 import { DerivativesPanel } from '@/components/markets/derivatives-panel';
@@ -14,20 +15,22 @@ export default function MarketsPage() {
   const [timeframe, setTimeframe] = useState('4h');
 
   return (
-    <div>
-      <div className="flex items-center gap-2 mb-5">
-        <h2 className="text-lg font-bold">Markets</h2>
+    <div className="p-3 sm:p-5">
+      <div className="flex items-center gap-2 mb-4 sm:mb-5">
+        <CryptoIcon symbol={symbol} size={20} />
+        <h2 className="text-base sm:text-lg font-bold">Markets</h2>
+        <span className="text-xs text-[var(--muted)] font-mono">{symbol}</span>
       </div>
 
       {/* Controls */}
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-4">
         <SymbolSelector value={symbol} onChange={setSymbol} />
         <div className="flex rounded overflow-hidden border border-[var(--border)]">
           {TIMEFRAMES.map((tf) => (
             <button
               key={tf}
               onClick={() => setTimeframe(tf)}
-              className={`px-3 py-1.5 text-xs ${
+              className={`px-2.5 sm:px-3 py-1.5 text-[11px] sm:text-xs touch-target ${
                 timeframe === tf
                   ? 'bg-[var(--primary)] text-white'
                   : 'bg-[var(--card)] text-[var(--muted)] hover:text-[var(--foreground)]'
@@ -41,10 +44,10 @@ export default function MarketsPage() {
 
       {/* Chart placeholder — candles endpoint not available */}
       <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-2 mb-4">
-        <div className="flex flex-col items-center justify-center h-[300px] text-xs text-[var(--muted)]">
+        <div className="flex flex-col items-center justify-center h-[200px] sm:h-[300px] text-xs text-[var(--muted)]">
           <svg
-            width="32"
-            height="32"
+            width="24"
+            height="24"
             viewBox="0 0 16 16"
             fill="none"
             stroke="currentColor"

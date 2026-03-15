@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useApi } from '@/hooks/use-api';
 import { formatUsd, formatPct } from '@/lib/utils';
+import { CryptoIcon } from '@/components/ui/crypto-icon';
 
 interface Position {
   symbol: string;
@@ -68,7 +69,12 @@ export function PositionsTable() {
                 key={p.symbol}
                 className={`border-t border-[var(--border)] hover:bg-[var(--card-hover)] ${i % 2 === 0 ? '' : 'bg-[var(--background-secondary)]'}`}
               >
-                <td className="py-2 font-mono font-medium">{p.symbol}</td>
+                <td className="py-2 font-mono font-medium">
+                  <span className="inline-flex items-center gap-1.5">
+                    <CryptoIcon symbol={p.symbol} size={14} />
+                    {p.symbol}
+                  </span>
+                </td>
                 <td className="py-2">
                   <span
                     className={p.side === 'long' ? 'text-[var(--success)]' : 'text-[var(--danger)]'}

@@ -29,11 +29,14 @@ export function NewsFeed() {
   const items = data?.news ?? [];
 
   return (
-    <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-4">
-      <h3 className="text-xs font-medium text-[var(--muted)] mb-3 uppercase tracking-wider">
-        Latest News
-      </h3>
-      <div className="max-h-80 overflow-y-auto space-y-2">
+    <div className="dash-card bg-[var(--card)] border border-[var(--border)] rounded-lg p-3 sm:p-4 animate-fade-up stagger-6">
+      <div className="flex items-center gap-2 mb-3">
+        <i className="fa-solid fa-newspaper text-xs text-[var(--accent-blue)]" />
+        <h3 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
+          Latest News
+        </h3>
+      </div>
+      <div className="max-h-60 sm:max-h-80 overflow-y-auto space-y-2">
         {error ? (
           <p className="text-xs text-[var(--muted)] text-center py-4">News feed unavailable</p>
         ) : items.length > 0 ? (

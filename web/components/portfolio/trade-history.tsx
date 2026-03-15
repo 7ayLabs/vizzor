@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useApi } from '@/hooks/use-api';
 import { formatUsd, formatPct } from '@/lib/utils';
+import { CryptoIcon } from '@/components/ui/crypto-icon';
 
 interface Trade {
   symbol: string;
@@ -61,7 +62,12 @@ export function TradeHistory() {
                 key={i}
                 className={`border-t border-[var(--border)] hover:bg-[var(--card-hover)] ${i % 2 === 0 ? '' : 'bg-[var(--background-secondary)]'}`}
               >
-                <td className="py-2 font-mono font-medium">{t.symbol}</td>
+                <td className="py-2 font-mono font-medium">
+                  <span className="inline-flex items-center gap-1.5">
+                    <CryptoIcon symbol={t.symbol} size={14} />
+                    {t.symbol}
+                  </span>
+                </td>
                 <td className="py-2">
                   <span
                     className={t.side === 'long' ? 'text-[var(--success)]' : 'text-[var(--danger)]'}

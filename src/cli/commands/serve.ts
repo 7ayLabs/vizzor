@@ -11,6 +11,18 @@ export async function handleServe(options: {
 }): Promise<void> {
   console.log(chalk.bold('Starting Vizzor REST API...'));
 
+  // Initialise AI layer (same as TUI) so /v1/chat can use the provider
+  const { loadConfig } = await import('../../config/loader.js');
+  const { setConfig, setToolHandler } = await import('../../ai/client.js');
+  const { handleTool } = await import('../../ai/tool-handler.js');
+
+  const cfg = loadConfig();
+  setConfig(cfg);
+  setToolHandler(handleTool);
+
+  const providerName = cfg.ai?.provider ?? 'ollama';
+  console.log(chalk.dim(`AI provider: ${providerName}`));
+
   const { startApiServer } = await import('../../api/server.js');
   await startApiServer({
     port: options.port,

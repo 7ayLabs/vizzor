@@ -48,7 +48,7 @@ export function PredictionPanel({ symbol }: { symbol: string }) {
             >
               {dir}
             </span>
-            <span className="text-xs text-[var(--muted)]">
+            <span className="text-xs text-[var(--muted)] inline-flex items-center gap-1">
               {symbol} &middot; {data.timeframe ?? '7d'}
             </span>
           </div>

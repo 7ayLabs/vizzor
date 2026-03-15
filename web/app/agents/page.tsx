@@ -12,10 +12,10 @@ export default function AgentsPage() {
   const running = agents.filter((a) => a.status === 'running').length;
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-5">
+    <div className="p-3 sm:p-5">
+      <div className="flex items-center justify-between mb-4 sm:mb-5">
         <div className="flex items-center gap-2">
-          <h2 className="text-lg font-bold">Trading Agents</h2>
+          <h2 className="text-base sm:text-lg font-bold">Trading Agents</h2>
           {running > 0 && (
             <span className="text-xs font-mono text-[var(--success)]">{running} running</span>
           )}

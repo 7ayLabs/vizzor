@@ -1,3 +1,20 @@
+// Chat types
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  toolCalls?: ToolCallResult[];
+  timestamp: number;
+  isStreaming?: boolean;
+}
+
+export interface ToolCallResult {
+  tool: string;
+  input: Record<string, unknown>;
+  result: unknown;
+  status: 'pending' | 'done' | 'error';
+}
+
 export interface Agent {
   id?: string;
   name: string;

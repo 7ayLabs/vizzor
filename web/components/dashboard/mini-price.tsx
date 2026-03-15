@@ -2,6 +2,7 @@
 
 import { useApi } from '@/hooks/use-api';
 import { formatUsd, formatPct } from '@/lib/utils';
+import { CryptoIcon } from '@/components/ui/crypto-icon';
 import type { MarketPrice } from '@/lib/types';
 
 export function MiniPrice({ symbol }: { symbol: string }) {
@@ -11,7 +12,10 @@ export function MiniPrice({ symbol }: { symbol: string }) {
 
   return (
     <div className="flex items-center justify-between text-xs py-0.5">
-      <span className="text-[var(--muted)]">{symbol}</span>
+      <span className="text-[var(--muted)] flex items-center gap-1">
+        <CryptoIcon symbol={symbol} size={12} />
+        {symbol}
+      </span>
       <div className="flex items-center gap-1.5">
         <span className="font-mono">{data ? formatUsd(data.price) : '---'}</span>
         <span className={`font-mono ${isUp ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>

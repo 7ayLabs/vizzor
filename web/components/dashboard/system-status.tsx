@@ -20,7 +20,7 @@ export function SystemStatus() {
       </div>
       <div className="flex items-center gap-1.5">
         <span
-          className={`inline-block w-1.5 h-1.5 rounded-full ${mlOk ? 'bg-[var(--success)] pulse-dot' : 'bg-gray-600'}`}
+          className={`inline-block w-1.5 h-1.5 rounded-full ${mlOk ? 'bg-[var(--success)] pulse-dot' : 'bg-[var(--muted)]'}`}
         />
         <span>ML</span>
       </div>

@@ -9,9 +9,9 @@ export default function PortfolioPage() {
   const [activeTab, setActiveTab] = useState<'positions' | 'trades'>('positions');
 
   return (
-    <div>
-      <div className="flex items-center gap-2 mb-5">
-        <h2 className="text-lg font-bold">Portfolio</h2>
+    <div className="p-3 sm:p-5">
+      <div className="flex items-center gap-2 mb-4 sm:mb-5">
+        <h2 className="text-base sm:text-lg font-bold">Portfolio</h2>
       </div>
 
       <div className="space-y-4">
@@ -21,7 +21,7 @@ export default function PortfolioPage() {
         <div className="flex gap-0 border-b border-[var(--border)]">
           <button
             onClick={() => setActiveTab('positions')}
-            className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
+            className={`px-3 sm:px-4 py-2.5 sm:py-2 text-xs font-medium border-b-2 transition-colors touch-target ${
               activeTab === 'positions'
                 ? 'border-[var(--primary)] text-[var(--primary)]'
                 : 'border-transparent text-[var(--muted)] hover:text-[var(--foreground)]'
@@ -31,7 +31,7 @@ export default function PortfolioPage() {
           </button>
           <button
             onClick={() => setActiveTab('trades')}
-            className={`px-4 py-2 text-xs font-medium border-b-2 transition-colors ${
+            className={`px-3 sm:px-4 py-2.5 sm:py-2 text-xs font-medium border-b-2 transition-colors touch-target ${
               activeTab === 'trades'
                 ? 'border-[var(--primary)] text-[var(--primary)]'
                 : 'border-transparent text-[var(--muted)] hover:text-[var(--foreground)]'

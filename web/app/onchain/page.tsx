@@ -6,9 +6,9 @@ import { WalletAnalyzer } from '@/components/onchain/wallet-analyzer';
 
 export default function OnChainPage() {
   return (
-    <div>
-      <div className="flex items-center gap-2 mb-5">
-        <h2 className="text-lg font-bold">On-Chain Intelligence</h2>
+    <div className="p-3 sm:p-5">
+      <div className="flex items-center gap-2 mb-4 sm:mb-5">
+        <h2 className="text-base sm:text-lg font-bold">On-Chain Intelligence</h2>
       </div>
 
       <div className="space-y-4">

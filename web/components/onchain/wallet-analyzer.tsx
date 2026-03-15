@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { apiFetch } from '@/lib/api';
 import { riskLevelColor } from '@/lib/utils';
+import { CryptoIcon } from '@/components/ui/crypto-icon';
 import type { WalletAnalysis } from '@/lib/types';
 
 const CHAINS = [
@@ -150,7 +151,10 @@ export function WalletAnalyzer() {
               <div className="space-y-0.5">
                 {result.tokenBalances.slice(0, 10).map((tb) => (
                   <div key={tb.address} className="flex justify-between text-xs">
-                    <span className="font-medium">{tb.symbol}</span>
+                    <span className="font-medium inline-flex items-center gap-1">
+                      <CryptoIcon symbol={tb.symbol} size={12} />
+                      {tb.symbol}
+                    </span>
                     <span className="font-mono text-[var(--muted)]">
                       {formatBalance(tb.balance)}
                     </span>

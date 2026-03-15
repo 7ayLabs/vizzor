@@ -14,6 +14,7 @@ import { registerSecurityRoutes } from './routes/v1/security.js';
 import { backtestRoutes } from './routes/v1/backtest.js';
 import { agentRoutes } from './routes/v1/agents.js';
 import { portfolioRoutes } from './routes/v1/portfolio.js';
+import { registerChatRoutes } from './routes/v1/chat.js';
 import { authMiddleware } from './auth/middleware.js';
 import { errorHandler } from './middleware/error-handler.js';
 
@@ -91,6 +92,7 @@ export async function startApiServer(options: {
   await server.register(registerMarketRoutes, { prefix: '/v1/market' });
   await server.register(registerAnalysisRoutes, { prefix: '/v1/analysis' });
   await server.register(registerSecurityRoutes, { prefix: '/v1/security' });
+  await server.register(registerChatRoutes, { prefix: '/v1' });
   await server.register(backtestRoutes);
   await server.register(agentRoutes);
   await server.register(portfolioRoutes);

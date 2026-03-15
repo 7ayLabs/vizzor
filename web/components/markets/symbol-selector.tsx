@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { apiFetch } from '@/lib/api';
+import { CryptoIcon } from '@/components/ui/crypto-icon';
 
 interface SearchResult {
   symbol: string;
@@ -82,9 +83,10 @@ export function SymbolSelector({
               }}
               className="w-full text-left px-3 py-2 text-xs hover:bg-[var(--card-hover)] flex justify-between items-center"
             >
-              <span>
+              <span className="flex items-center gap-1.5">
+                <CryptoIcon symbol={r.symbol} size={14} />
                 <span className="font-medium">{r.symbol}</span>
-                <span className="text-[var(--muted)] ml-2">{r.name}</span>
+                <span className="text-[var(--muted)]">{r.name}</span>
               </span>
               <span className="text-[10px] text-[var(--muted)]">{r.chain}</span>
             </button>

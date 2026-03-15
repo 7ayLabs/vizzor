@@ -2,6 +2,7 @@
 
 import { useApi } from '@/hooks/use-api';
 import { formatUsd, formatPct, formatCompact } from '@/lib/utils';
+import { CryptoIcon } from '@/components/ui/crypto-icon';
 import type { TrendingToken } from '@/lib/types';
 
 const CHAIN_COLORS: Record<string, { bg: string; text: string }> = {
@@ -19,11 +20,44 @@ function ChainBadge({ chain }: { chain: string }) {
   };
   return (
     <span
-      className="text-[10px] px-1.5 py-0.5 rounded font-medium"
+      className="inline-flex items-center gap-0.5 text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0.5 rounded font-medium"
       style={{ background: colors.bg, color: colors.text }}
     >
+      <CryptoIcon symbol={chain} size={10} />
       {chain}
     </span>
+  );
+}
+
+/** Mobile card view for small screens */
+function TokenCard({ token, rank }: { token: TrendingToken; rank: number }) {
+  const price = token.priceUsd != null ? parseFloat(token.priceUsd) : null;
+  const change = token.priceChange24h;
+
+  return (
+    <div className="flex items-center gap-2.5 py-2.5 border-b border-[var(--border)] last:border-0">
+      <span className="text-[10px] text-[var(--muted)] w-4 shrink-0 text-center">{rank}</span>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <CryptoIcon symbol={token.symbol} size={14} />
+          <span className="text-xs font-medium truncate">{token.symbol}</span>
+          <ChainBadge chain={token.chain} />
+        </div>
+        <div className="flex items-center gap-2 mt-0.5">
+          <span className="text-[10px] font-mono">{price != null ? formatUsd(price) : '---'}</span>
+          {token.volume24h != null && (
+            <span className="text-[10px] font-mono text-[var(--muted)]">
+              Vol ${formatCompact(token.volume24h)}
+            </span>
+          )}
+        </div>
+      </div>
+      <span
+        className={`text-[11px] font-mono shrink-0 ${change != null && change >= 0 ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}
+      >
+        {change != null ? formatPct(change) : '---'}
+      </span>
+    </div>
   );
 }
 
@@ -32,11 +66,25 @@ export function TrendingTokens() {
   const tokens = data?.trending?.slice(0, 10) ?? [];
 
   return (
-    <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-4">
-      <h3 className="text-xs font-medium text-[var(--muted)] mb-3 uppercase tracking-wider">
-        Trending
-      </h3>
-      <div className="overflow-x-auto">
+    <div className="dash-card bg-[var(--card)] border border-[var(--border)] rounded-lg p-3 sm:p-4 animate-fade-up stagger-5">
+      <div className="flex items-center gap-2 mb-2 sm:mb-3">
+        <i className="fa-solid fa-fire text-xs text-[var(--accent-orange)]" />
+        <h3 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
+          Trending
+        </h3>
+      </div>
+
+      {/* Mobile: card layout */}
+      <div className="sm:hidden">
+        {tokens.length > 0 ? (
+          tokens.map((t, i) => <TokenCard key={`${t.symbol}-${i}`} token={t} rank={i + 1} />)
+        ) : (
+          <p className="text-xs text-[var(--muted)] text-center py-4">Loading trending tokens...</p>
+        )}
+      </div>
+
+      {/* Desktop: table layout */}
+      <div className="hidden sm:block overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
             <tr className="text-[var(--muted)] text-left">
@@ -60,7 +108,12 @@ export function TrendingTokens() {
                     className="border-t border-[var(--border)] hover:bg-[var(--card-hover)]"
                   >
                     <td className="py-1.5 pr-2 text-[var(--muted)]">{i + 1}</td>
-                    <td className="py-1.5 pr-3 font-medium">{t.symbol}</td>
+                    <td className="py-1.5 pr-3 font-medium">
+                      <span className="inline-flex items-center gap-1.5">
+                        <CryptoIcon symbol={t.symbol} size={14} />
+                        {t.symbol}
+                      </span>
+                    </td>
                     <td className="py-1.5 pr-3">
                       <ChainBadge chain={t.chain} />
                     </td>
