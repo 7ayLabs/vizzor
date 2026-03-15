@@ -13,9 +13,11 @@ export const mlAdaptiveStrategy: AgentStrategy = {
     'when available, falls back to rule-based when < 100 training samples.',
 
   evaluate(signals: AgentSignals): AgentDecision {
-    // Synchronous evaluation — uses cached ML predictions if available
-    // The async ML call happens in the engine before this is called
     return evaluateWithRules(signals);
+  },
+
+  async evaluateAsync(signals: AgentSignals, symbol: string): Promise<AgentDecision> {
+    return evaluateWithML(symbol, signals);
   },
 };
 

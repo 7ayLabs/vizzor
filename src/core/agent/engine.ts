@@ -82,7 +82,9 @@ export class AgentEngine {
     for (const symbol of this.state.config.pairs) {
       try {
         const signals = await this.gatherSignals(symbol);
-        const decision = this.strategy.evaluate(signals);
+        const decision = this.strategy.evaluateAsync
+          ? await this.strategy.evaluateAsync(signals, symbol)
+          : this.strategy.evaluate(signals);
 
         const result: AgentCycleResult = {
           agentId: this.state.config.id,

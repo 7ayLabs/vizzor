@@ -87,6 +87,12 @@ export function createAgent(
   // Validate strategy
   getStrategy(strategy);
 
+  // Check for duplicate name
+  const existing = getAgentByName(name);
+  if (existing) {
+    throw new Error(`Agent "${name}" already exists. Delete it first or choose a different name.`);
+  }
+
   const id = randomUUID();
   const now = Date.now();
 
@@ -190,8 +196,8 @@ export function deleteAgent(id: string): boolean {
     engines.delete(id);
   }
 
-  const result = getDb().prepare('DELETE FROM agents WHERE id = ?').run(id);
   getDb().prepare('DELETE FROM agent_decisions WHERE agent_id = ?').run(id);
+  const result = getDb().prepare('DELETE FROM agents WHERE id = ?').run(id);
 
   return result.changes > 0;
 }
@@ -222,7 +228,11 @@ export function startAgent(id: string): AgentState {
 
 export function stopAgent(id: string): AgentState {
   const engine = engines.get(id);
-  if (!engine) throw new Error(`Agent not running: ${id}`);
+  if (!engine) {
+    const config = getAgentById(id);
+    if (!config) throw new Error(`Agent not found: ${id}`);
+    return { config, status: 'idle', lastCycle: null, cycleCount: 0, error: null };
+  }
 
   engine.stop();
   return engine.getState();
