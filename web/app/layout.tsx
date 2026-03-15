@@ -1,6 +1,9 @@
 import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
 import './globals.css';
 import { LayoutShell } from '@/components/layout/layout-shell';
+
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export const metadata: Metadata = {
   title: 'Vizzor Mission Control',
@@ -18,13 +21,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           crossOrigin="anonymous"
           referrerPolicy="no-referrer"
         />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('vizzor-theme');if(t==='light'||t==='system'){document.documentElement.setAttribute('data-theme',t)}}catch(e){}})()`,
-          }}
-        />
       </head>
-      <body className="flex flex-col min-h-screen" suppressHydrationWarning>
+      <body
+        className={`${inter.variable} font-sans flex flex-col min-h-screen`}
+        suppressHydrationWarning
+      >
         <LayoutShell>{children}</LayoutShell>
       </body>
     </html>

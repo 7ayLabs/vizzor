@@ -12,12 +12,12 @@ export function MiniPrice({ symbol }: { symbol: string }) {
 
   return (
     <div className="flex items-center justify-between text-xs py-0.5">
-      <span className="text-[var(--muted)] flex items-center gap-1">
+      <span className="text-[var(--text-muted)] flex items-center gap-1">
         <CryptoIcon symbol={symbol} size={12} />
         {symbol}
       </span>
       <div className="flex items-center gap-1.5">
-        <span className="font-mono">{data ? formatUsd(data.price) : '---'}</span>
+        <span className="font-mono text-white">{data ? formatUsd(data.price) : '---'}</span>
         <span className={`font-mono ${isUp ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>
           {data ? formatPct(change) : ''}
         </span>

@@ -24,16 +24,16 @@ export function TradeHistory() {
   const filtered = filter === 'all' ? trades : trades.filter((t) => t.symbol === filter);
 
   return (
-    <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-4">
+    <div className="bg-white/[0.04] backdrop-blur-xl border border-white/[0.08] rounded-xl p-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
+        <h3 className="text-xs font-medium text-[#6b6b6b] uppercase tracking-wider">
           Trade History
         </h3>
         {symbols.length > 1 && (
           <select
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            className="bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-[10px]"
+            className="bg-white/[0.06] border border-white/[0.08] rounded-lg px-2 py-1 text-[10px] text-white"
           >
             <option value="all">All</option>
             {symbols.map((s) => (
@@ -47,7 +47,7 @@ export function TradeHistory() {
       {filtered.length > 0 ? (
         <table className="w-full text-xs">
           <thead>
-            <tr className="text-[var(--muted)] text-left">
+            <tr className="text-[#6b6b6b] text-left">
               <th className="pb-2">Symbol</th>
               <th className="pb-2">Side</th>
               <th className="pb-2">Entry</th>
@@ -60,9 +60,9 @@ export function TradeHistory() {
             {filtered.map((t, i) => (
               <tr
                 key={i}
-                className={`border-t border-[var(--border)] hover:bg-[var(--card-hover)] ${i % 2 === 0 ? '' : 'bg-[var(--background-secondary)]'}`}
+                className={`border-t border-white/[0.06] hover:bg-white/[0.04] ${i % 2 === 0 ? '' : 'bg-white/[0.02]'}`}
               >
-                <td className="py-2 font-mono font-medium">
+                <td className="py-2 font-mono font-medium text-white">
                   <span className="inline-flex items-center gap-1.5">
                     <CryptoIcon symbol={t.symbol} size={14} />
                     {t.symbol}
@@ -75,22 +75,20 @@ export function TradeHistory() {
                     {t.side.toUpperCase()}
                   </span>
                 </td>
-                <td className="py-2 font-mono">{formatUsd(t.entryPrice)}</td>
-                <td className="py-2 font-mono">{formatUsd(t.exitPrice)}</td>
+                <td className="py-2 font-mono text-[#a1a1a1]">{formatUsd(t.entryPrice)}</td>
+                <td className="py-2 font-mono text-[#a1a1a1]">{formatUsd(t.exitPrice)}</td>
                 <td
                   className={`py-2 font-mono ${t.pnl >= 0 ? 'text-[var(--success)] glow-green' : 'text-[var(--danger)] glow-red'}`}
                 >
                   {formatUsd(t.pnl)} ({formatPct(t.pnlPct)})
                 </td>
-                <td className="py-2 text-[var(--muted)]">
-                  {new Date(t.closedAt).toLocaleDateString()}
-                </td>
+                <td className="py-2 text-[#6b6b6b]">{new Date(t.closedAt).toLocaleDateString()}</td>
               </tr>
             ))}
           </tbody>
         </table>
       ) : (
-        <p className="text-xs text-[var(--muted)]">No trades yet</p>
+        <p className="text-xs text-[#6b6b6b]">No trades yet</p>
       )}
     </div>
   );

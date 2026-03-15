@@ -16,8 +16,8 @@ export function PerformanceMetrics() {
   const { data } = useApi<Metrics>('/v1/portfolio/default');
 
   return (
-    <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-4">
-      <h3 className="text-xs font-medium text-[var(--muted)] mb-3 uppercase tracking-wider">
+    <div className="bg-white/[0.04] backdrop-blur-xl border border-white/[0.08] rounded-xl p-4">
+      <h3 className="text-xs font-medium text-[#6b6b6b] mb-3 uppercase tracking-wider">
         Performance
       </h3>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
@@ -67,9 +67,9 @@ function Stat({
 
   return (
     <div>
-      <p className="text-[10px] text-[var(--muted)] uppercase">{label}</p>
+      <p className="text-[10px] text-[#6b6b6b] uppercase">{label}</p>
       <p
-        className={`font-mono font-bold ${large ? 'text-xl' : 'text-sm'} ${glowClass}`}
+        className={`font-mono font-bold ${large ? 'text-xl' : 'text-sm'} ${glowClass} text-white`}
         style={color ? { color } : undefined}
       >
         {value}

@@ -3,9 +3,9 @@
 import { apiFetch } from '@/lib/api';
 
 const STRATEGY_COLORS: Record<string, string> = {
-  momentum: 'var(--accent-blue)',
-  'trend-following': 'var(--accent-purple)',
-  'ml-adaptive': 'var(--primary)',
+  momentum: 'rgba(255,255,255,0.5)',
+  'trend-following': 'rgba(255,255,255,0.45)',
+  'ml-adaptive': 'rgba(255,255,255,0.6)',
 };
 
 interface AgentCardProps {
@@ -21,7 +21,7 @@ interface AgentCardProps {
 
 export function AgentCard({ agent, onAction }: AgentCardProps) {
   const isRunning = agent.status === 'running';
-  const stratColor = STRATEGY_COLORS[agent.strategy] ?? 'var(--muted)';
+  const _stratColor = STRATEGY_COLORS[agent.strategy] ?? '#6b6b6b';
 
   const handleToggle = async () => {
     const action = isRunning ? 'stop' : 'start';
@@ -31,10 +31,10 @@ export function AgentCard({ agent, onAction }: AgentCardProps) {
 
   return (
     <div
-      className="bg-[var(--card)] border rounded-lg p-4 transition-all"
+      className="bg-white/[0.04] backdrop-blur-xl border rounded-xl p-4 transition-all"
       style={{
-        borderColor: isRunning ? 'rgba(6, 182, 212, 0.3)' : 'var(--border)',
-        boxShadow: isRunning ? '0 0 12px rgba(6, 182, 212, 0.1)' : 'none',
+        borderColor: isRunning ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.08)',
+        boxShadow: isRunning ? '0 0 20px rgba(255, 255, 255, 0.03)' : 'none',
       }}
     >
       <div className="flex justify-between items-start mb-3">
@@ -42,30 +42,24 @@ export function AgentCard({ agent, onAction }: AgentCardProps) {
           {isRunning && (
             <span className="inline-block w-2 h-2 rounded-full bg-[var(--success)] pulse-dot" />
           )}
-          <h4 className="font-medium text-sm">{agent.name}</h4>
+          <h4 className="font-medium text-sm text-white">{agent.name}</h4>
         </div>
-        <span
-          className="text-[10px] px-2 py-0.5 rounded font-medium"
-          style={{
-            color: stratColor,
-            background: `color-mix(in srgb, ${stratColor} 15%, transparent)`,
-          }}
-        >
+        <span className="text-[10px] px-2 py-0.5 rounded font-medium bg-white/[0.06] text-[#a1a1a1]">
           {agent.strategy}
         </span>
       </div>
-      <div className="text-xs text-[var(--muted)] space-y-1 mb-3">
+      <div className="text-xs text-[#6b6b6b] space-y-1 mb-3">
         <p>Pairs: {agent.pairs.join(', ')}</p>
         <p>
-          Cycles: <span className="font-mono">{agent.cycleCount}</span>
+          Cycles: <span className="font-mono text-white">{agent.cycleCount}</span>
         </p>
       </div>
       <button
         onClick={handleToggle}
-        className={`w-full py-1.5 rounded text-xs font-medium transition-colors ${
+        className={`w-full py-1.5 rounded-lg text-xs font-medium transition-colors ${
           isRunning
-            ? 'bg-[var(--danger-bg)] text-[var(--danger)] hover:bg-red-900/30'
-            : 'bg-[var(--success-bg)] text-[var(--success)] hover:bg-green-900/30'
+            ? 'bg-red-500/10 text-[var(--danger)] hover:bg-red-500/20'
+            : 'bg-green-500/10 text-[var(--success)] hover:bg-green-500/20'
         }`}
       >
         {isRunning ? 'Stop' : 'Start'}

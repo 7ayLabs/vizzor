@@ -20,7 +20,7 @@ const CHAINS = [
 
 function scoreColor(score: number): string {
   if (score >= 70) return 'var(--danger)';
-  if (score >= 40) return 'var(--warning)';
+  if (score >= 40) return '#a1a1a1';
   return 'var(--success)';
 }
 
@@ -56,8 +56,8 @@ export function RugDetector() {
   };
 
   return (
-    <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-4">
-      <h3 className="text-xs font-medium text-[var(--muted)] mb-3 uppercase tracking-wider">
+    <div className="bg-white/[0.04] backdrop-blur-xl border border-white/[0.08] rounded-xl p-4">
+      <h3 className="text-xs font-medium text-[#6b6b6b] mb-3 uppercase tracking-wider">
         Rug Pull Detector
       </h3>
       <div className="flex gap-2 mb-3">
@@ -66,12 +66,12 @@ export function RugDetector() {
           placeholder="Contract address"
           value={address}
           onChange={(e) => setAddress(e.target.value)}
-          className="flex-1 bg-[var(--background)] border border-[var(--border)] rounded px-3 py-1.5 text-xs focus:outline-none focus:border-[var(--primary)]"
+          className="flex-1 bg-white/[0.06] border border-white/[0.08] rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-white/[0.2]"
         />
         <select
           value={chain}
           onChange={(e) => setChain(e.target.value)}
-          className="bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1.5 text-xs"
+          className="bg-white/[0.06] border border-white/[0.08] rounded-lg px-2 py-1.5 text-xs text-white"
         >
           {CHAINS.map((c) => (
             <option key={c.value} value={c.value}>
@@ -82,7 +82,7 @@ export function RugDetector() {
         <button
           onClick={handleScan}
           disabled={loading || !address.trim()}
-          className="bg-[var(--primary)] text-white rounded px-3 py-1.5 text-xs font-medium hover:opacity-90 disabled:opacity-50"
+          className="bg-white/[0.1] text-white rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-white/[0.15] disabled:opacity-50 transition-colors"
         >
           {loading ? '...' : 'SCAN'}
         </button>
@@ -91,21 +91,21 @@ export function RugDetector() {
       {error && <p className="text-xs text-[var(--danger)] mb-2">{error}</p>}
 
       {result && (
-        <div className="space-y-3 pt-3 border-t border-[var(--border)]">
+        <div className="space-y-3 pt-3 border-t border-white/[0.08]">
           {/* Score */}
           <div className="flex items-center gap-3">
             <div>
-              <p className="text-[10px] text-[var(--muted)] uppercase">Risk Score</p>
+              <p className="text-[10px] text-[#6b6b6b] uppercase">Risk Score</p>
               <span
                 className="text-2xl font-mono font-bold"
                 style={{ color: scoreColor(result.riskScore) }}
               >
                 {result.riskScore}
               </span>
-              <span className="text-xs text-[var(--muted)]">/100</span>
+              <span className="text-xs text-[#6b6b6b]">/100</span>
             </div>
             <span
-              className="text-xs px-2 py-0.5 rounded font-bold uppercase"
+              className="text-xs px-2 py-0.5 rounded-lg font-bold uppercase"
               style={{
                 color: scoreColor(result.riskScore),
                 background: `color-mix(in srgb, ${scoreColor(result.riskScore)} 15%, transparent)`,
@@ -116,7 +116,7 @@ export function RugDetector() {
           </div>
 
           {/* Score bar */}
-          <div className="w-full h-1.5 bg-[var(--background)] rounded-full overflow-hidden">
+          <div className="w-full h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
             <div
               className="h-full rounded-full"
               style={{
@@ -134,25 +134,21 @@ export function RugDetector() {
               >
                 {result.isHoneypot ? '\u2717' : '\u2713'}
               </span>
-              <span>Honeypot</span>
+              <span className="text-white">Honeypot</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span
-                className={
-                  result.hasLiquidityLock ? 'text-[var(--success)]' : 'text-[var(--warning)]'
-                }
+                className={result.hasLiquidityLock ? 'text-[var(--success)]' : 'text-[#a1a1a1]'}
               >
                 {result.hasLiquidityLock ? '\u2713' : '\u2717'}
               </span>
-              <span>Liquidity Lock</span>
+              <span className="text-white">Liquidity Lock</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span
-                className={result.ownerCanMint ? 'text-[var(--warning)]' : 'text-[var(--success)]'}
-              >
+              <span className={result.ownerCanMint ? 'text-[#a1a1a1]' : 'text-[var(--success)]'}>
                 {result.ownerCanMint ? '\u2717' : '\u2713'}
               </span>
-              <span>Owner Mint</span>
+              <span className="text-white">Owner Mint</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span
@@ -160,13 +156,13 @@ export function RugDetector() {
               >
                 {result.highSellTax ? '\u2717' : '\u2713'}
               </span>
-              <span>Sell Tax</span>
+              <span className="text-white">Sell Tax</span>
             </div>
           </div>
 
           {/* Detailed checks */}
           {result.details && result.details.length > 0 && (
-            <div className="space-y-1 border-t border-[var(--border)] pt-2">
+            <div className="space-y-1 border-t border-white/[0.08] pt-2">
               {result.details.map((d) => (
                 <div key={d.check} className="flex items-center gap-2 text-xs">
                   <span
@@ -175,13 +171,13 @@ export function RugDetector() {
                         ? 'text-[var(--success)]'
                         : d.severity === 'critical'
                           ? 'text-[var(--danger)]'
-                          : 'text-[var(--warning)]'
+                          : 'text-[#a1a1a1]'
                     }
                   >
                     {d.passed ? '\u2713' : '\u2717'}
                   </span>
-                  <span className="text-[var(--foreground)]">{d.check}</span>
-                  <span className="text-[var(--muted)] text-[10px] ml-auto truncate max-w-[200px]">
+                  <span className="text-white">{d.check}</span>
+                  <span className="text-[#6b6b6b] text-[10px] ml-auto truncate max-w-[200px]">
                     {d.description}
                   </span>
                 </div>

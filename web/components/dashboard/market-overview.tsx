@@ -7,10 +7,10 @@ import type { MarketPrice, FearGreedData } from '@/lib/types';
 
 const FG_ZONES = [
   { max: 20, label: 'Extreme Fear', color: '#ef4444' },
-  { max: 40, label: 'Fear', color: '#f97316' },
-  { max: 60, label: 'Neutral', color: '#f59e0b' },
-  { max: 80, label: 'Greed', color: '#84cc16' },
-  { max: 100, label: 'Extreme Greed', color: '#10b981' },
+  { max: 40, label: 'Fear', color: '#a1a1a1' },
+  { max: 60, label: 'Neutral', color: '#6b6b6b' },
+  { max: 80, label: 'Greed', color: '#a1a1a1' },
+  { max: 100, label: 'Extreme Greed', color: '#22c55e' },
 ];
 
 function getFGStyle(value: number) {
@@ -26,10 +26,10 @@ export function MarketOverview() {
   const fgStyle = getFGStyle(fgValue);
 
   return (
-    <div className="dash-card bg-[var(--card)] border border-[var(--border)] rounded-lg p-3 sm:p-4 animate-fade-up stagger-1">
+    <div className="dash-card bg-white/[0.04] backdrop-blur-xl border border-white/[0.08] rounded-xl p-3 sm:p-4 animate-fade-up stagger-1">
       <div className="flex items-center gap-2 mb-3">
-        <i className="fa-solid fa-chart-line text-xs text-[var(--primary)]" />
-        <h3 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
+        <i className="fa-solid fa-chart-line text-xs text-white/50" />
+        <h3 className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider">
           Market Stats
         </h3>
       </div>
@@ -37,18 +37,18 @@ export function MarketOverview() {
       <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
         {/* BTC Price */}
         <div>
-          <p className="text-[10px] text-[var(--muted)] flex items-center gap-1">
+          <p className="text-[10px] text-[var(--text-muted)] flex items-center gap-1">
             <CryptoIcon symbol="BTC" size={12} />
             BTC Price
           </p>
-          <p className="text-sm font-mono font-bold">
+          <p className="text-sm font-mono font-bold text-white">
             {btc?.price != null ? formatUsd(btc.price) : '---'}
           </p>
         </div>
 
         {/* 24h Change */}
         <div>
-          <p className="text-[10px] text-[var(--muted)] flex items-center gap-1">
+          <p className="text-[10px] text-[var(--text-muted)] flex items-center gap-1">
             <i className="fa-solid fa-arrow-right-arrow-left text-[8px]" />
             24h Change
           </p>
@@ -69,31 +69,31 @@ export function MarketOverview() {
 
         {/* Volume */}
         <div>
-          <p className="text-[10px] text-[var(--muted)] flex items-center gap-1">
+          <p className="text-[10px] text-[var(--text-muted)] flex items-center gap-1">
             <i className="fa-solid fa-chart-bar text-[8px]" />
             24h Volume
           </p>
-          <p className="text-sm font-mono font-bold">
+          <p className="text-sm font-mono font-bold text-white">
             {btc?.volume24h != null ? `$${formatCompact(btc.volume24h)}` : '---'}
           </p>
         </div>
 
         {/* Market Cap */}
         <div>
-          <p className="text-[10px] text-[var(--muted)] flex items-center gap-1">
+          <p className="text-[10px] text-[var(--text-muted)] flex items-center gap-1">
             <i className="fa-solid fa-coins text-[8px]" />
             Market Cap
           </p>
-          <p className="text-sm font-mono font-bold">
+          <p className="text-sm font-mono font-bold text-white">
             {btc?.marketCap != null ? `$${formatCompact(btc.marketCap)}` : '---'}
           </p>
         </div>
       </div>
 
       {/* Fear & Greed bar */}
-      <div className="mt-3 pt-3 border-t border-[var(--border)]">
+      <div className="mt-3 pt-3 border-t border-white/[0.08]">
         <div className="flex items-center justify-between mb-1">
-          <span className="text-[10px] text-[var(--muted)] flex items-center gap-1">
+          <span className="text-[10px] text-[var(--text-muted)] flex items-center gap-1">
             <i className="fa-solid fa-gauge text-[8px]" />
             Fear & Greed
           </span>
@@ -106,7 +106,7 @@ export function MarketOverview() {
             </span>
           </div>
         </div>
-        <div className="h-1.5 bg-[var(--background)] rounded-full overflow-hidden">
+        <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
           <div
             className="h-full rounded-full animate-bar-fill"
             style={{ width: `${fgValue}%`, background: fgStyle.color }}
