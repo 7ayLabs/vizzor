@@ -13,11 +13,11 @@ import {
   deleteAgent as removeAgent,
 } from '../../../core/agent/index.js';
 
-const readLimit = { config: { rateLimit: { max: 100, timeWindow: '1 minute' } } };
-const writeLimit = { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } };
-
 export async function agentRoutes(fastify: FastifyInstance): Promise<void> {
-  fastify.get('/v1/agents', { ...readLimit }, async () => {
+  const readRateLimit = fastify.rateLimit({ max: 100, timeWindow: '1 minute' });
+  const writeRateLimit = fastify.rateLimit({ max: 20, timeWindow: '1 minute' });
+
+  fastify.get('/v1/agents', { preHandler: readRateLimit }, async () => {
     const agents = listAgents();
     return {
       agents: agents.map((a) => {
@@ -34,7 +34,7 @@ export async function agentRoutes(fastify: FastifyInstance): Promise<void> {
     };
   });
 
-  fastify.post('/v1/agents', { ...writeLimit }, async (request) => {
+  fastify.post('/v1/agents', { preHandler: writeRateLimit }, async (request) => {
     const body = request.body as Record<string, unknown>;
     const name = String(body['name'] ?? '');
     const strategy = String(body['strategy'] ?? 'momentum');
@@ -44,7 +44,7 @@ export async function agentRoutes(fastify: FastifyInstance): Promise<void> {
     return { id: agent.id, name: agent.name, strategy: agent.strategy, pairs: agent.pairs };
   });
 
-  fastify.get('/v1/agents/:name', { ...readLimit }, async (request) => {
+  fastify.get('/v1/agents/:name', { preHandler: readRateLimit }, async (request) => {
     const { name } = request.params as { name: string };
     const agent = getAgentByName(name);
     if (!agent) return { error: 'Agent not found' };
@@ -58,7 +58,7 @@ export async function agentRoutes(fastify: FastifyInstance): Promise<void> {
     };
   });
 
-  fastify.post('/v1/agents/:name/start', { ...writeLimit }, async (request) => {
+  fastify.post('/v1/agents/:name/start', { preHandler: writeRateLimit }, async (request) => {
     const { name } = request.params as { name: string };
     const agent = getAgentByName(name);
     if (!agent) return { error: 'Agent not found' };
@@ -66,7 +66,7 @@ export async function agentRoutes(fastify: FastifyInstance): Promise<void> {
     return { message: `Agent "${name}" started` };
   });
 
-  fastify.post('/v1/agents/:name/stop', { ...writeLimit }, async (request) => {
+  fastify.post('/v1/agents/:name/stop', { preHandler: writeRateLimit }, async (request) => {
     const { name } = request.params as { name: string };
     const agent = getAgentByName(name);
     if (!agent) return { error: 'Agent not found' };
@@ -74,7 +74,7 @@ export async function agentRoutes(fastify: FastifyInstance): Promise<void> {
     return { message: `Agent "${name}" stopped` };
   });
 
-  fastify.delete('/v1/agents/:name', { ...writeLimit }, async (request) => {
+  fastify.delete('/v1/agents/:name', { preHandler: writeRateLimit }, async (request) => {
     const { name } = request.params as { name: string };
     const agent = getAgentByName(name);
     if (!agent) return { error: 'Agent not found' };
