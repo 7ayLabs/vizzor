@@ -18,6 +18,7 @@ export interface AgentStrategy {
   name: string;
   description: string;
   evaluate(signals: AgentSignals): AgentDecision;
+  evaluateAsync?(signals: AgentSignals, symbol: string): Promise<AgentDecision>;
 }
 
 export interface AgentSignals {

@@ -321,6 +321,38 @@ export class MLClient {
     }
   }
 
+  async trainModel(modelName: string, params?: Record<string, unknown>): Promise<unknown> {
+    try {
+      const res = await fetch(`${this.baseUrl}/train`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: modelName, ...params }),
+        signal: AbortSignal.timeout(300000), // 5 min for training
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (err) {
+      log.debug(`ML train failed: ${err instanceof Error ? err.message : String(err)}`);
+      return null;
+    }
+  }
+
+  async evaluateModel(modelName: string): Promise<unknown> {
+    try {
+      const res = await fetch(`${this.baseUrl}/evaluate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: modelName }),
+        signal: AbortSignal.timeout(60000),
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (err) {
+      log.debug(`ML evaluate failed: ${err instanceof Error ? err.message : String(err)}`);
+      return null;
+    }
+  }
+
   async getModelHealth(): Promise<ModelHealth | null> {
     try {
       const res = await fetch(`${this.baseUrl}/health`, {

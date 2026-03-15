@@ -145,7 +145,10 @@ export async function buildContextBlock(userMessage: string): Promise<string> {
   // Solana base58: 32-44 chars, must contain at least one digit to avoid matching English words
   const solanaMatch = userMessage.match(/\b([1-9A-HJ-NP-Za-km-z]{32,44})\b/);
   const isSolanaAddr =
-    solanaMatch && !evmMatch && /\d/.test(solanaMatch[1]!) && solanaMatch[1]!.length >= 32;
+    solanaMatch &&
+    !evmMatch &&
+    /\d/.test(solanaMatch[1] ?? '') &&
+    (solanaMatch[1] ?? '').length >= 32;
   const addressMatch = evmMatch ?? (isSolanaAddr ? solanaMatch : null);
   const detectedChain = evmMatch ? null : isSolanaAddr ? 'solana' : null;
 
@@ -178,7 +181,7 @@ export async function buildContextBlock(userMessage: string): Promise<string> {
       const verbMatch = lower.match(
         /(?:anali[zs]e|audit|scan|check|review|inspect)\s+([a-z0-9]+)/i,
       );
-      if (verbMatch) searchTokens.push(verbMatch[1]!);
+      if (verbMatch?.[1]) searchTokens.push(verbMatch[1]);
     }
     for (const token of searchTokens.slice(0, 3)) {
       tasks.push(
@@ -663,7 +666,8 @@ async function fetchNewsData(symbol?: string): Promise<string | null> {
           const mlResults = await mlClient.analyzeSentimentBatch(texts);
           if (mlResults.length > 0) {
             for (let i = 0; i < headlines.length; i++) {
-              const n = headlines[i]!;
+              const n = headlines[i];
+              if (!n) continue;
               const ml = mlResults[i];
               const label = ml
                 ? `${ml.sentiment.toUpperCase()} (${(ml.confidence * 100).toFixed(0)}%)`
@@ -710,8 +714,8 @@ async function fetchNewsData(symbol?: string): Promise<string | null> {
       /<item>[\s\S]*?<title>([\s\S]*?)<\/title>[\s\S]*?<pubDate>([\s\S]*?)<\/pubDate>[\s\S]*?<\/item>/g;
     let match;
     while ((match = itemRegex.exec(xml)) !== null && items.length < 8) {
-      const title = match[1]!.replace(/<!\[CDATA\[|\]\]>/g, '').trim();
-      const date = match[2]!.trim();
+      const title = (match[1] ?? '').replace(/<!\[CDATA\[|\]\]>/g, '').trim();
+      const date = (match[2] ?? '').trim();
       items.push(`- ${title} (${date})`);
     }
 
@@ -792,7 +796,8 @@ async function fetchDexAndSecurityData(
     }
 
     const lines = [`## DEX Data: ${query.toUpperCase()} (via DexScreener, live)`];
-    const topPair = pairs[0]!;
+    const topPair = pairs[0]; // Safe: we return early above when pairs.length === 0
+    if (!topPair) return null;
 
     // Show top 3 pairs with enriched data
     for (const pair of pairs.slice(0, 3)) {
@@ -1093,7 +1098,7 @@ function detectUnknownTokens(original: string, knownTokens: string[]): string[] 
   const dollarRegex = /\$([A-Za-z][A-Za-z0-9]{1,9})\b/g;
   let m0;
   while ((m0 = dollarRegex.exec(original)) !== null) {
-    const sym = m0[1]!.toLowerCase();
+    const sym = (m0[1] ?? '').toLowerCase();
     if (!knownSet.has(sym) && !unknowns.includes(sym)) {
       unknowns.push(sym);
     }
@@ -1103,7 +1108,7 @@ function detectUnknownTokens(original: string, knownTokens: string[]): string[] 
   const capsRegex = /\b([A-Z][A-Z0-9]{2,9})\b/g;
   let m;
   while ((m = capsRegex.exec(original)) !== null) {
-    const sym = m[1]!.toLowerCase();
+    const sym = (m[1] ?? '').toLowerCase();
     // Skip common English words that happen to be uppercase
     const SKIP = new Set([
       'THE',
@@ -1160,7 +1165,7 @@ function detectUnknownTokens(original: string, knownTokens: string[]): string[] 
       'RUG',
       'FULL',
     ]);
-    if (!knownSet.has(sym) && !SKIP.has(m[1]!) && !unknowns.includes(sym)) {
+    if (!knownSet.has(sym) && !SKIP.has(m[1] ?? '') && !unknowns.includes(sym)) {
       unknowns.push(sym);
     }
   }
@@ -1169,7 +1174,7 @@ function detectUnknownTokens(original: string, knownTokens: string[]): string[] 
   const lower = original.toLowerCase();
   const verbRegex = /(?:anali[zs]e|audit|scan|check|review|inspect)\s+([a-zA-Z0-9]{2,15})/gi;
   while ((m = verbRegex.exec(lower)) !== null) {
-    const token = m[1]!.toLowerCase();
+    const token = (m[1] ?? '').toLowerCase();
     if (!knownSet.has(token) && !unknowns.includes(token) && token.length >= 2) {
       unknowns.push(token);
     }
@@ -1266,7 +1271,7 @@ function buildAnalysisReport(
   // Extract price for the target token (not BTC/ETH baseline)
   const extract = (pattern: RegExp): number | null => {
     const match = joined.match(pattern);
-    return match ? parseFloat(match[1]!.replace(/,/g, '')) : null;
+    return match ? parseFloat((match[1] ?? '').replace(/,/g, '')) : null;
   };
 
   // 1. VERDICT — extract key data points
@@ -1313,8 +1318,8 @@ function buildAnalysisReport(
   // Buy/sell ratio
   const buysMatch = joined.match(/(\d+)\s*buys\s*\/\s*(\d+)\s*sells/);
   if (buysMatch) {
-    const buys = parseInt(buysMatch[1]!, 10);
-    const sells = parseInt(buysMatch[2]!, 10);
+    const buys = parseInt(buysMatch[1] ?? '0', 10);
+    const sells = parseInt(buysMatch[2] ?? '0', 10);
     const total = buys + sells;
     if (total > 0) {
       lines.push(`- Buy/Sell Ratio: ${buys}/${sells} (${((buys / total) * 100).toFixed(0)}% buys)`);
@@ -1334,7 +1339,7 @@ function buildAnalysisReport(
     if (riskLevel) lines.push(`- Risk Level: ${riskLevel.toUpperCase()}`);
     // Extract flags
     const flagsMatch = joined.match(/RED FLAGS:\s*(.+)/);
-    if (flagsMatch && !flagsMatch[1]!.includes('None'))
+    if (flagsMatch && !(flagsMatch[1] ?? '').includes('None'))
       lines.push(`- **Red Flags: ${flagsMatch[1]}**`);
     const holderCount = extract(/Holders:\s*([0-9,]+)/);
     if (holderCount !== null) lines.push(`- Holders: ${holderCount.toLocaleString()}`);
@@ -1417,7 +1422,7 @@ function computeSignals(sections: string[], tokens: string[], userMessage = ''):
   // Extract numbers from data using regex
   const extract = (pattern: RegExp): number | null => {
     const match = joined.match(pattern);
-    return match ? parseFloat(match[1]!.replace(/,/g, '')) : null;
+    return match ? parseFloat((match[1] ?? '').replace(/,/g, '')) : null;
   };
 
   // 1. Price momentum signal
@@ -1446,8 +1451,8 @@ function computeSignals(sections: string[], tokens: string[], userMessage = ''):
   // 2. Buy/sell pressure signal
   const buysMatch = joined.match(/(\d+)\s*buys\s*\/\s*(\d+)\s*sells/);
   if (buysMatch) {
-    const buys = parseInt(buysMatch[1]!, 10);
-    const sells = parseInt(buysMatch[2]!, 10);
+    const buys = parseInt(buysMatch[1] ?? '0', 10);
+    const sells = parseInt(buysMatch[2] ?? '0', 10);
     const total = buys + sells;
     signalCount++;
     if (total > 0) {
@@ -1516,7 +1521,7 @@ function computeSignals(sections: string[], tokens: string[], userMessage = ''):
   // 5. Funding rate signal
   const fundingMatch = joined.match(/Funding:\s*([+-]?\d+\.?\d*)%/);
   if (fundingMatch) {
-    const funding = parseFloat(fundingMatch[1]!);
+    const funding = parseFloat(fundingMatch[1] ?? '0');
     signalCount++;
     if (funding > 0.05) {
       signals.push(
@@ -1593,7 +1598,7 @@ function computeSignals(sections: string[], tokens: string[], userMessage = ''):
   // 10. Token age signal
   const ageMatch = joined.match(/Pair Created:\s*(\d+)d ago/);
   if (ageMatch) {
-    const ageDays = parseInt(ageMatch[1]!, 10);
+    const ageDays = parseInt(ageMatch[1] ?? '0', 10);
     signalCount++;
     if (ageDays < 1) {
       bearish++;
@@ -1686,7 +1691,7 @@ function parseRequestedTimeframes(userMessage: string): { label: string; hours: 
   // "at HH:MM" or "at H:MMpm" — specific clock time
   const clockMatch = lower.match(/at\s+(\d{1,2}):?(\d{2})?\s*(am|pm|hrs?)?/);
   if (clockMatch) {
-    let hour = parseInt(clockMatch[1]!, 10);
+    let hour = parseInt(clockMatch[1] ?? '0', 10);
     const minute = parseInt(clockMatch[2] || '0', 10);
     const ampm = clockMatch[3];
     if (ampm === 'pm' && hour < 12) hour += 12;
@@ -1713,8 +1718,8 @@ function parseRequestedTimeframes(userMessage: string): { label: string; hours: 
   // "in X minutes/hours/days"
   const inMatch = lower.match(/in\s+(\d+)\s*(min(?:ute)?s?|hours?|hrs?|days?|weeks?|months?)/);
   if (inMatch) {
-    const amount = parseInt(inMatch[1]!, 10);
-    const unit = inMatch[2]!;
+    const amount = parseInt(inMatch[1] ?? '0', 10);
+    const unit = inMatch[2] ?? '';
     let hours = amount;
     if (unit.startsWith('min')) hours = amount / 60;
     else if (unit.startsWith('day')) hours = amount * 24;
@@ -1749,14 +1754,14 @@ function computePriceTargets(
   // Extract current price (handle comma-formatted numbers like $2,111.55)
   const priceMatch = data.match(/Price:\s*\$([0-9,.]+(?:e[+-]?\d+)?)/);
   if (!priceMatch) return null;
-  const price = parseFloat(priceMatch[1]!.replace(/,/g, ''));
+  const price = parseFloat((priceMatch[1] ?? '').replace(/,/g, ''));
   if (isNaN(price) || price <= 0) return null;
 
   // Extract liquidity and market cap for context
   const liqMatch = data.match(/Liquidity:\s*\$([0-9,]+)/);
   const mcapMatch = data.match(/Market Cap:\s*\$([0-9,]+)/);
-  const liquidity = liqMatch ? parseFloat(liqMatch[1]!.replace(/,/g, '')) : 0;
-  const mcap = mcapMatch ? parseFloat(mcapMatch[1]!.replace(/,/g, '')) : 0;
+  const liquidity = liqMatch ? parseFloat((liqMatch[1] ?? '').replace(/,/g, '')) : 0;
+  const mcap = mcapMatch ? parseFloat((mcapMatch[1] ?? '').replace(/,/g, '')) : 0;
 
   // Calculate hourly volatility from 24h change
   const dailyVol = Math.abs(change24h ?? 10) / 100;

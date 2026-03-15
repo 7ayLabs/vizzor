@@ -70,6 +70,18 @@ services:
       - ./n8n/workflows:/home/node/workflows:ro
     restart: unless-stopped
 
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://vizzor-api:3000
+    depends_on:
+      - vizzor-api
+    restart: unless-stopped
+
   postgres:
     image: timescale/timescaledb:latest-pg15
     # No external port — only accessible via internal Docker network

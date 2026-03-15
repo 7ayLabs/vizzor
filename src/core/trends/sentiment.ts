@@ -140,7 +140,10 @@ export async function analyzeSentiment(query: string): Promise<SentimentSummary>
   let consensus: SentimentSummary['consensus'] = 'neutral';
   if (overall > 0.2) consensus = 'positive';
   else if (overall < -0.2) consensus = 'negative';
-  else if (sources.length > 1 && Math.abs(sources[0]!.score - sources[1]!.score) > 0.5) {
+  else if (
+    sources.length > 1 &&
+    Math.abs((sources[0]?.score ?? 0) - (sources[1]?.score ?? 0)) > 0.5
+  ) {
     consensus = 'mixed';
   }
 

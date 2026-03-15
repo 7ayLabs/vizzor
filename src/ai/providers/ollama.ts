@@ -94,7 +94,7 @@ export class OllamaProvider implements AIProvider {
   readonly supportsTools = false;
 
   private client!: Ollama;
-  private model = DEFAULT_MODELS['ollama']!;
+  private model = DEFAULT_MODELS['ollama'] ?? 'llama3.2';
 
   // -------------------------------------------------------------------------
   // Lifecycle

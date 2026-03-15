@@ -1,6 +1,5 @@
 name: "Vizzor CodeQL Config"
 
-# Exclude paths with intentional sensitive data display patterns.
-# src/cli/commands/api.ts: One-time API key display (key cannot be retrieved after creation).
 paths-ignore:
+  # One-time API key display — key cannot be retrieved after creation
   - src/cli/commands/api.ts

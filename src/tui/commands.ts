@@ -135,6 +135,8 @@ export async function executeCommand(name: string, args: string[]): Promise<Comm
       return handleConfig(args);
     case 'agent':
       return handleAgent(args);
+    case 'backtest':
+      return handleBacktest(args);
     case 'clear':
       return { blocks: [], text: '' };
     case 'exit':
@@ -434,12 +436,16 @@ function handleAgent(args: string[]): CommandResult {
         const intervalIdx = args.indexOf('--interval');
 
         const strategy =
-          stratIdx !== -1 && stratIdx + 1 < args.length ? args[stratIdx + 1]! : 'momentum';
+          stratIdx !== -1 && stratIdx + 1 < args.length
+            ? (args[stratIdx + 1] ?? 'momentum')
+            : 'momentum';
         const pairsRaw =
-          pairsIdx !== -1 && pairsIdx + 1 < args.length ? args[pairsIdx + 1]! : 'BTC,ETH';
+          pairsIdx !== -1 && pairsIdx + 1 < args.length
+            ? (args[pairsIdx + 1] ?? 'BTC,ETH')
+            : 'BTC,ETH';
         const interval =
           intervalIdx !== -1 && intervalIdx + 1 < args.length
-            ? parseInt(args[intervalIdx + 1]!, 10)
+            ? parseInt(args[intervalIdx + 1] ?? '60', 10)
             : 60;
 
         const pairs = pairsRaw.split(',').map((p) => p.trim().toUpperCase());
@@ -555,6 +561,7 @@ function handleHelp(): CommandResult {
     '  /trends                              Live trending tokens + top gainers/losers',
     '  /audit <contract> [--chain <chain>]  Audit a smart contract (bytecode scanning)',
     '  /agent <sub>                         Manage autonomous trading agents',
+    '  /backtest -s <strat> --pair <P> --from <D> --to <D>  Run a historical backtest',
     '  /provider [list|<name>]              Show/switch AI provider',
     '  /config [set <key> <value>]           Show or update configuration',
     '  /clear                               Clear message history',
@@ -567,6 +574,69 @@ function handleHelp(): CommandResult {
   ].join('\n');
 
   return { blocks: [], text };
+}
+
+async function handleBacktest(args: string[]): Promise<CommandResult> {
+  const stratIdx = args.indexOf('-s') !== -1 ? args.indexOf('-s') : args.indexOf('--strategy');
+  const pairIdx = args.indexOf('--pair');
+  const fromIdx = args.indexOf('--from');
+  const toIdx = args.indexOf('--to');
+  const tfIdx = args.indexOf('--timeframe');
+
+  const strategy = stratIdx !== -1 && stratIdx + 1 < args.length ? (args[stratIdx + 1] ?? '') : '';
+  const pair = pairIdx !== -1 && pairIdx + 1 < args.length ? (args[pairIdx + 1] ?? '') : '';
+  const from = fromIdx !== -1 && fromIdx + 1 < args.length ? (args[fromIdx + 1] ?? '') : '';
+  const to = toIdx !== -1 && toIdx + 1 < args.length ? (args[toIdx + 1] ?? '') : '';
+  const timeframe = tfIdx !== -1 && tfIdx + 1 < args.length ? (args[tfIdx + 1] ?? '4h') : '4h';
+
+  if (!strategy || !pair || !from || !to) {
+    return {
+      blocks: [],
+      text: 'Usage: /backtest -s <strategy> --pair <PAIR> --from <YYYY-MM-DD> --to <YYYY-MM-DD> [--timeframe <tf>]',
+    };
+  }
+
+  try {
+    const { BacktestEngine } = await import('../core/backtest/engine.js');
+    const engine = new BacktestEngine({
+      strategy,
+      pair,
+      from,
+      to,
+      initialCapital: 10000,
+      timeframe,
+      slippageBps: 10,
+      commissionPct: 0.1,
+    });
+
+    const result = await engine.run();
+    const lines = [
+      `Backtest: ${result.config.strategy} on ${result.config.pair} (${result.config.from} → ${result.config.to})`,
+      `Initial Capital: $${result.config.initialCapital.toLocaleString()}`,
+      '',
+      `Total Return: $${result.metrics.totalReturn.toFixed(2)} (${result.metrics.totalReturnPct.toFixed(2)}%)`,
+      `Win Rate: ${(result.metrics.winRate * 100).toFixed(1)}%`,
+      `Total Trades: ${result.metrics.totalTrades}`,
+      `Profit Factor: ${result.metrics.profitFactor === Infinity ? '∞' : result.metrics.profitFactor.toFixed(2)}`,
+      `Sharpe Ratio: ${result.metrics.sharpeRatio.toFixed(2)}`,
+      `Max Drawdown: ${result.metrics.maxDrawdown.toFixed(2)}%`,
+    ];
+
+    if (result.trades.length > 0) {
+      lines.push('', 'Last 5 Trades:');
+      for (const t of result.trades.slice(-5)) {
+        const dir = t.pnl >= 0 ? '+' : '';
+        lines.push(
+          `  ${new Date(t.entryTime).toISOString().split('T')[0]} → ${new Date(t.exitTime).toISOString().split('T')[0]} | ${t.side} | $${t.entryPrice.toFixed(2)} → $${t.exitPrice.toFixed(2)} | ${dir}$${t.pnl.toFixed(2)} (${dir}${t.pnlPct.toFixed(2)}%)`,
+        );
+      }
+    }
+
+    return { blocks: [], text: lines.join('\n') };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { blocks: [], text: `Backtest failed: ${message}` };
+  }
 }
 
 async function handleConfig(args: string[]): Promise<CommandResult> {

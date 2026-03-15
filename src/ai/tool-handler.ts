@@ -784,6 +784,97 @@ async function handleToolUnsafe(name: string, input: unknown): Promise<unknown> 
       };
     }
 
+    case 'get_ml_model_health': {
+      let mlClient = getMLClient();
+      if (!mlClient) {
+        try {
+          const cfg = getConfig();
+          if (cfg.ml?.enabled && cfg.ml.sidecarUrl) {
+            mlClient = initMLClient(cfg.ml.sidecarUrl);
+          }
+        } catch {
+          /* config not loaded */
+        }
+      }
+      if (!mlClient) {
+        return { error: 'ML sidecar not configured' };
+      }
+      const health = await mlClient.getModelHealth();
+      if (!health) {
+        return { error: 'ML sidecar not responding' };
+      }
+      return {
+        models: health.models.map((m) => ({
+          name: m.name,
+          version: m.version,
+          loaded: m.loaded,
+          lastTrained: m.lastTrained,
+          accuracy: m.accuracy,
+        })),
+        uptime: health.uptime,
+        predictionsServed: health.predictionsServed,
+      };
+    }
+
+    case 'classify_user_intent': {
+      const text = String(params['text'] ?? '');
+      let mlClient = getMLClient();
+      if (!mlClient) {
+        try {
+          const cfg = getConfig();
+          if (cfg.ml?.enabled && cfg.ml.sidecarUrl) {
+            mlClient = initMLClient(cfg.ml.sidecarUrl);
+          }
+        } catch {
+          /* config not loaded */
+        }
+      }
+      if (!mlClient) {
+        return { error: 'ML sidecar not configured for intent classification' };
+      }
+      const intent = await mlClient.classifyIntent(text);
+      if (!intent) {
+        return { error: 'Intent classification failed' };
+      }
+      return {
+        intent: intent.intent,
+        confidence: intent.confidence,
+        secondaryIntent: intent.secondary_intent,
+        detectedTokens: intent.detected_tokens,
+        detectedAddresses: intent.detected_addresses,
+        model: intent.model,
+      };
+    }
+
+    case 'run_backtest': {
+      const { BacktestEngine } = await import('../core/backtest/engine.js');
+      const engine = new BacktestEngine({
+        strategy: String(params['strategy'] ?? 'momentum'),
+        pair: String(params['pair'] ?? 'BTCUSDT'),
+        from: String(params['from'] ?? ''),
+        to: String(params['to'] ?? ''),
+        initialCapital: 10000,
+        timeframe: String(params['timeframe'] ?? '4h'),
+        slippageBps: 10,
+        commissionPct: 0.1,
+      });
+      const result = await engine.run();
+      return {
+        strategy: result.config.strategy,
+        pair: result.config.pair,
+        period: `${result.config.from} → ${result.config.to}`,
+        metrics: result.metrics,
+        tradeCount: result.trades.length,
+        lastTrades: result.trades.slice(-5).map((t) => ({
+          entry: t.entryPrice,
+          exit: t.exitPrice,
+          pnl: t.pnl,
+          pnlPct: t.pnlPct,
+          side: t.side,
+        })),
+      };
+    }
+
     default:
       return { error: `Unknown tool: ${name}` };
   }

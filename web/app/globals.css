@@ -1,0 +1,395 @@
+@import "tailwindcss";
+
+:root {
+  --background: #060a10;
+  --background-secondary: #0c1018;
+  --foreground: #e2e8f0;
+  --card: #0f1520;
+  --card-hover: #141d2b;
+  --border: #1e293b;
+  --primary: #06b6d4;
+  --success: #10b981;
+  --success-bg: rgba(16, 185, 129, 0.15);
+  --danger: #ef4444;
+  --danger-bg: rgba(239, 68, 68, 0.15);
+  --warning: #f59e0b;
+  --muted: #64748b;
+  --accent-blue: #3b82f6;
+  --accent-purple: #8b5cf6;
+  --accent-orange: #f97316;
+}
+
+[data-theme="light"] {
+  --background: #f8fafc;
+  --background-secondary: #f1f5f9;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-hover: #f8fafc;
+  --border: #e2e8f0;
+  --primary: #0891b2;
+  --success: #059669;
+  --success-bg: rgba(5, 150, 105, 0.12);
+  --danger: #dc2626;
+  --danger-bg: rgba(220, 38, 38, 0.12);
+  --warning: #d97706;
+  --muted: #94a3b8;
+  --accent-blue: #2563eb;
+  --accent-purple: #7c3aed;
+  --accent-orange: #ea580c;
+}
+
+@media (prefers-color-scheme: light) {
+  [data-theme="system"] {
+    --background: #f8fafc;
+    --background-secondary: #f1f5f9;
+    --foreground: #0f172a;
+    --card: #ffffff;
+    --card-hover: #f8fafc;
+    --border: #e2e8f0;
+    --primary: #0891b2;
+    --success: #059669;
+    --success-bg: rgba(5, 150, 105, 0.12);
+    --danger: #dc2626;
+    --danger-bg: rgba(220, 38, 38, 0.12);
+    --warning: #d97706;
+    --muted: #94a3b8;
+    --accent-blue: #2563eb;
+    --accent-purple: #7c3aed;
+    --accent-orange: #ea580c;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'JetBrains Mono', 'SF Mono', ui-monospace, 'Cascadia Code', 'Fira Code', monospace;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+
+/* Ticker scroll animation */
+@keyframes ticker-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.ticker-scroll:hover {
+  animation-play-state: paused;
+}
+
+/* Pulse dot for live indicators */
+@keyframes pulse-dot {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  }
+  50% {
+    opacity: 0.7;
+    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0);
+  }
+}
+
+.pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+/* Glow effects */
+.glow-green {
+  text-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+}
+
+.glow-red {
+  text-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+}
+
+.glow-cyan {
+  text-shadow: 0 0 8px rgba(6, 182, 212, 0.6);
+}
+
+/* Mobile sidebar slide-in */
+@keyframes slide-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.2s ease-out;
+}
+
+/* Chat markdown styles */
+.chat-content p {
+  margin-bottom: 0.25rem;
+}
+
+.chat-content ul,
+.chat-content ol {
+  padding-left: 1.25rem;
+  margin: 0.5rem 0;
+}
+
+.chat-content li {
+  margin-bottom: 0.125rem;
+}
+
+.chat-content a {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+.chat-content strong {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.chat-content .chat-h1,
+.chat-content .chat-h2,
+.chat-content .chat-h3,
+.chat-content .chat-h4 {
+  font-weight: 700;
+  margin-top: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.chat-content .chat-h1 { font-size: 1rem; }
+.chat-content .chat-h2 { font-size: 0.875rem; }
+.chat-content .chat-h3 { font-size: 0.8125rem; }
+
+.chat-inline-code {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0.1rem 0.3rem;
+  font-size: 0.8em;
+}
+
+.chat-code-block {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.75rem;
+  margin: 0.5rem 0;
+  overflow-x: auto;
+  font-size: 0.75rem;
+}
+
+/* ═══ TUI-inspired animations ═══ */
+
+/* Dots spinner — matches TUI ink-spinner "dots" type */
+@keyframes dots-spin {
+  0%, 20% { content: '⠋'; }
+  10% { content: '⠙'; }
+  20% { content: '⠹'; }
+  30% { content: '⠸'; }
+  40% { content: '⠼'; }
+  50% { content: '⠴'; }
+  60% { content: '⠦'; }
+  70% { content: '⠧'; }
+  80% { content: '⠇'; }
+  90% { content: '⠏'; }
+}
+
+/* Typing indicator — 3-dot bounce (Figma pattern) */
+@keyframes typing-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
+.typing-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--primary);
+  animation: typing-bounce 1.4s ease-in-out infinite;
+}
+
+.typing-dot:nth-child(2) { animation-delay: 0.16s; }
+.typing-dot:nth-child(3) { animation-delay: 0.32s; }
+
+/* Streaming cursor — matches TUI block cursor (\u2588) */
+@keyframes cursor-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.streaming-cursor::after {
+  content: '█';
+  color: var(--primary);
+  animation: cursor-blink 1s step-end infinite;
+  font-size: 0.85em;
+}
+
+/* ═══ Message animations (Figma slide-in + fade) ═══ */
+
+/* Bot messages: slide from left */
+@keyframes msg-slide-left {
+  from { opacity: 0; transform: translateX(-12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* User messages: slide from right */
+@keyframes msg-slide-right {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Fade up — generic entrance */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Scale pop — for cards and chips */
+@keyframes scale-pop {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Shimmer skeleton loader */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-msg-left {
+  animation: msg-slide-left 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+
+.animate-msg-right {
+  animation: msg-slide-right 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+
+.animate-fade-up {
+  animation: fade-up 0.35s ease-out both;
+}
+
+.animate-scale-pop {
+  animation: scale-pop 0.25s ease-out both;
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, var(--card) 25%, var(--border) 50%, var(--card) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* Stagger delays for sequential animations */
+.stagger-1 { animation-delay: 0.05s; }
+.stagger-2 { animation-delay: 0.1s; }
+.stagger-3 { animation-delay: 0.15s; }
+.stagger-4 { animation-delay: 0.2s; }
+.stagger-5 { animation-delay: 0.25s; }
+
+/* Tool card expand/collapse */
+@keyframes card-expand {
+  from { opacity: 0; max-height: 0; }
+  to { opacity: 1; max-height: 500px; }
+}
+
+.animate-card-expand {
+  animation: card-expand 0.3s ease-out both;
+  overflow: hidden;
+}
+
+/* Progress bar fill — matches TUI risk bar */
+@keyframes bar-fill {
+  from { width: 0; }
+}
+
+.animate-bar-fill {
+  animation: bar-fill 0.6s ease-out both;
+}
+
+/* Breathing pulse for bot avatar */
+@keyframes breathe {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(6, 182, 212, 0.4); }
+  50% { box-shadow: 0 0 0 4px rgba(6, 182, 212, 0); }
+}
+
+.animate-breathe {
+  animation: breathe 3s ease-in-out infinite;
+}
+
+/* Suggestion chip hover */
+.suggestion-chip {
+  transition: all 0.2s ease;
+}
+
+.suggestion-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.suggestion-chip:active {
+  transform: translateY(0);
+}
+
+/* Smooth tool status transitions */
+.tool-status-enter {
+  animation: fade-up 0.25s ease-out both;
+}
+
+/* TUI-style left border accent on messages */
+.tui-border-left {
+  border-left: 2px solid var(--primary);
+  padding-left: 0.75rem;
+}
+
+.tui-border-left-user {
+  border-left: 2px solid var(--accent-orange);
+  padding-left: 0.75rem;
+}
+
+/* Mobile-optimized touch targets */
+@media (max-width: 640px) {
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Frosted glass header on scroll */
+.glass-header {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  background: color-mix(in srgb, var(--background-secondary) 85%, transparent);
+}
+
+/* Dashboard card hover accent */
+.dash-card {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.dash-card:hover {
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+}
+
+/* Extended stagger delays for dashboard grids */
+.stagger-6 { animation-delay: 0.3s; }
+.stagger-7 { animation-delay: 0.35s; }
+.stagger-8 { animation-delay: 0.4s; }

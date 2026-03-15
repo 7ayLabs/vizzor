@@ -143,7 +143,7 @@ function dexPairToTrending(pair: DexPair): TrendingToken {
     name: pair.baseToken.name,
     symbol: pair.baseToken.symbol,
     chain: pair.chainId,
-    priceUsd: pair.priceUsd ?? '0',
+    priceUsd: pair.priceUsd || '',
     priceChange24h: pair.priceChange?.h24 ?? 0,
     volume24h: pair.volume?.h24 ?? 0,
     liquidity: pair.liquidity?.usd ?? 0,

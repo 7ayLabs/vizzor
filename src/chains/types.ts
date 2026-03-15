@@ -148,3 +148,38 @@ export interface ChainAdapter {
   getBlockNumber(): Promise<bigint>;
   getBlock(blockNumber: bigint): Promise<Block>;
 }
+
+// ---------------------------------------------------------------------------
+// Writable chain adapter — extends read-only with transaction capabilities
+// ---------------------------------------------------------------------------
+
+export interface TransactionRequest {
+  readonly to: string;
+  readonly value?: bigint;
+  readonly data?: string;
+  readonly gasLimit?: bigint;
+  readonly maxFeePerGas?: bigint;
+  readonly maxPriorityFeePerGas?: bigint;
+}
+
+export interface TransactionReceipt {
+  readonly hash: string;
+  readonly blockNumber: bigint;
+  readonly status: 'success' | 'reverted';
+  readonly gasUsed: bigint;
+  readonly effectiveGasPrice: bigint;
+  readonly logs: readonly { address: string; topics: string[]; data: string }[];
+}
+
+export interface WritableChainAdapter extends ChainAdapter {
+  sendTransaction(tx: TransactionRequest): Promise<TransactionReceipt>;
+  writeContract(
+    address: string,
+    abi: readonly unknown[],
+    functionName: string,
+    args?: unknown[],
+    value?: bigint,
+  ): Promise<TransactionReceipt>;
+  signMessage(message: string): Promise<string>;
+  estimateGas(tx: TransactionRequest): Promise<bigint>;
+}

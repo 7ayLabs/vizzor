@@ -1,6 +1,6 @@
 import type { ChainAdapter } from '../../chains/types.js';
 import { getMLClient } from '../../ml/client.js';
-import type { WalletMLFeatures } from '../../ml/types.js';
+import type { AnomalyResult, WalletMLFeatures } from '../../ml/types.js';
 
 export interface WhaleActivity {
   address: string;
@@ -15,6 +15,7 @@ export interface WhaleReport {
   whales: WhaleActivity[];
   whaleConcentration: number;
   risk: 'low' | 'medium' | 'high';
+  anomalies?: AnomalyResult[];
 }
 
 export async function trackWhales(
@@ -61,11 +62,14 @@ export async function trackWhales(
         if (result) {
           const behavior = result.behavior_type;
           if (behavior === 'whale' || behavior === 'normal_trader') {
-            whales[idx]!.recentActivity = 'holding';
+            const whale = whales[idx];
+            if (whale) whale.recentActivity = 'holding';
           } else if (behavior === 'sniper' || behavior === 'bot') {
-            whales[idx]!.recentActivity = 'accumulating';
+            const whale = whales[idx];
+            if (whale) whale.recentActivity = 'accumulating';
           } else if (behavior === 'mixer_user' || behavior === 'rug_deployer') {
-            whales[idx]!.recentActivity = 'distributing';
+            const whale = whales[idx];
+            if (whale) whale.recentActivity = 'distributing';
           }
         }
       } catch {
@@ -73,6 +77,27 @@ export async function trackWhales(
       }
     });
     await Promise.allSettled(classifyTasks);
+  }
+
+  // ML: detect anomalies in whale transfer flows
+  let detectedAnomalies: AnomalyResult[] | undefined;
+  if (mlClient && whales.length > 0) {
+    try {
+      const flows = whales.map((w) => ({
+        symbol: tokenAddress,
+        amount: Number(w.balance) / 1e18,
+        from: w.address,
+        to: tokenAddress,
+        timestamp: Date.now(),
+        type: 'transfer' as const,
+      }));
+      const anomalyResults = await mlClient.detectAnomalies(flows);
+      if (anomalyResults.length > 0) {
+        detectedAnomalies = anomalyResults.filter((r) => r.isAnomaly);
+      }
+    } catch {
+      // ML anomaly detection unavailable
+    }
   }
 
   const whaleConcentration = whales.reduce((sum, w) => sum + w.percentageOfSupply, 0);
@@ -86,5 +111,6 @@ export async function trackWhales(
     whales,
     whaleConcentration,
     risk,
+    ...(detectedAnomalies && detectedAnomalies.length > 0 && { anomalies: detectedAnomalies }),
   };
 }

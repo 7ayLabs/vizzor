@@ -96,8 +96,8 @@ function findClusters(nodes: FlowNode[], edges: FlowEdge[]): FlowNode[][] {
     const stack = [node.address];
 
     while (stack.length > 0) {
-      const addr = stack.pop()!;
-      if (visited.has(addr)) continue;
+      const addr = stack.pop();
+      if (addr === undefined || visited.has(addr)) continue;
       visited.add(addr);
 
       const n = nodeIndex.get(addr);

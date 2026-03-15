@@ -1,8 +1,8 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="vizzor_lighticon.png">
-    <source media="(prefers-color-scheme: light)" srcset="vizzor_icon.png">
-    <img alt="Vizzor" src="vizzor_icon.png" width="120">
+    <source media="(prefers-color-scheme: dark)" srcset="vizzor_logoicon.png">
+    <source media="(prefers-color-scheme: light)" srcset="vizzor_logodarkicon.png">
+    <img alt="Vizzor" src="vizzor_logodarkicon.png" width="120">
   </picture>
 </p>
 
@@ -212,6 +212,8 @@ vizzor ico list [options]           # ICO/IDO tracker
 vizzor config init                  # Initialize config
 vizzor config set <key> <value>     # Set config value
 vizzor config show                  # Show config
+vizzor wallet create|import|list|delete  # Wallet management
+vizzor backtest [options]           # Historical strategy backtest
 vizzor bot start [options]          # Start Discord/Telegram bots
 vizzor bot validate                 # Check bot token configuration
 ```
@@ -239,6 +241,7 @@ vizzor bot validate                 # Check bot token configuration
 | `/agent status <name>` | View status + recent decisions |
 | `/agent delete <name>` | Delete an agent |
 | `/agent strategies` | List available strategies |
+| `/backtest` | Run historical strategy backtest |
 | `/help` | Command reference |
 | `/clear` | Clear messages |
 | `/exit` | Quit |
@@ -314,6 +317,11 @@ Vizzor exposes **17+ tools** to the AI. During conversation, the AI autonomously
 | `create_agent` | Deploy autonomous prediction agent |
 | `list_agents` | List active agents |
 | `get_agent_status` | Agent status and decisions |
+| `run_backtest` | Historical strategy backtesting |
+| `get_ml_prediction` | ML model price prediction |
+| `get_ml_regime` | Market regime classification |
+| `get_ml_model_health` | ML sidecar health and model status |
+| `classify_user_intent` | AI-powered query intent detection |
 
 ### AI Providers
 
@@ -390,16 +398,28 @@ vizzor api start --port 3100
 vizzor api key create "my-app"
 
 # Endpoints
-GET  /health              # Health check (public)
-GET  /docs                # OpenAPI/Swagger UI (dev only)
-POST /scan                # Token security scan
-POST /trends              # Market trends
-POST /track               # Wallet forensics
-POST /predict             # AI prediction
-POST /audit               # Contract audit
+GET  /health                    # Health check (public)
+GET  /docs                      # OpenAPI/Swagger UI (dev only)
+POST /scan                      # Token security scan
+POST /trends                    # Market trends
+POST /track                     # Wallet forensics
+POST /predict                   # AI prediction
+POST /audit                     # Contract audit
+GET  /v1/market/price/:symbol   # Single symbol price
+GET  /v1/market/prices?symbols= # Batch prices (comma-separated)
+GET  /v1/market/trending        # Trending tokens
+GET  /v1/market/fear-greed      # Fear & Greed Index
+GET  /v1/market/ml-health       # ML sidecar status
+POST /v1/chat                   # AI chat (SSE streaming)
+POST /v1/backtest               # Historical backtest
+GET  /v1/agents                 # List agents
+POST /v1/agents                 # Create agent
+POST /v1/agents/:name/start    # Start agent
+POST /v1/agents/:name/stop     # Stop agent
+GET  /v1/portfolio/:id          # Agent portfolio
 ```
 
-All endpoints require `X-API-Key` header. Rate limited to 100 req/min per key. Keys are hashed with scrypt and stored locally.
+All endpoints require `X-API-Key` header. Rate limited to 300 req/min per key. Keys are hashed with scrypt and stored locally.
 
 ### Autonomous Agents v2
 
@@ -436,7 +456,7 @@ Portfolio-aware trading agents with risk management:
 | Arbitrage Scanner | Cross-DEX price divergence |
 
 ```bash
-docker compose up -d  # Starts Vizzor + ML sidecar + PostgreSQL + n8n
+docker compose up -d  # Starts Vizzor + ML sidecar + PostgreSQL + n8n + Web Dashboard
 ```
 
 ### Extended ML Models
@@ -453,7 +473,7 @@ v0.10 adds 7 new Python models to the sidecar:
 | **Portfolio Optimizer** | Mean-Variance | Dynamic position sizing |
 | **Intent Classifier** | DistilBERT | User query intent detection |
 
-All 13 models integrated across 14 TypeScript modules with graceful fallback to heuristics.
+All 13 models integrated across 14 TypeScript modules with graceful fallback to heuristics. v0.11 adds model training pipeline (`POST /train`, `POST /evaluate`) and wires remaining ML modules.
 
 ---
 
@@ -475,7 +495,78 @@ Autonomous prediction agents that run a continuous **think -> analyze -> decide 
 | **Trend-Following** | EMA Crossover + OBV + Fear & Greed | Golden cross + rising volume | Death cross |
 | **ML-Adaptive** | All TA + Funding + Fear & Greed + Regime | ML composite score > threshold | ML signal reversal + stop loss |
 
-> Agents operate in **alert-only mode** -- they log decisions and emit signals but do not execute on-chain transactions.
+> Agents can run in **alert-only mode** or with **live trade execution** via DEX integration.
+
+### Trade Execution (v0.11)
+
+On-chain trade execution with safety controls:
+
+- **Wallet Manager** — encrypted private key storage (AES-256-GCM + scrypt) at `~/.vizzor/wallets/`
+- **DEX Router** — Uniswap V3 SwapRouter02 integration for token swaps
+- **Slippage Protection** — configurable max slippage (default 0.5%)
+- **Dry-Run Mode** — simulate trades without executing (default: on)
+- **Gas Estimation** — automatic gas estimation with configurable multiplier
+
+```bash
+vizzor wallet create           # Create encrypted wallet
+vizzor wallet import           # Import existing private key
+vizzor wallet list             # List managed wallets
+```
+
+### Backtesting Engine (v0.11)
+
+Historical strategy simulation with walk-forward analysis:
+
+```bash
+vizzor backtest --strategy momentum --pair BTCUSDT --from 2024-01-01 --to 2024-12-31
+```
+
+- Run any strategy against historical kline data
+- Metrics: total return, win rate, profit factor, Sharpe ratio, max drawdown
+- Equity curve and drawdown visualization
+- Walk-forward analysis with rolling train/test windows
+- Available via CLI, TUI (`/backtest`), AI tool, and REST API (`POST /v1/backtest`)
+
+### Real-time WebSocket Feeds (v0.11)
+
+Live market data via Binance WebSocket streams:
+
+- Trade, kline, and ticker streams with auto-reconnect
+- Connection pooling (up to 5 connections, 1024 streams each)
+- In-memory price cache for instant access
+- Agent engine prefers WebSocket data over REST polling
+
+### Web Dashboard (v0.11)
+
+Next.js 15 web dashboard at `http://localhost:3001`:
+
+- **AI Chat** — full conversational interface with streaming responses, tool result cards, and all 47 CLI tools available via natural language
+- **Dashboard** — market overview with Fear & Greed, ML predictions (Chronovisor), sentiment intelligence, regime detection, trending tokens, news feed, agent summary, and ML model status
+- **Markets** — market analysis with symbol selector, wallet analyzer, and on-chain intelligence
+- **Agents** — create, start/stop, and monitor autonomous trading agents
+- **Portfolio** — positions, trade history, performance metrics
+- **Settings** — API and provider configuration
+- **Docs** — interactive documentation for all AI tools and chat commands
+
+**UI features:**
+- Dark/light/system theme with automatic switching
+- Live crypto ticker (top 100 coins) with batch price fetching
+- Cryptocurrency icons (CDN + letter fallback for newer tokens)
+- Custom Vizzor branding with theme-aware logo
+- API and ML health indicators
+- Responsive mobile layout with collapsible sidebar
+
+```bash
+docker compose up web           # Start dashboard on port 3001
+```
+
+### Training Pipeline (v0.11)
+
+Model training and evaluation via the ML sidecar:
+
+- `POST /train` — train rug detector, trend scorer, regime classifier, sentiment models
+- `POST /evaluate` — evaluate model accuracy on held-out test sets
+- Data loaders for PostgreSQL-backed labeled datasets
 
 ---
 
@@ -490,7 +581,10 @@ Autonomous prediction agents that run a continuous **think -> analyze -> decide 
 | Base | Live | GoPlus |
 | BSC | Live | GoPlus |
 | Avalanche | Live | GoPlus |
-| Solana | Live (DEX + GoPlus) | GoPlus |
+| Solana | Live | GoPlus |
+| Sui | Live | GoPlus |
+| Aptos | Live | GoPlus |
+| TON | Live | GoPlus |
 
 New chains are added by implementing the `ChainAdapter` interface.
 
@@ -561,7 +655,7 @@ pnpm dev              # Dev mode (tsx)
 pnpm build            # Build (tsup)
 pnpm lint             # ESLint
 pnpm typecheck        # TypeScript strict
-pnpm test             # Vitest (164 tests, 19 suites)
+pnpm test             # Vitest
 pnpm test:coverage    # With coverage
 ```
 
@@ -573,7 +667,8 @@ pnpm test:coverage    # With coverage
 | CLI | Commander.js |
 | TUI | Ink (React for terminals) |
 | AI | Anthropic SDK, OpenAI SDK, Google GenAI, Ollama |
-| Blockchain | viem (EVM), plugin adapter system |
+| Blockchain | viem (EVM), Solana, Sui, Aptos, TON adapters |
+| Dashboard | Next.js 15, React 19, Tailwind CSS 4 |
 | Database | better-sqlite3 + PostgreSQL (pg) |
 | ML Sidecar | Python FastAPI, scikit-learn, PyTorch |
 | API | Fastify + Swagger/OpenAPI |

@@ -11,6 +11,10 @@ import { createLogger } from '../utils/logger.js';
 import { registerMarketRoutes } from './routes/v1/market.js';
 import { registerAnalysisRoutes } from './routes/v1/analysis.js';
 import { registerSecurityRoutes } from './routes/v1/security.js';
+import { backtestRoutes } from './routes/v1/backtest.js';
+import { agentRoutes } from './routes/v1/agents.js';
+import { portfolioRoutes } from './routes/v1/portfolio.js';
+import { registerChatRoutes } from './routes/v1/chat.js';
 import { authMiddleware } from './auth/middleware.js';
 import { errorHandler } from './middleware/error-handler.js';
 
@@ -31,7 +35,7 @@ export async function startApiServer(options: {
     origin: isProd ? origin : true,
   });
   await server.register(rateLimit, {
-    max: 100,
+    max: 300,
     timeWindow: '1 minute',
   });
   await server.register(swagger, {
@@ -39,7 +43,7 @@ export async function startApiServer(options: {
       info: {
         title: 'Vizzor API',
         description: 'AI-powered crypto intelligence REST API',
-        version: '0.10.5',
+        version: '0.11.0',
       },
       servers: [{ url: `http://${options.host}:${options.port}` }],
       components: {
@@ -78,7 +82,7 @@ export async function startApiServer(options: {
     }
     return {
       status: 'ok',
-      version: '0.10.5',
+      version: '0.11.0',
       uptime: process.uptime(),
       timestamp: new Date().toISOString(),
     };
@@ -88,6 +92,10 @@ export async function startApiServer(options: {
   await server.register(registerMarketRoutes, { prefix: '/v1/market' });
   await server.register(registerAnalysisRoutes, { prefix: '/v1/analysis' });
   await server.register(registerSecurityRoutes, { prefix: '/v1/security' });
+  await server.register(registerChatRoutes, { prefix: '/v1' });
+  await server.register(backtestRoutes);
+  await server.register(agentRoutes);
+  await server.register(portfolioRoutes);
 
   await server.listen({ port: options.port, host: options.host });
   log.info(`Vizzor API listening on ${options.host}:${options.port}`);
