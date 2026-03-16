@@ -198,6 +198,42 @@ Ask for any specific time and Vizzor computes a targeted projection:
 > predict DOGE end of week        # end of week
 ```
 
+### Institutional Microstructure Analysis (v0.12)
+
+8 dedicated tools for institutional-grade order flow and market structure analysis. When asked for a full analysis, the AI chains all 8 tools and synthesizes a multi-scenario report.
+
+| Tool | Signal |
+|------|--------|
+| **Market Structure** | Swing highs/lows, HH/HL/LH/LL sequence, BOS/CHoCH, market bias |
+| **Fair Value Gaps** | Bullish/bearish FVGs with fill status, strength, and proximity |
+| **VWAP** | Volume-weighted average price + standard deviation bands |
+| **Volume Delta** | Cumulative buy/sell delta, divergence detection |
+| **Liquidation Map** | Estimated liquidation clusters at 10x/25x/50x/100x leverage |
+| **Order Book Depth** | L2 bid/ask walls, imbalance ratio, institutional absorption zones |
+| **Support/Resistance** | Auto-detected S/R zones from price action with touch counts |
+| **Squeeze Detector** | Short/long squeeze probability from multi-signal analysis |
+
+Full microstructure analysis outputs a structured 7-section report:
+
+```
+CONTEXTO GENERAL         → Price, bias, structure, psychological levels
+ESCENARIO 1 – BULL TRAP  → Upside manipulation zone, short entry, targets
+ESCENARIO 2 – BEAR TRAP  → Downside manipulation zone, long entry, targets
+ESCENARIO 3 – SHORT SQZ  → Short squeeze cascade setup
+ESCENARIO 4 – LONG SQZ   → Long squeeze cascade setup
+ZONAS DE MANIPULACIÓN    → Key institutional targeting zones
+CONCLUSIÓN OPERATIVA     → Highest probability scenario
+```
+
+Works with all AI providers. For Ollama: data is pre-computed and injected into context. For Claude/OpenAI/Gemini: AI calls tools individually and synthesizes the report.
+
+```
+> full microstructure analysis for BTC
+> show me FVGs on ETH 15m
+> where are the liquidation clusters for SOL?
+> is there a short squeeze setup on BTC?
+```
+
 ---
 
 ## Command Reference
@@ -297,7 +333,7 @@ vizzor bot validate                 # Check bot token configuration
 
 ## AI Tools
 
-Vizzor exposes **20+ tools** to the AI. During conversation, the AI autonomously calls whichever tools it needs to build a complete prediction.
+Vizzor exposes **30+ tools** to the AI. During conversation, the AI autonomously calls whichever tools it needs to build a complete prediction.
 
 | Tool | What It Provides |
 |------|------------------|
@@ -327,6 +363,14 @@ Vizzor exposes **20+ tools** to the AI. During conversation, the AI autonomously
 | `get_chronovisor_prediction` | ChronoVisor ensemble prediction (v0.12) |
 | `scan_trenches` | Real-time memecoin migration scanner (v0.12) |
 | `preview_trade` | Trade preview with safety checks (v0.12) |
+| `get_market_structure` | Swing points, HH/HL/LH/LL, BOS/CHoCH, market bias (v0.12) |
+| `get_fvg_analysis` | Fair Value Gap detection with fill status and strength (v0.12) |
+| `get_vwap` | Volume-Weighted Average Price + deviation bands (v0.12) |
+| `get_volume_delta` | Cumulative buy/sell delta + divergence detection (v0.12) |
+| `get_liquidation_map` | Liquidation zone clusters at 10x/25x/50x/100x (v0.12) |
+| `get_order_book_depth` | L2 order book depth, bid/ask walls, imbalance (v0.12) |
+| `get_sr_zones` | Auto-detected support/resistance zones (v0.12) |
+| `get_squeeze_detector` | Short/long squeeze probability analysis (v0.12) |
 
 ### AI Providers
 
@@ -350,7 +394,7 @@ For providers without tool support (Ollama), Vizzor pre-fetches all relevant dat
 
 | Source | Data | Auth |
 |--------|------|------|
-| **Binance** | Klines, tickers, funding rates, open interest, gainers/losers | Public |
+| **Binance** | Klines, tickers, funding rates, open interest, order book depth, long/short ratios, taker buy/sell, gainers/losers | Public |
 | **DexScreener** | DEX pairs, trending tokens, real-time pricing | Public |
 | **GoPlus** | Token security, honeypot detection, holder analysis | Public |
 | **DeFiLlama** | TVL, fundraising rounds, protocol metrics | Public |
@@ -595,6 +639,11 @@ Next.js 15 web dashboard at `http://localhost:3001`:
 - Custom Vizzor branding
 - API and ML health indicators
 - Responsive mobile layout with collapsible sidebar
+- **Rich chat rendering** — colored section headers, $SYMBOL crypto tags with icons, tables, LaTeX cleanup
+- **Compact tool calls** — single collapsible group with progress bar during streaming
+- **Collapsible responses** — auto-collapse long messages with "Show more/less" toggle
+- **Full-page scroll** — natural page scroll with sticky input bar
+- **Conversation memory** — context-aware multi-turn chat with thread support
 
 ```bash
 docker compose up web           # Start dashboard on port 3001
