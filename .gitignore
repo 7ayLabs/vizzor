@@ -3,6 +3,8 @@ node_modules/
 
 # Build
 dist/
+*.tsbuildinfo
+web/next-env.d.ts
 
 # Environment
 .env

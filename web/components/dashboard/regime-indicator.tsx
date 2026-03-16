@@ -22,8 +22,8 @@ const REGIME_STYLES: Record<string, { color: string; label: string; icon: string
     label: 'Trending Bear',
     icon: 'fa-solid fa-arrow-trend-down',
   },
-  ranging: { color: 'var(--warning)', label: 'Ranging', icon: 'fa-solid fa-arrows-left-right' },
-  volatile: { color: 'var(--accent-orange)', label: 'Volatile', icon: 'fa-solid fa-bolt' },
+  ranging: { color: '#a1a1a1', label: 'Ranging', icon: 'fa-solid fa-arrows-left-right' },
+  volatile: { color: '#a1a1a1', label: 'Volatile', icon: 'fa-solid fa-bolt' },
   capitulation: { color: 'var(--danger)', label: 'Capitulation', icon: 'fa-solid fa-skull' },
 };
 
@@ -65,32 +65,27 @@ export function RegimeIndicator() {
   const style = REGIME_STYLES[r] ?? REGIME_STYLES.ranging;
 
   return (
-    <div className="dash-card bg-[var(--card)] border border-[var(--border)] rounded-lg p-3 sm:p-4 animate-fade-up stagger-4">
+    <div className="dash-card bg-white/[0.04] backdrop-blur-xl border border-white/[0.08] rounded-xl p-3 sm:p-4 animate-fade-up stagger-4">
       <div className="flex items-center gap-2 mb-3">
-        <i className="fa-solid fa-signal text-xs text-[var(--accent-blue)]" />
-        <h3 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
+        <i className="fa-solid fa-signal text-xs text-white/50" />
+        <h3 className="text-xs font-medium text-[#6b6b6b] uppercase tracking-wider">
           Market Regime
         </h3>
-        <span className="text-[9px] px-1.5 py-0.5 rounded font-medium bg-[var(--accent-blue)]/10 text-[var(--accent-blue)] ml-auto">
+        <span className="text-[9px] px-1.5 py-0.5 rounded font-medium bg-white/[0.08] text-[#a1a1a1] ml-auto">
           HMM
         </span>
       </div>
       {regime ? (
         <div className="space-y-3">
           <div className="flex items-center gap-2.5">
-            <div
-              className="flex size-10 items-center justify-center rounded-lg"
-              style={{
-                background: `color-mix(in srgb, ${style.color} 15%, transparent)`,
-              }}
-            >
+            <div className="flex size-10 items-center justify-center rounded-lg bg-white/[0.06]">
               <i className={`${style.icon} text-base`} style={{ color: style.color }} />
             </div>
             <div>
               <p className="text-sm font-bold" style={{ color: style.color }}>
                 {style.label}
               </p>
-              <p className="text-[10px] text-[var(--muted)]">
+              <p className="text-[10px] text-[#6b6b6b]">
                 {regime.confidence != null
                   ? `${Number(regime.confidence).toFixed(0)}% confidence`
                   : '---'}
@@ -111,20 +106,20 @@ export function RegimeIndicator() {
                       className="flex items-center gap-2 text-xs animate-fade-up"
                       style={{ animationDelay: `${i * 0.06}s` }}
                     >
-                      <span className="w-16 sm:w-20 text-[var(--muted)] capitalize truncate text-[10px] sm:text-xs">
+                      <span className="w-16 sm:w-20 text-[#6b6b6b] capitalize truncate text-[10px] sm:text-xs">
                         {name.replace('_', ' ')}
                       </span>
-                      <div className="flex-1 h-1.5 bg-[var(--background)] rounded-full overflow-hidden">
+                      <div className="flex-1 h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
                         <div
                           className="h-full rounded-full animate-bar-fill"
                           style={{
                             width: `${prob * 100}%`,
-                            background: s?.color ?? 'var(--muted)',
+                            background: s?.color ?? '#6b6b6b',
                             animationDelay: `${i * 0.1}s`,
                           }}
                         />
                       </div>
-                      <span className="font-mono w-10 text-right text-[10px]">
+                      <span className="font-mono w-10 text-right text-[10px] text-[#a1a1a1]">
                         {prob != null ? `${(prob * 100).toFixed(0)}%` : '---'}
                       </span>
                     </div>
@@ -133,7 +128,7 @@ export function RegimeIndicator() {
             </div>
           )}
 
-          <p className="text-[10px] text-[var(--muted)] flex items-center gap-1">
+          <p className="text-[10px] text-[#6b6b6b] flex items-center gap-1">
             <i className="fa-solid fa-microchip text-[8px]" />
             {regime.model}
           </p>
@@ -145,7 +140,7 @@ export function RegimeIndicator() {
             <span className="typing-dot" />
             <span className="typing-dot" />
           </span>
-          <span className="text-xs text-[var(--muted)]">Detecting regime...</span>
+          <span className="text-xs text-[#6b6b6b]">Detecting regime...</span>
         </div>
       )}
     </div>

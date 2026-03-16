@@ -5,10 +5,10 @@ import type { FearGreedData, NewsItem } from '@/lib/types';
 
 const FG_ZONES = [
   { max: 20, label: 'Extreme Fear', color: '#ef4444' },
-  { max: 40, label: 'Fear', color: '#f97316' },
-  { max: 60, label: 'Neutral', color: '#f59e0b' },
-  { max: 80, label: 'Greed', color: '#84cc16' },
-  { max: 100, label: 'Extreme Greed', color: '#10b981' },
+  { max: 40, label: 'Fear', color: '#a1a1a1' },
+  { max: 60, label: 'Neutral', color: '#6b6b6b' },
+  { max: 80, label: 'Greed', color: '#a1a1a1' },
+  { max: 100, label: 'Extreme Greed', color: '#22c55e' },
 ];
 
 function getFGStyle(value: number) {
@@ -35,7 +35,7 @@ export function SentimentOverview() {
 
   const mood = bullish > bearish ? 'Bullish' : bearish > bullish ? 'Bearish' : 'Neutral';
   const moodColor =
-    bullish > bearish ? 'var(--success)' : bearish > bullish ? 'var(--danger)' : 'var(--muted)';
+    bullish > bearish ? 'var(--success)' : bearish > bullish ? 'var(--danger)' : '#a1a1a1';
   const moodIcon =
     bullish > bearish
       ? 'fa-solid fa-face-smile'
@@ -44,36 +44,31 @@ export function SentimentOverview() {
         : 'fa-solid fa-face-meh';
 
   return (
-    <div className="dash-card bg-[var(--card)] border border-[var(--border)] rounded-lg p-3 sm:p-4 animate-fade-up stagger-5">
+    <div className="dash-card bg-white/[0.04] backdrop-blur-xl border border-white/[0.08] rounded-xl p-3 sm:p-4 animate-fade-up stagger-5">
       <div className="flex items-center gap-2 mb-3">
-        <i className="fa-solid fa-brain text-xs text-[var(--accent-purple)]" />
-        <h3 className="text-xs font-medium text-[var(--muted)] uppercase tracking-wider">
+        <i className="fa-solid fa-brain text-xs text-white/45" />
+        <h3 className="text-xs font-medium text-[#6b6b6b] uppercase tracking-wider">
           Sentiment Intelligence
         </h3>
       </div>
 
       {/* Overall mood */}
       <div className="flex items-center gap-2.5 mb-3">
-        <div
-          className="flex size-10 items-center justify-center rounded-lg"
-          style={{
-            background: `color-mix(in srgb, ${moodColor} 15%, transparent)`,
-          }}
-        >
+        <div className="flex size-10 items-center justify-center rounded-lg bg-white/[0.06]">
           <i className={`${moodIcon} text-base`} style={{ color: moodColor }} />
         </div>
         <div>
           <p className="text-sm font-bold" style={{ color: moodColor }}>
             {mood}
           </p>
-          <p className="text-[10px] text-[var(--muted)]">Overall market sentiment</p>
+          <p className="text-[10px] text-[#6b6b6b]">Overall market sentiment</p>
         </div>
       </div>
 
       {/* Fear & Greed bar */}
-      <div className="mb-3 pb-3 border-b border-[var(--border)]">
+      <div className="mb-3 pb-3 border-b border-white/[0.08]">
         <div className="flex items-center justify-between mb-1">
-          <span className="text-[10px] text-[var(--muted)] flex items-center gap-1">
+          <span className="text-[10px] text-[#6b6b6b] flex items-center gap-1">
             <i className="fa-solid fa-gauge text-[8px]" />
             Fear & Greed Index
           </span>
@@ -86,7 +81,7 @@ export function SentimentOverview() {
             </span>
           </div>
         </div>
-        <div className="h-1.5 bg-[var(--background)] rounded-full overflow-hidden">
+        <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
           <div
             className="h-full rounded-full animate-bar-fill"
             style={{ width: `${fgValue}%`, background: fgStyle.color }}
@@ -96,7 +91,7 @@ export function SentimentOverview() {
 
       {/* News sentiment distribution */}
       <div>
-        <p className="text-[10px] text-[var(--muted)] mb-2 flex items-center gap-1">
+        <p className="text-[10px] text-[#6b6b6b] mb-2 flex items-center gap-1">
           <i className="fa-solid fa-newspaper text-[8px]" />
           News Sentiment ({news.length} articles)
         </p>
@@ -110,11 +105,11 @@ export function SentimentOverview() {
             <span className="font-mono font-bold text-[var(--danger)]">{bearish}</span>
           </div>
           <div className="flex items-center gap-1">
-            <i className="fa-solid fa-minus text-[8px] text-[var(--muted)]" />
-            <span className="font-mono font-bold">{neutral}</span>
+            <i className="fa-solid fa-minus text-[8px] text-[#6b6b6b]" />
+            <span className="font-mono font-bold text-white">{neutral}</span>
           </div>
         </div>
-        <div className="flex h-1.5 rounded-full overflow-hidden bg-[var(--background)]">
+        <div className="flex h-1.5 rounded-full overflow-hidden bg-white/[0.06]">
           {bullish > 0 && (
             <div
               className="bg-[var(--success)] animate-bar-fill"
@@ -122,7 +117,7 @@ export function SentimentOverview() {
             />
           )}
           {neutral > 0 && (
-            <div className="bg-[var(--muted)]" style={{ width: `${(neutral / total) * 100}%` }} />
+            <div className="bg-[#6b6b6b]" style={{ width: `${(neutral / total) * 100}%` }} />
           )}
           {bearish > 0 && (
             <div className="bg-[var(--danger)]" style={{ width: `${(bearish / total) * 100}%` }} />

@@ -7,7 +7,11 @@ import { getProvider, getConfig, switchProvider } from '../../../ai/client.js';
 import { buildChatSystemPrompt } from '../../../ai/prompts/chat.js';
 import { VIZZOR_TOOLS } from '../../../ai/tools.js';
 import { handleTool } from '../../../ai/tool-handler.js';
-import type { ToolHandler, StreamCallbacks } from '../../../ai/providers/types.js';
+import type {
+  ToolHandler,
+  StreamCallbacks,
+  ChatMessage as ProviderChatMessage,
+} from '../../../ai/providers/types.js';
 import { buildContextBlock } from '../../../ai/context-injector.js';
 import { getAvailableProviders } from '../../../ai/providers/registry.js';
 import { createLogger } from '../../../utils/logger.js';
@@ -106,26 +110,30 @@ export async function registerChatRoutes(server: FastifyInstance): Promise<void>
         const provider = getProvider();
         const systemPrompt = buildChatSystemPrompt();
 
-        // Build conversation context from prior messages
+        // Build conversation history from prior messages
         const lastUserMsg = messages[messages.length - 1] as ChatMessage;
-        const priorMessages = messages.slice(0, -1);
-        let contextBlock = '';
-        if (priorMessages.length > 0) {
-          contextBlock = '\n\n## Conversation History\n\n';
-          for (const msg of priorMessages) {
-            contextBlock += `**${msg.role === 'user' ? 'User' : 'Assistant'}**: ${msg.content}\n\n`;
-          }
-        }
-
-        const fullSystemPrompt = systemPrompt + contextBlock;
+        const priorMessages = messages.slice(0, -1) as ProviderChatMessage[];
         const userMessage = lastUserMsg.content;
 
         if (!provider.supportsTools) {
           // Non-tool provider: inject context and do single pass
           const { OLLAMA_SYSTEM_PROMPT } = await import('../../../ai/prompts/chat.js');
-          const context = await buildContextBlock(userMessage);
-          const enrichedPrompt =
-            OLLAMA_SYSTEM_PROMPT + (context ? '\n' + context : '') + contextBlock;
+          const {
+            contextText,
+            tokenData: allTokens,
+            queriedSymbols,
+          } = await buildContextBlock(userMessage, { compact: true });
+
+          // Emit structured token data — filter to queried tokens only (no baseline noise)
+          const tokens =
+            queriedSymbols.length > 0
+              ? allTokens.filter((t) => queriedSymbols.includes(t.symbol))
+              : allTokens;
+          if (tokens.length > 0) {
+            write('token_data', { tokens });
+          }
+
+          const enrichedPrompt = OLLAMA_SYSTEM_PROMPT + (contextText ? '\n' + contextText : '');
 
           const callbacks: StreamCallbacks = {
             onText: (delta) => write('text', { delta }),
@@ -138,7 +146,14 @@ export async function registerChatRoutes(server: FastifyInstance): Promise<void>
             onDone: (fullText) => write('done', { fullText }),
           };
 
-          await provider.analyzeStream(enrichedPrompt, userMessage, callbacks);
+          await provider.analyzeStream(
+            enrichedPrompt,
+            userMessage,
+            callbacks,
+            undefined,
+            undefined,
+            priorMessages,
+          );
           reply.raw.end();
           return;
         }
@@ -159,11 +174,12 @@ export async function registerChatRoutes(server: FastifyInstance): Promise<void>
         };
 
         await provider.analyzeStream(
-          fullSystemPrompt,
+          systemPrompt,
           userMessage,
           callbacks,
           VIZZOR_TOOLS,
           wrappedHandler,
+          priorMessages,
         );
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
@@ -173,5 +189,20 @@ export async function registerChatRoutes(server: FastifyInstance): Promise<void>
 
       reply.raw.end();
     },
+  });
+
+  // POST /v1/chat/thread
+  server.post('/thread', async (request, reply) => {
+    const body = request.body as { parentMessageId: string; message: string; apiKey?: string };
+    if (!body.parentMessageId || !body.message) {
+      return reply.status(400).send({ error: 'parentMessageId and message are required' });
+    }
+    // Thread replies use the same chat flow but include parent context
+    // For now, return a placeholder that integrates with existing chat SSE
+    return {
+      threadId: body.parentMessageId,
+      message: body.message,
+      status: 'queued',
+    };
   });
 }

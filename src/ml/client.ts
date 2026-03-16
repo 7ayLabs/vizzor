@@ -31,6 +31,9 @@ import type {
   BytecodeRiskMLResult,
   PortfolioPredMLFeatures,
   PortfolioPredMLResult,
+  PumpDetectionMLResult,
+  NarrativeMLResult,
+  DivergenceMLResult,
 } from './types.js';
 
 const log = createLogger('ml-client');
@@ -317,6 +320,66 @@ export class MLClient {
       return (await res.json()) as PortfolioPredMLResult;
     } catch (err) {
       log.debug(`ML portfolio forward failed: ${err instanceof Error ? err.message : String(err)}`);
+      return null;
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // v0.12.0 — New ML endpoints
+  // -----------------------------------------------------------------------
+
+  async detectPump(
+    token: string,
+    prices: number[],
+    volumes: number[],
+  ): Promise<PumpDetectionMLResult | null> {
+    try {
+      const res = await fetch(`${this.baseUrl}/detect-pump`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, prices, volumes }),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!res.ok) return null;
+      return (await res.json()) as PumpDetectionMLResult;
+    } catch (err) {
+      log.debug(`ML pump detect failed: ${err instanceof Error ? err.message : String(err)}`);
+      return null;
+    }
+  }
+
+  async detectNarrative(texts: string[]): Promise<NarrativeMLResult[] | null> {
+    try {
+      const res = await fetch(`${this.baseUrl}/detect-narrative`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texts }),
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!res.ok) return null;
+      const data = (await res.json()) as { narratives: NarrativeMLResult[] };
+      return data.narratives;
+    } catch (err) {
+      log.debug(`ML narrative detect failed: ${err instanceof Error ? err.message : String(err)}`);
+      return null;
+    }
+  }
+
+  async detectDivergence(
+    marketOdds: number[],
+    prices: number[],
+  ): Promise<DivergenceMLResult | null> {
+    try {
+      const res = await fetch(`${this.baseUrl}/detect-divergence`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ market_odds: marketOdds, prices }),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!res.ok) return null;
+      return (await res.json()) as DivergenceMLResult;
+    } catch (err) {
+      log.debug(`ML divergence detect failed: ${err instanceof Error ? err.message : String(err)}`);
       return null;
     }
   }

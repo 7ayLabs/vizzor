@@ -19,6 +19,7 @@ export interface PortfolioState {
   cash: number;
   positions: Position[];
   realizedPnl: number;
+  totalReturnPct: number;
   maxDrawdown: number;
   winRate: number;
   sharpeRatio: number;

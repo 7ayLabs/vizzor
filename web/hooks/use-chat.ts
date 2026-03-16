@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
-import type { ChatMessage, ToolCallResult } from '@/lib/types';
+import type { ChatMessage, ToolCallResult, TokenDataPoint } from '@/lib/types';
 import { parseSSE } from '@/lib/sse-parser';
 import { API_BASE } from '@/lib/constants';
 
@@ -14,9 +14,34 @@ export function useChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const [wsConnection, setWsConnection] = useState<WebSocket | null>(null);
+
+  // Connect via WebSocket for supplementary real-time data (not replacing SSE chat)
+  const connectWebSocket = useCallback((apiKey: string) => {
+    const ws = new WebSocket(`ws://${window.location.hostname}:3001/ws`);
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: 'auth', apiKey }));
+      ws.send(
+        JSON.stringify({ type: 'subscribe', channels: ['ml:prediction', 'agent:*:decision'] }),
+      );
+    };
+    ws.onmessage = (event: MessageEvent) => {
+      try {
+        const msg = JSON.parse(String(event.data)) as { channel?: string };
+        // Handle real-time updates
+        if (msg.channel?.startsWith('agent:') && msg.channel.endsWith(':decision')) {
+          // Could trigger UI update for agent decisions
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+    setWsConnection(ws);
+    return ws;
+  }, []);
 
   const sendMessage = useCallback(
-    async (content: string) => {
+    async (content: string, parentMessageId?: string) => {
       if (!content.trim()) return;
 
       const userMsg: ChatMessage = {
@@ -24,6 +49,7 @@ export function useChat() {
         role: 'user',
         content: content.trim(),
         timestamp: Date.now(),
+        parentMessageId,
       };
 
       const assistantId = nextId();
@@ -34,6 +60,7 @@ export function useChat() {
         toolCalls: [],
         timestamp: Date.now(),
         isStreaming: true,
+        parentMessageId: parentMessageId ? userMsg.id : undefined,
       };
 
       setMessages((prev) => [...prev, userMsg, assistantMsg]);
@@ -72,6 +99,16 @@ export function useChat() {
                 setMessages((prev) =>
                   prev.map((m) =>
                     m.id === assistantId ? { ...m, content: m.content + payload.delta } : m,
+                  ),
+                );
+                break;
+
+              case 'token_data':
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantId
+                      ? { ...m, tokenData: payload.tokens as TokenDataPoint[] }
+                      : m,
                   ),
                 );
                 break;
@@ -166,5 +203,21 @@ export function useChat() {
     setIsStreaming(false);
   }, []);
 
-  return { messages, isStreaming, sendMessage, stopStreaming, clearChat };
+  const disconnectWebSocket = useCallback(() => {
+    if (wsConnection) {
+      wsConnection.close();
+      setWsConnection(null);
+    }
+  }, [wsConnection]);
+
+  return {
+    messages,
+    isStreaming,
+    sendMessage,
+    stopStreaming,
+    clearChat,
+    connectWebSocket,
+    disconnectWebSocket,
+    wsConnection,
+  };
 }

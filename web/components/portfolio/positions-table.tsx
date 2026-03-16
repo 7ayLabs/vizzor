@@ -39,7 +39,7 @@ export function PositionsTable() {
 
   const SortHeader = ({ label, field }: { label: string; field: SortKey }) => (
     <th
-      className="pb-2 cursor-pointer hover:text-[var(--foreground)] select-none"
+      className="pb-2 cursor-pointer hover:text-white select-none"
       onClick={() => handleSort(field)}
     >
       {label} {sortBy === field ? (sortDir === 'asc' ? '\u2191' : '\u2193') : ''}
@@ -47,14 +47,14 @@ export function PositionsTable() {
   );
 
   return (
-    <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-4">
-      <h3 className="text-xs font-medium text-[var(--muted)] mb-3 uppercase tracking-wider">
+    <div className="bg-white/[0.04] backdrop-blur-xl border border-white/[0.08] rounded-xl p-4">
+      <h3 className="text-xs font-medium text-[#6b6b6b] mb-3 uppercase tracking-wider">
         Open Positions
       </h3>
       {positions.length > 0 ? (
         <table className="w-full text-xs">
           <thead>
-            <tr className="text-[var(--muted)] text-left">
+            <tr className="text-[#6b6b6b] text-left">
               <SortHeader label="Symbol" field="symbol" />
               <th className="pb-2">Side</th>
               <th className="pb-2">Entry</th>
@@ -67,9 +67,9 @@ export function PositionsTable() {
             {positions.map((p, i) => (
               <tr
                 key={p.symbol}
-                className={`border-t border-[var(--border)] hover:bg-[var(--card-hover)] ${i % 2 === 0 ? '' : 'bg-[var(--background-secondary)]'}`}
+                className={`border-t border-white/[0.06] hover:bg-white/[0.04] ${i % 2 === 0 ? '' : 'bg-white/[0.02]'}`}
               >
-                <td className="py-2 font-mono font-medium">
+                <td className="py-2 font-mono font-medium text-white">
                   <span className="inline-flex items-center gap-1.5">
                     <CryptoIcon symbol={p.symbol} size={14} />
                     {p.symbol}
@@ -82,9 +82,9 @@ export function PositionsTable() {
                     {p.side.toUpperCase()}
                   </span>
                 </td>
-                <td className="py-2 font-mono">{formatUsd(p.entryPrice)}</td>
-                <td className="py-2 font-mono">{formatUsd(p.currentPrice)}</td>
-                <td className="py-2 font-mono">{p.size}</td>
+                <td className="py-2 font-mono text-[#a1a1a1]">{formatUsd(p.entryPrice)}</td>
+                <td className="py-2 font-mono text-[#a1a1a1]">{formatUsd(p.currentPrice)}</td>
+                <td className="py-2 font-mono text-white">{p.size}</td>
                 <td
                   className={`py-2 font-mono ${p.pnl >= 0 ? 'text-[var(--success)] glow-green' : 'text-[var(--danger)] glow-red'}`}
                 >
@@ -95,7 +95,7 @@ export function PositionsTable() {
           </tbody>
         </table>
       ) : (
-        <p className="text-xs text-[var(--muted)]">No open positions</p>
+        <p className="text-xs text-[#6b6b6b]">No open positions</p>
       )}
     </div>
   );

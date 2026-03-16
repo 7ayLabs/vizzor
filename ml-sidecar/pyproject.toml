@@ -1,6 +1,6 @@
 [project]
 name = "vizzor-ml-sidecar"
-version = "0.11.0"
+version = "0.12.0"
 description = "ML sidecar for Vizzor — LSTM, RF, Isolation Forest, Rug Detection, Wallet Classification, Sentiment NLP, Trend Scoring, TA Interpretation, Regime Detection, Strategy Bandit, Project Risk, Portfolio Optimization, Intent Classification"
 requires-python = ">=3.11"
 dependencies = [

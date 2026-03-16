@@ -65,6 +65,8 @@ export class BacktestEngine {
         fundingRate: null,
         fearGreed: null,
         priceChange24h: null,
+        predictionMarketSentiment: null,
+        predictionMarketOdds: null,
         price,
       };
 

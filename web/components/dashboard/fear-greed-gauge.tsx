@@ -5,17 +5,17 @@ import type { FearGreedData } from '@/lib/types';
 
 const ZONES = [
   { label: 'Extreme Fear', color: '#ef4444', max: 20 },
-  { label: 'Fear', color: '#f97316', max: 40 },
-  { label: 'Neutral', color: '#f59e0b', max: 60 },
-  { label: 'Greed', color: '#84cc16', max: 80 },
-  { label: 'Extreme Greed', color: '#10b981', max: 100 },
+  { label: 'Fear', color: '#a1a1a1', max: 40 },
+  { label: 'Neutral', color: '#6b6b6b', max: 60 },
+  { label: 'Greed', color: '#a1a1a1', max: 80 },
+  { label: 'Extreme Greed', color: '#22c55e', max: 100 },
 ];
 
 function getClassification(value: number): { label: string; color: string } {
   for (const zone of ZONES) {
     if (value <= zone.max) return { label: zone.label, color: zone.color };
   }
-  return { label: 'Unknown', color: '#64748b' };
+  return { label: 'Unknown', color: '#6b6b6b' };
 }
 
 export function FearGreedGauge() {
@@ -33,8 +33,8 @@ export function FearGreedGauge() {
   const needleY = 55 + 35 * Math.sin((angle * Math.PI) / 180);
 
   return (
-    <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-4">
-      <h3 className="text-xs font-medium text-[var(--muted)] mb-2 uppercase tracking-wider">
+    <div className="bg-white/[0.04] backdrop-blur-xl border border-white/[0.08] rounded-xl p-4">
+      <h3 className="text-xs font-medium text-[var(--text-muted)] mb-2 uppercase tracking-wider">
         Fear & Greed
       </h3>
       <div className="flex flex-col items-center">
@@ -88,7 +88,7 @@ export function FearGreedGauge() {
           {data ? label : 'Loading...'}
         </span>
         {data?.previous?.value !== undefined && (
-          <span className="text-[10px] text-[var(--muted)] mt-0.5">
+          <span className="text-[10px] text-[var(--text-muted)] mt-0.5">
             Prev: {data.previous.value}
           </span>
         )}

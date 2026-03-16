@@ -49,6 +49,16 @@ function rowToConfig(row: {
     strategy: row.strategy,
     pairs: JSON.parse(row.pairs) as string[],
     interval: row.interval_seconds,
+    chains: (row as Record<string, unknown>)['chains']
+      ? (JSON.parse(String((row as Record<string, unknown>)['chains'])) as string[])
+      : ['ethereum'],
+    mode: ((row as Record<string, unknown>)['mode'] as 'paper' | 'live') ?? 'paper',
+    walletId: String((row as Record<string, unknown>)['wallet_id'] ?? ''),
+    riskConfig: {
+      maxDailyLoss: Number((row as Record<string, unknown>)['max_daily_loss'] ?? 100),
+      maxPositionValue: Number((row as Record<string, unknown>)['max_position_value'] ?? 1000),
+      maxDrawdownPct: Number((row as Record<string, unknown>)['max_drawdown_pct'] ?? 10),
+    },
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

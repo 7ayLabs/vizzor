@@ -1,11 +1,23 @@
+// Structured token data from context injector (sent via SSE)
+export interface TokenDataPoint {
+  symbol: string;
+  price: number;
+  change24h: number;
+  volume24h?: number;
+  marketCap?: number;
+  source: string;
+}
+
 // Chat types
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   toolCalls?: ToolCallResult[];
+  tokenData?: TokenDataPoint[];
   timestamp: number;
   isStreaming?: boolean;
+  parentMessageId?: string;
 }
 
 export interface ToolCallResult {

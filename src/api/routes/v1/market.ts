@@ -241,6 +241,22 @@ export async function registerMarketRoutes(server: FastifyInstance): Promise<voi
     },
   });
 
+  // GET /v1/market/trenches
+  server.get('/trenches', async (request, _reply) => {
+    const {
+      chain = 'solana',
+      minLiquidity = '1000',
+      limit = '10',
+    } = request.query as Record<string, string>;
+    const { DexPairTracker } = await import('../../../data/sources/dex-pair-tracker.js');
+    const tracker = new DexPairTracker();
+    const pairs = await tracker.detectNewPairs(chain, 30);
+    const filtered = pairs
+      .filter((p) => p.liquidity >= Number(minLiquidity))
+      .slice(0, Number(limit));
+    return { chain, results: filtered, count: filtered.length };
+  });
+
   server.get('/derivatives/:symbol', {
     schema: {
       tags: ['Market'],

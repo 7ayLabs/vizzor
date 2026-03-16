@@ -20,20 +20,19 @@
 </p>
 
 <p align="center">
-  <a href="#what-vizzor-predicts">Predictions</a> &bull;
+  <a href="#requirements">Requirements</a> &bull;
   <a href="#installation">Install</a> &bull;
   <a href="#quick-start">Quick Start</a> &bull;
-  <a href="#prediction-engine">Engine</a> &bull;
-  <a href="#command-reference">Commands</a> &bull;
-  <a href="#ai-tools">AI Tools</a> &bull;
-  <a href="#data-sources">Data Sources</a> &bull;
+  <a href="#usage">Usage</a> &bull;
   <a href="#agents">Agents</a> &bull;
+  <a href="#web-dashboard">Dashboard</a> &bull;
+  <a href="#api-server">API</a> &bull;
   <a href="#configuration">Config</a>
 </p>
 
 ---
 
-Vizzor is a crypto market prediction engine. It pulls live data from 7 APIs, runs technical analysis on raw candles, reads derivatives positioning and market sentiment, then synthesizes price predictions with actual dollar targets across multiple timeframes -- from 5 minutes to 3 months.
+Vizzor is a crypto market prediction engine. It pulls live data from 7+ APIs, runs technical analysis on raw candles, reads derivatives positioning and market sentiment, then synthesizes price predictions with actual dollar targets across multiple timeframes — from 5 minutes to 3 months.
 
 Ask about any coin, token, or currency. Vizzor fetches real-time data, computes signals, and gives you a prediction with numbers, not opinions.
 
@@ -51,60 +50,74 @@ ETH at $2,112 | Bullish | Confidence: Medium-High
 
 ---
 
-## What Vizzor Predicts
+## What It Does
 
-**Any tradable crypto asset.** BTC, ETH, SOL, meme coins, new DEX launches, tokens by contract address -- if it has a price, Vizzor can analyze it.
+**Any tradable crypto asset.** BTC, ETH, SOL, meme coins, new DEX launches, tokens by contract address — if it has a price, Vizzor can analyze it.
 
-### Price Predictions
-
-Every prediction includes dollar-value targets across all timeframes:
-
-| Timeframe | Use Case |
-|-----------|----------|
-| **5 min / 15 min** | Scalping, quick entries |
-| **1 hour / 4 hours** | Intraday trading |
-| **1 day / 7 days** | Swing trades |
-| **2 weeks / 1 month** | Position trades |
-| **3 months** | Macro outlook |
-| **Custom time** | "predict BTC at 16:00 today" |
-
-Each timeframe shows bullish, most likely, and bearish scenarios with percentage moves. Predictions include support/resistance levels, signal confidence, and what would invalidate the forecast.
-
-### Market Intelligence
-
-Beyond price targets, Vizzor provides:
-
-- **Token security audits** -- honeypot detection, tax analysis, mint/blacklist flags, rug pull indicators
-- **On-chain forensics** -- wallet analysis, whale tracking, holder concentration, token flow patterns
-- **Derivatives positioning** -- funding rates, open interest, long/short ratios from Binance Futures
-- **Sentiment analysis** -- Fear & Greed Index, news sentiment, buy/sell transaction ratios
-- **Trending discovery** -- what tokens are moving right now across DexScreener and CoinGecko
-- **ICO tracking** -- upcoming launches, fundraising rounds, investor data from DeFiLlama
+- **Price predictions** — bull/bear/likely targets across 9 timeframes (5m to 3 months)
+- **Microstructure analysis** — market structure, FVGs, VWAP, volume delta, liquidation map, order book depth, S/R zones, squeeze detection
+- **Token security audits** — honeypot detection, tax analysis, mint/blacklist flags, rug pull indicators
+- **On-chain forensics** — wallet analysis, whale tracking, holder concentration, token flow patterns
+- **Derivatives positioning** — funding rates, open interest, long/short ratios from Binance Futures
+- **Sentiment analysis** — Fear & Greed Index, news sentiment, buy/sell transaction ratios
+- **Trending discovery** — what tokens are moving right now across DexScreener and CoinGecko
+- **ICO tracking** — upcoming launches, fundraising rounds, investor data
+- **Autonomous agents** — set-and-forget trading agents with paper/live execution
 
 ---
 
 ## Requirements
 
+### Hardware
+
+| Component | Minimum | Recommended |
+|-----------|---------|-------------|
+| **CPU** | 2 cores | 4+ cores |
+| **RAM** | 2 GB | 4+ GB (8 GB if running ML sidecar) |
+| **Disk** | 500 MB | 2 GB (includes SQLite cache + ML models) |
+| **Network** | Stable internet | Low latency to Binance/CoinGecko APIs |
+| **GPU** | Not required | Not required (ML models are CPU-based) |
+
+### Software
+
 | Dependency | Version | Notes |
 |------------|---------|-------|
 | **Node.js** | >= 20.0.0 | ES2022 target, ESM modules |
-| **pnpm** | >= 8.0 | Recommended (npm/yarn also work) |
+| **pnpm** | >= 8.0 | Recommended package manager (npm/yarn also work) |
 | **Python** | 3.x | Required by `better-sqlite3` native build |
 | **C++ compiler** | GCC / Clang / MSVC | Required by `better-sqlite3` native build |
-| **Docker** | >= 24 | Optional, for ML sidecar + PostgreSQL |
+| **Docker** | >= 24 | Optional — for ML sidecar, PostgreSQL, web dashboard |
 
-Works on **macOS**, **Linux**, and **Windows**. No GPU required.
+Works on **macOS**, **Linux**, and **Windows**.
+
+### API Keys
+
+| Key | Required | Free Tier | Purpose |
+|-----|----------|-----------|---------|
+| `ANTHROPIC_API_KEY` | Yes (or use Ollama) | Pay-per-use | Claude AI — best prediction quality |
+| `ETHERSCAN_API_KEY` | Recommended | Yes | Transaction history, contract source |
+| `OPENAI_API_KEY` | No | Pay-per-use | GPT-4 as alternative provider |
+| `GOOGLE_API_KEY` | No | Free tier | Gemini as alternative provider |
+| `ALCHEMY_API_KEY` | No | Free tier | Premium RPC endpoints |
+| `COINGECKO_API_KEY` | No | Free tier | Extended market data |
+| `CRYPTOPANIC_API_KEY` | No | Free tier | News with sentiment |
+| `DISCORD_TOKEN` | No | Free | Discord bot |
+| `TELEGRAM_BOT_TOKEN` | No | Free | Telegram bot |
+
+**No API key at all?** Use Ollama with a local model — fully offline predictions (lower quality but free).
 
 ---
 
 ## Installation
+
+### npm (recommended)
 
 ```bash
 npm install -g @vizzor/cli
 ```
 
 ```bash
-# Or run directly
+# Or run directly without installing
 npx @vizzor/cli
 ```
 
@@ -121,88 +134,93 @@ pnpm link --global
 ### Docker (Full Stack)
 
 ```bash
-cp .env.example .env    # Configure API keys
-docker compose up -d     # Starts CLI + ML sidecar + PostgreSQL
+cp .env.example .env     # Configure API keys
+docker compose up -d      # Starts CLI + ML sidecar + PostgreSQL + Web Dashboard
 ```
 
 ---
 
 ## Quick Start
 
+### Option A: With Claude (best quality)
+
 ```bash
-# 1. Set your API key
-vizzor config set anthropicApiKey <your-key>
-# or: export ANTHROPIC_API_KEY=<your-key>
+# 1. Set your Anthropic API key
+vizzor config set anthropicApiKey sk-ant-...
+# or: export ANTHROPIC_API_KEY=sk-ant-...
 
 # 2. Launch
 vizzor
 ```
 
-Then just ask:
+### Option B: With Ollama (free, local, offline)
+
+```bash
+# 1. Install Ollama: https://ollama.ai
+ollama pull llama3.2    # or qwen2.5:14b for better results
+
+# 2. Configure Vizzor
+vizzor config set ai.provider ollama
+vizzor config set ai.model llama3.2
+
+# 3. Launch
+vizzor
+```
+
+### Option C: With OpenAI or Gemini
+
+```bash
+vizzor config set ai.provider openai
+vizzor config set openaiApiKey sk-...
+# or
+vizzor config set ai.provider gemini
+vizzor config set googleApiKey AI...
+```
+
+### Start asking
 
 ```
 > predict BTC price next week
 > analyze $PEPE security and price outlook
 > what's trending in crypto right now
+> full microstructure analysis for ETH
 > track wallet 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045
 > audit contract 0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984
 ```
 
 ---
 
-## Prediction Engine
+## Usage
 
-### Multi-Signal Composite
+### TUI (Terminal UI)
 
-Vizzor builds predictions from 5 weighted signal dimensions:
+Launch with `vizzor`. Interactive chat with live price ticker, streaming responses, and slash commands.
 
-```
-Technical Analysis ........... 40%    RSI, MACD, Bollinger, EMA, ATR, OBV
-Market Sentiment ............. 20%    Fear & Greed, news sentiment, buy/sell ratio
-Derivatives Positioning ...... 20%    Funding rate, open interest, long/short
-Trend Momentum ............... 15%    24h/7d price action, volume trends
-Macro Cycle ................... 5%    Fear & Greed extremes as contrarian signals
-                              ----
-Composite Score        -100 to +100
-```
+**Price Ticker:** Arrow keys to navigate, **Enter** to trigger AI prediction, **Tab** to toggle focus.
 
-Signals are computed from raw data before the AI sees them. The AI presents and contextualizes the pre-computed analysis -- it doesn't invent numbers.
-
-### Technical Analysis
-
-Computed from Binance kline data. No third-party TA APIs -- pure math on raw candles.
-
-| Indicator | Signal |
-|-----------|--------|
-| **RSI** (14) | Overbought > 70, Oversold < 30 |
-| **MACD** (12, 26, 9) | Crossover direction + histogram momentum |
-| **Bollinger Bands** (20, 2) | %B position for squeeze/breakout |
-| **EMA Crossover** (12/26) | Golden cross / death cross |
-| **ATR** (14) | Volatility regime |
-| **OBV** | Volume-price confirmation |
-
-### Volatility-Scaled Projections
-
-Price targets use `hourlyVol * sqrt(hours)` scaling -- wider ranges for longer timeframes, amplified for micro-cap/meme tokens. The engine automatically detects meme coins (Pump.fun, sub-$1M market cap) and applies higher volatility multipliers.
-
-### Time-Aware Predictions
-
-Ask for any specific time and Vizzor computes a targeted projection:
-
-```
-> predict SOL at 3:00pm          # specific clock time
-> predict ETH in 30 minutes      # relative time
-> predict BTC tomorrow            # next day
-> predict DOGE end of week        # end of week
-```
-
----
-
-## Command Reference
+| Command | Description |
+|---------|-------------|
+| `/scan <address> [--chain <chain>]` | Token security + risk scan |
+| `/track <wallet> [--chain <chain>]` | Wallet forensics |
+| `/trends` | Trending tokens + top gainers/losers |
+| `/audit <contract> [--chain <chain>]` | Smart contract audit |
+| `/add <symbol>` | Add token to live price ticker |
+| `/remove <symbol>` | Remove token from ticker |
+| `/chain [<id>]` | Show/switch chain |
+| `/provider` | Show current AI provider |
+| `/provider <name>` | Switch to `anthropic`, `openai`, `gemini`, `ollama` |
+| `/agent create <name> [options]` | Create autonomous agent |
+| `/agent list` | List agents |
+| `/agent start <name>` | Start agent |
+| `/agent stop <name>` | Stop agent |
+| `/agent status <name>` | Agent status + decisions |
+| `/backtest` | Historical strategy backtest |
+| `/config` | Show config |
+| `/help` | Command reference |
 
 ### CLI Commands
 
-```
+```bash
 vizzor                              # Launch interactive TUI
 vizzor scan <token> [options]       # Token risk analysis
 vizzor trends [options]             # Market trends + top movers
@@ -215,405 +233,215 @@ vizzor config show                  # Show config
 vizzor wallet create|import|list|delete  # Wallet management
 vizzor backtest [options]           # Historical strategy backtest
 vizzor bot start [options]          # Start Discord/Telegram bots
-vizzor bot validate                 # Check bot token configuration
+vizzor api start [--port 3100]      # Start REST API server
+vizzor api key create "my-app"      # Create API key
 ```
-
-### TUI Slash Commands
-
-| Command | Description |
-|---------|-------------|
-| `/scan <address> [--chain <chain>]` | Token security + risk scan |
-| `/track <wallet> [--chain <chain>]` | Wallet forensics |
-| `/trends` | Trending tokens + top gainers/losers |
-| `/audit <contract> [--chain <chain>]` | Smart contract audit |
-| `/add <symbol>` | Add a token to the live price ticker |
-| `/remove <symbol>` | Remove a token from the price ticker |
-| `/chain [<id>]` | Show available chains or switch chain |
-| `/config` | Show config with setup guidance |
-| `/config set <key> <value>` | Update a config value |
-| `/provider` | Show current AI provider |
-| `/provider list` | List all providers with availability |
-| `/provider <name>` | Switch to `anthropic`, `openai`, `gemini`, `ollama` |
-| `/agent create <name> [options]` | Create autonomous prediction agent |
-| `/agent list` | List all agents |
-| `/agent start <name>` | Start agent cycle |
-| `/agent stop <name>` | Stop agent |
-| `/agent status <name>` | View status + recent decisions |
-| `/agent delete <name>` | Delete an agent |
-| `/agent strategies` | List available strategies |
-| `/backtest` | Run historical strategy backtest |
-| `/help` | Command reference |
-| `/clear` | Clear messages |
-| `/exit` | Quit |
-
-**Price Ticker:** Arrow keys to navigate, **Enter** to trigger full AI prediction for any token, **Tab** to toggle focus.
 
 ### Discord Bot
 
+Requires `DISCORD_TOKEN`. Enable the `MESSAGE_CONTENT` privileged intent in the [Discord Developer Portal](https://discord.com/developers/applications).
+
 | Command | Description |
 |---------|-------------|
-| `/scan <address>` | Token security + risk scan |
-| `/trends` | Trending tokens + market data |
-| `/track <wallet>` | Wallet forensics |
-| `/ico` | Upcoming launches and rounds |
-| `/audit <contract>` | Contract audit |
-| `/price <symbol>` | Live price check |
 | `/predict <symbol>` | AI prediction with signals |
-| `/wallet <address>` | ETH wallet balance |
-| `/agent_create` | Create a trading agent |
-| `/agent_list` | List all agents |
-| `/agent_start` | Start an agent |
-| `/agent_stop` | Stop an agent |
-| `/agent_status` | Agent status & decisions |
-| `/agent_delete` | Delete an agent |
-| `/help` | Show all commands |
-| *@mention* | AI-powered chat with live data |
-
-**Setup**: Enable the `MESSAGE_CONTENT` privileged intent in the [Discord Developer Portal](https://discord.com/developers/applications) for @mention AI chat.
+| `/scan <address>` | Token security scan |
+| `/trends` | Trending tokens |
+| `/track <wallet>` | Wallet forensics |
+| `/price <symbol>` | Live price |
+| `/audit <contract>` | Contract audit |
+| `/ico` | Upcoming launches |
+| `/agent_create` | Create agent |
+| *@mention* | AI-powered chat |
 
 ### Telegram Bot
 
-| Command | Description |
-|---------|-------------|
-| `/scan <address>` | Token security scan |
-| `/trends` | Trending tokens + gainers/losers |
-| `/track <wallet>` | Wallet forensics |
-| `/ico` | Upcoming launches and rounds |
-| `/audit <contract>` | Contract audit |
-| `/price <symbol>` | Live price check |
-| `/predict <symbol>` | AI prediction with signals |
-| `/wallet <address>` | ETH wallet balance |
-| `/agent_create` | Create a trading agent |
-| `/agent_list` | List all agents |
-| `/agent_start` | Start an agent |
-| `/agent_stop` | Stop an agent |
-| `/agent_status` | Agent status & decisions |
-| `/agent_delete` | Delete an agent |
-| *Any text* | AI-powered chat with live data |
+Requires `TELEGRAM_BOT_TOKEN`.
 
----
-
-## AI Tools
-
-Vizzor exposes **17+ tools** to the AI. During conversation, the AI autonomously calls whichever tools it needs to build a complete prediction.
-
-| Tool | What It Provides |
-|------|------------------|
-| `get_market_data` | Price, volume, market cap (CoinGecko) |
-| `search_token_dex` | Real-time DEX pair data (DexScreener) |
-| `get_technical_analysis` | RSI, MACD, Bollinger, EMA, ATR, OBV |
-| `get_prediction` | Multi-signal composite prediction |
-| `get_derivatives_data` | Funding rate, open interest (Binance Futures) |
-| `get_fear_greed` | Fear & Greed Index + 7-day history |
-| `get_crypto_news` | News headlines with sentiment scoring |
-| `get_trending` | Hot tokens across DexScreener + CoinGecko |
-| `get_token_info` | On-chain token data (name, supply, holders) |
-| `get_token_security` | GoPlus security scan (honeypot, taxes, flags) |
-| `analyze_wallet` | Wallet forensics (patterns, holdings, risk) |
-| `check_rug_indicators` | Rug pull detection suite |
-| `search_upcoming_icos` | ICO/IDO tracker with filters |
-| `get_raises` | Recent fundraising rounds |
-| `get_funding_history` | Project/investor funding history |
-| `create_agent` | Deploy autonomous prediction agent |
-| `list_agents` | List active agents |
-| `get_agent_status` | Agent status and decisions |
-| `run_backtest` | Historical strategy backtesting |
-| `get_ml_prediction` | ML model price prediction |
-| `get_ml_regime` | Market regime classification |
-| `get_ml_model_health` | ML sidecar health and model status |
-| `classify_user_intent` | AI-powered query intent detection |
-
-### AI Providers
-
-| Provider | Model | Tool Support | Notes |
-|----------|-------|--------------|-------|
-| **Anthropic** | Claude Opus / Sonnet | Full tool-use | Default. Best prediction quality |
-| **OpenAI** | GPT-4 Turbo | Full tool-use | Function calling |
-| **Google** | Gemini Pro | Full tool-use | Tool-use support |
-| **Ollama** | Any local model | Context injection | Pre-computed signals injected into context |
-
-For providers without tool support (Ollama), Vizzor pre-fetches all relevant data, runs signal computation, and injects pre-written analysis directly into the context. The model presents the pre-computed predictions rather than generating them from scratch.
-
-```bash
-/provider openai
-/provider ollama llama3
-```
-
----
-
-## Data Sources
-
-| Source | Data | Auth |
-|--------|------|------|
-| **Binance** | Klines, tickers, funding rates, open interest, gainers/losers | Public |
-| **DexScreener** | DEX pairs, trending tokens, real-time pricing | Public |
-| **GoPlus** | Token security, honeypot detection, holder analysis | Public |
-| **DeFiLlama** | TVL, fundraising rounds, protocol metrics | Public |
-| **CryptoPanic** | News aggregation with sentiment | Free tier |
-| **Fear & Greed** | Crypto Fear & Greed Index | Public |
-| **Pump.fun** | Solana meme coin launches | Public |
-
-All responses cached with configurable TTL (5 min for market data, 1 hour for token info, 24 hours for contract code).
-
-### Database Layer
-
-Dual-backend storage with automatic migration:
-
-| Backend | Use Case |
-|---------|----------|
-| **SQLite** | Default, zero-config local cache |
-| **PostgreSQL** | Multi-instance deployments, Docker stack |
-
-Data pipeline collectors run on configurable intervals, aggregating market snapshots, token metrics, and wallet activity into time-series tables for ML training and trend analysis.
-
-### ML Prediction Sidecar
-
-A Python FastAPI sidecar enhances predictions with trained models:
-
-| Model | Algorithm | Purpose |
-|-------|-----------|---------|
-| **Price Predictor** | LSTM | Short-term price direction |
-| **Signal Classifier** | Random Forest | Buy/sell/hold signal quality |
-| **Anomaly Detector** | Isolation Forest | Unusual market activity |
-| **Rug Detector** | GBM | Scam token identification |
-| **Wallet Classifier** | LSTM | Wallet behavior profiling |
-| **Sentiment NLP** | DistilBERT | News headline sentiment |
-
-Models fall back to heuristic scoring when the sidecar is unavailable. Start with Docker:
-
-```bash
-docker compose up ml-sidecar
-curl http://localhost:8000/health
-```
-
-### REST API
-
-Authenticated REST API exposing all Vizzor capabilities programmatically:
-
-```bash
-# Start the API server
-vizzor api start --port 3100
-
-# Create an API key
-vizzor api key create "my-app"
-
-# Endpoints
-GET  /health                    # Health check (public)
-GET  /docs                      # OpenAPI/Swagger UI (dev only)
-POST /scan                      # Token security scan
-POST /trends                    # Market trends
-POST /track                     # Wallet forensics
-POST /predict                   # AI prediction
-POST /audit                     # Contract audit
-GET  /v1/market/price/:symbol   # Single symbol price
-GET  /v1/market/prices?symbols= # Batch prices (comma-separated)
-GET  /v1/market/trending        # Trending tokens
-GET  /v1/market/fear-greed      # Fear & Greed Index
-GET  /v1/market/ml-health       # ML sidecar status
-POST /v1/chat                   # AI chat (SSE streaming)
-POST /v1/backtest               # Historical backtest
-GET  /v1/agents                 # List agents
-POST /v1/agents                 # Create agent
-POST /v1/agents/:name/start    # Start agent
-POST /v1/agents/:name/stop     # Stop agent
-GET  /v1/portfolio/:id          # Agent portfolio
-```
-
-All endpoints require `X-API-Key` header. Rate limited to 300 req/min per key. Keys are hashed with scrypt and stored locally.
-
-### Autonomous Agents v2
-
-Portfolio-aware trading agents with risk management:
-
-- **Portfolio Manager** — tracks positions, calculates P&L, manages allocation limits
-- **Risk System** — Kelly criterion position sizing, ATR-based stop losses, drawdown limits
-- **ML-Adaptive Strategy** — combines RSI, MACD, EMA, Bollinger, funding rate with ML regime detection
-- **Strategy Registry** — pluggable strategy system, easy to add custom strategies
-
-### Security & ZK
-
-- **AES-256-GCM encryption** for sensitive data at rest
-- **HMAC signatures** for API request integrity
-- **Audit logging** for security-critical operations
-- **ZK-proof chain adapters** for privacy-preserving verification
-- **Input sanitization** across all user-facing surfaces
-
-### n8n Workflow Automation
-
-14 pre-built n8n workflows for automated operations:
-
-| Workflow | Function |
-|----------|----------|
-| Data Collection | Scheduled market data ingestion |
-| Alert Pipeline | Real-time anomaly alerts |
-| ML Retraining | Periodic model retraining |
-| Agent Monitor | Agent health and decision tracking |
-| Daily Report | Automated portfolio summaries |
-| Anomaly Analysis | Deep-dive unusual activity |
-| Narrative Generator | Market narrative detection |
-| Portfolio Rebalancer | Automated rebalancing signals |
-| Strategy Tournament | Strategy backtesting comparison |
-| Arbitrage Scanner | Cross-DEX price divergence |
-
-```bash
-docker compose up -d  # Starts Vizzor + ML sidecar + PostgreSQL + n8n + Web Dashboard
-```
-
-### Extended ML Models
-
-v0.10 adds 7 new Python models to the sidecar:
-
-| Model | Algorithm | Purpose |
-|-------|-----------|---------|
-| **Trend Scorer** | XGBoost | Market trend strength scoring |
-| **TA Interpreter** | Random Forest | Technical analysis signal weighting |
-| **Strategy Bandit** | Contextual Bandit | Adaptive strategy selection |
-| **Regime Detector** | HMM | Market regime classification |
-| **Project Risk** | GBM | Comprehensive project risk scoring |
-| **Portfolio Optimizer** | Mean-Variance | Dynamic position sizing |
-| **Intent Classifier** | DistilBERT | User query intent detection |
-
-All 13 models integrated across 14 TypeScript modules with graceful fallback to heuristics. v0.11 adds model training pipeline (`POST /train`, `POST /evaluate`) and wires remaining ML modules.
+Same commands as Discord (`/predict`, `/scan`, `/trends`, `/track`, `/price`, `/audit`, `/ico`, `/agent_create`). Any text message triggers AI chat.
 
 ---
 
 ## Agents
 
-Autonomous prediction agents that run a continuous **think -> analyze -> decide -> act** cycle.
+Autonomous prediction agents that run a continuous **think → analyze → decide → act** cycle.
+
+### Agent Requirements
+
+| Requirement | Details |
+|-------------|---------|
+| **AI Provider** | Any (Claude recommended for best decisions) |
+| **Wallet** | Required for live trading; not needed for paper trading or alert-only |
+| **RPC Endpoint** | Required for live trading (default public RPCs or Alchemy) |
+| **Minimum Balance** | Agent-specific; configurable spending limits |
+| **Always-on Process** | Agent runs in a loop — needs a persistent process (terminal, tmux, Docker, etc.) |
+
+### Create and Run
 
 ```bash
+# Create an agent
 /agent create alpha --strategy momentum --pairs BTC,ETH,SOL --interval 60
+
+# Start it
 /agent start alpha
+
+# Check status
 /agent status alpha
+
+# Stop it
+/agent stop alpha
 ```
+
+### Execution Modes
+
+| Mode | Description | Wallet Required |
+|------|-------------|-----------------|
+| **Alert-only** | Generates signals, no trades | No |
+| **Paper trading** | Simulated trades with realistic slippage model | No |
+| **Live trading** | On-chain execution via DEX router | Yes |
 
 ### Strategies
 
-| Strategy | Signals | Entry | Exit |
-|----------|---------|-------|------|
-| **Momentum** | RSI + MACD + Bollinger + Funding | RSI crosses above 30 + bullish MACD | RSI > 70 + bearish divergence |
-| **Trend-Following** | EMA Crossover + OBV + Fear & Greed | Golden cross + rising volume | Death cross |
-| **ML-Adaptive** | All TA + Funding + Fear & Greed + Regime | ML composite score > threshold | ML signal reversal + stop loss |
+| Strategy | Signals | Best For |
+|----------|---------|----------|
+| **Momentum** | RSI + MACD + Bollinger + Funding | Short-term reversals |
+| **Trend-Following** | EMA Crossover + OBV + Fear & Greed | Swing trades |
+| **ML-Adaptive** | All TA + ML regime + ChronoVisor | Adaptive, all conditions |
 
-> Agents can run in **alert-only mode** or with **live trade execution** via DEX integration.
+### Safety Pipeline (Live Trading)
 
-### Trade Execution (v0.11)
+Live trades pass through a 7-step pipeline before execution:
 
-On-chain trade execution with safety controls:
+1. **Validate** — check parameters, balance, spending limits
+2. **Prepare** — build transaction with DEX router quote
+3. **Simulate** — `eth_call` dry run to detect reverts
+4. **Approve** — ERC-20 token approval if needed
+5. **Execute** — submit on-chain transaction
+6. **Record** — log to portfolio + audit trail
+7. **Cleanup** — update positions, trigger alerts
 
-- **Wallet Manager** — encrypted private key storage (AES-256-GCM + scrypt) at `~/.vizzor/wallets/`
-- **DEX Router** — Uniswap V3 SwapRouter02 integration for token swaps
-- **Slippage Protection** — configurable max slippage (default 0.5%)
-- **Dry-Run Mode** — simulate trades without executing (default: on)
-- **Gas Estimation** — automatic gas estimation with configurable multiplier
+Additional protections:
+- Per-agent daily/weekly spending caps
+- Kelly criterion position sizing
+- ATR-based stop losses
+- Max drawdown limits
+- Global emergency kill switch (`/agent emergency-stop`)
+
+### Wallet Setup
 
 ```bash
-vizzor wallet create           # Create encrypted wallet
+vizzor wallet create           # Generate new encrypted wallet
 vizzor wallet import           # Import existing private key
 vizzor wallet list             # List managed wallets
 ```
 
-### Backtesting Engine (v0.11)
+Wallets are encrypted with AES-256-GCM (scrypt N=2^18) and stored at `~/.vizzor/wallets/`.
 
-Historical strategy simulation with walk-forward analysis:
+### Backtesting
+
+Test strategies against historical data before going live:
 
 ```bash
 vizzor backtest --strategy momentum --pair BTCUSDT --from 2024-01-01 --to 2024-12-31
 ```
 
-- Run any strategy against historical kline data
-- Metrics: total return, win rate, profit factor, Sharpe ratio, max drawdown
-- Equity curve and drawdown visualization
-- Walk-forward analysis with rolling train/test windows
-- Available via CLI, TUI (`/backtest`), AI tool, and REST API (`POST /v1/backtest`)
+Metrics: total return, win rate, profit factor, Sharpe ratio, max drawdown, equity curve.
 
-### Real-time WebSocket Feeds (v0.11)
+---
 
-Live market data via Binance WebSocket streams:
+## Web Dashboard
 
-- Trade, kline, and ticker streams with auto-reconnect
-- Connection pooling (up to 5 connections, 1024 streams each)
-- In-memory price cache for instant access
-- Agent engine prefers WebSocket data over REST polling
+Next.js 15 dashboard at `http://localhost:3001`.
 
-### Web Dashboard (v0.11)
-
-Next.js 15 web dashboard at `http://localhost:3001`:
-
-- **AI Chat** — full conversational interface with streaming responses, tool result cards, and all 47 CLI tools available via natural language
-- **Dashboard** — market overview with Fear & Greed, ML predictions (Chronovisor), sentiment intelligence, regime detection, trending tokens, news feed, agent summary, and ML model status
-- **Markets** — market analysis with symbol selector, wallet analyzer, and on-chain intelligence
-- **Agents** — create, start/stop, and monitor autonomous trading agents
-- **Portfolio** — positions, trade history, performance metrics
-- **Settings** — API and provider configuration
-- **Docs** — interactive documentation for all AI tools and chat commands
-
-**UI features:**
-- Dark/light/system theme with automatic switching
-- Live crypto ticker (top 100 coins) with batch price fetching
-- Cryptocurrency icons (CDN + letter fallback for newer tokens)
-- Custom Vizzor branding with theme-aware logo
-- API and ML health indicators
-- Responsive mobile layout with collapsible sidebar
+### Setup
 
 ```bash
-docker compose up web           # Start dashboard on port 3001
+# Option 1: Docker (recommended)
+docker compose up web
+
+# Option 2: From source
+cd web
+pnpm install
+pnpm dev
 ```
 
-### Training Pipeline (v0.11)
+Requires the API server running (`vizzor api start`).
 
-Model training and evaluation via the ML sidecar:
+### Pages
 
-- `POST /train` — train rug detector, trend scorer, regime classifier, sentiment models
-- `POST /evaluate` — evaluate model accuracy on held-out test sets
-- Data loaders for PostgreSQL-backed labeled datasets
+- **AI Chat** — conversational interface with streaming, tool call progress, trade action cards
+- **Dashboard** — market overview, Fear & Greed, sentiment, regime, trending tokens, news
+- **Markets** — token analysis, wallet analyzer, on-chain intelligence
+- **Agents** — create, monitor, start/stop agents with paper/live mode
+- **Portfolio** — positions, trade history, P&L metrics
+- **Settings** — API keys and provider configuration
+
+---
+
+## API Server
+
+REST API exposing all Vizzor capabilities programmatically.
+
+### Setup
+
+```bash
+vizzor api start --port 3100      # Start server
+vizzor api key create "my-app"    # Create API key
+```
+
+All endpoints require `X-API-Key` header. Rate limited to 300 req/min per key.
+
+### Endpoints
+
+```
+GET  /health                    # Health check (public)
+GET  /docs                      # Swagger UI
+POST /v1/chat                   # AI chat (SSE streaming)
+POST /v1/chat/thread            # Threaded chat reply
+GET  /v1/market/price/:symbol   # Price
+GET  /v1/market/prices?symbols= # Batch prices
+GET  /v1/market/trending        # Trending tokens
+GET  /v1/market/fear-greed      # Fear & Greed Index
+GET  /v1/market/ml-health       # ML sidecar status
+GET  /v1/market/trenches        # Trenches scanner
+GET  /v1/chronovisor/:symbol    # ChronoVisor prediction
+POST /scan                      # Token security scan
+POST /trends                    # Market trends
+POST /track                     # Wallet forensics
+POST /predict                   # AI prediction
+POST /audit                     # Contract audit
+POST /v1/backtest               # Backtest
+GET  /v1/agents                 # List agents
+POST /v1/agents                 # Create agent
+POST /v1/agents/:name/start    # Start agent
+POST /v1/agents/:name/stop     # Stop agent
+GET  /v1/portfolio/:id          # Portfolio
+POST /v1/agents/emergency-stop  # Global kill switch
+WS   /ws                        # WebSocket real-time push
+```
 
 ---
 
 ## Supported Chains
 
-| Chain | Status | Security Scan |
-|-------|--------|---------------|
-| Ethereum | Live | GoPlus |
-| Polygon | Live | GoPlus |
-| Arbitrum | Live | GoPlus |
-| Optimism | Live | GoPlus |
-| Base | Live | GoPlus |
-| BSC | Live | GoPlus |
-| Avalanche | Live | GoPlus |
-| Solana | Live | GoPlus |
-| Sui | Live | GoPlus |
-| Aptos | Live | GoPlus |
-| TON | Live | GoPlus |
-
-New chains are added by implementing the `ChainAdapter` interface.
+| Chain | Status |
+|-------|--------|
+| Ethereum | Live |
+| Polygon | Live |
+| Arbitrum | Live |
+| Optimism | Live |
+| Base | Live |
+| BSC | Live |
+| Avalanche | Live |
+| Solana | Live |
+| Sui | Live |
+| Aptos | Live |
+| TON | Live |
 
 ---
 
 ## Configuration
 
 Config at `~/.vizzor/config.yaml`. Environment variables override file values.
-
-### Required
-
-| Variable | Purpose |
-|----------|---------|
-| `ANTHROPIC_API_KEY` | Claude AI -- primary prediction engine |
-| `ETHERSCAN_API_KEY` | Transaction history, contract source |
-
-### Optional
-
-| Variable | Purpose |
-|----------|---------|
-| `OPENAI_API_KEY` | GPT-4 as alternative provider |
-| `GOOGLE_API_KEY` | Gemini as alternative provider |
-| `ALCHEMY_API_KEY` | Premium RPC endpoints |
-| `COINGECKO_API_KEY` | Extended market data |
-| `CRYPTOPANIC_API_KEY` | News with sentiment |
-| `DISCORD_TOKEN` | Discord bot |
-| `TELEGRAM_BOT_TOKEN` | Telegram bot |
-
-### Full Config
 
 ```yaml
 anthropicApiKey: <your-key>
@@ -641,6 +469,37 @@ cacheTtl:
   walletData: 600
   contractCode: 86400
 ```
+
+### AI Provider Comparison
+
+| Provider | Quality | Cost | Latency | Tool Support | Offline |
+|----------|---------|------|---------|--------------|---------|
+| **Anthropic** (Claude) | Best | Pay-per-use | ~2-5s | Full | No |
+| **OpenAI** (GPT-4) | Great | Pay-per-use | ~2-5s | Full | No |
+| **Google** (Gemini) | Good | Free tier | ~2-4s | Full | No |
+| **Ollama** (local) | Varies | Free | ~5-30s | Context injection | Yes |
+
+---
+
+## ML Sidecar (Optional)
+
+Python FastAPI sidecar with 16 trained models for enhanced predictions. Falls back to heuristics when unavailable.
+
+### Setup
+
+```bash
+docker compose up ml-sidecar
+curl http://localhost:8000/health
+```
+
+### Requirements
+
+| Component | Minimum |
+|-----------|---------|
+| **RAM** | 4 GB (8 GB recommended) |
+| **Disk** | 1 GB for models |
+| **Python** | 3.10+ |
+| **GPU** | Not required |
 
 ---
 
@@ -680,7 +539,7 @@ pnpm test:coverage    # With coverage
 
 ## License
 
-[BUSL-1.1](LICENSE.md) -- Business Source License 1.1
+[BUSL-1.1](LICENSE.md) — Business Source License 1.1
 
 ---
 

@@ -11,7 +11,7 @@ export function SystemStatus() {
   const mlOk = ml?.available === true;
 
   return (
-    <div className="flex items-center gap-3 text-xs text-[var(--muted)] px-1">
+    <div className="flex items-center gap-3 text-xs text-[#6b6b6b] px-1">
       <div className="flex items-center gap-1.5">
         <span
           className={`inline-block w-1.5 h-1.5 rounded-full ${apiOk ? 'bg-[var(--success)] pulse-dot' : 'bg-[var(--danger)]'}`}
@@ -20,7 +20,7 @@ export function SystemStatus() {
       </div>
       <div className="flex items-center gap-1.5">
         <span
-          className={`inline-block w-1.5 h-1.5 rounded-full ${mlOk ? 'bg-[var(--success)] pulse-dot' : 'bg-[var(--muted)]'}`}
+          className={`inline-block w-1.5 h-1.5 rounded-full ${mlOk ? 'bg-[var(--success)] pulse-dot' : 'bg-[#6b6b6b]'}`}
         />
         <span>ML</span>
       </div>

@@ -39,7 +39,8 @@ function App(): React.JSX.Element {
   const [chainName, setChainName] = useState(DEFAULT_CHAIN);
   const [tickerFocused, setTickerFocused] = useState(false);
 
-  const { streamingText, isStreaming, activeTools, completedTools, sendMessage } = useAIStream();
+  const { streamingText, isStreaming, activeTools, completedTools, sendMessage, clearHistory } =
+    useAIStream();
   const { isExecuting, executeSlashCommand } = useCommand();
   const ticker = usePriceTicker();
 
@@ -125,6 +126,7 @@ function App(): React.JSX.Element {
         // Special commands handled directly by the app
         if (name === 'clear') {
           setMessages([]);
+          clearHistory();
           setClearEpoch((prev) => prev + 1);
           return;
         }
@@ -290,7 +292,7 @@ function App(): React.JSX.Element {
       setIsProcessing(true);
       sendMessage(input);
     },
-    [executeSlashCommand, sendMessage, showBanner],
+    [clearHistory, executeSlashCommand, sendMessage, showBanner],
   );
 
   // -----------------------------------------------------------------------

@@ -1,14 +1,38 @@
 // ---------------------------------------------------------------------------
-// API Key authentication middleware
+// API Key authentication middleware with per-key rate limiting
 // ---------------------------------------------------------------------------
 
 import { timingSafeEqual } from 'node:crypto';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { hashApiKey } from './keys.js';
 import { getDb } from '../../data/cache.js';
+import { logAuditEvent } from '../../security/audit.js';
 
 // Paths that don't require authentication
 const PUBLIC_PATHS = ['/health'];
+
+// Per-key rate limit tracking
+interface RateLimitEntry {
+  count: number;
+  resetAt: number;
+}
+
+const rateLimitMap = new Map<string, RateLimitEntry>();
+
+// Rate limit window in milliseconds (1 minute)
+const RATE_LIMIT_WINDOW_MS = 60_000;
+
+export interface AuthenticatedKeyInfo {
+  keyPrefix: string;
+  rateLimit: number;
+}
+
+// Augment request with key info for downstream use
+declare module 'fastify' {
+  interface FastifyRequest {
+    apiKeyInfo?: AuthenticatedKeyInfo;
+  }
+}
 
 export async function authMiddleware(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   // Skip auth only for health check
@@ -33,16 +57,57 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
   }
 
   const keyHash = hashApiKey(apiKey);
-  const valid = validateKey(keyHash);
-  if (!valid) {
+  const keyInfo = validateKey(keyHash);
+  if (!keyInfo) {
+    logAuditEvent({
+      type: 'auth_failure',
+      actor: `hash:${keyHash.slice(0, 8)}...`,
+      resource: request.url,
+      action: 'Invalid API key used',
+      ip: request.ip,
+    });
     return reply.status(403).send({
       error: 'Forbidden',
       message: 'Invalid API key',
     });
   }
+
+  // Per-key rate limiting
+  const now = Date.now();
+  let entry = rateLimitMap.get(keyInfo.keyPrefix);
+
+  if (!entry || now >= entry.resetAt) {
+    // Start new window
+    entry = { count: 0, resetAt: now + RATE_LIMIT_WINDOW_MS };
+    rateLimitMap.set(keyInfo.keyPrefix, entry);
+  }
+
+  entry.count++;
+
+  if (entry.count > keyInfo.rateLimit) {
+    logAuditEvent({
+      type: 'rate_limit_exceeded',
+      actor: keyInfo.keyPrefix,
+      resource: request.url,
+      action: `Rate limit exceeded: ${entry.count}/${keyInfo.rateLimit} per minute`,
+      ip: request.ip,
+    });
+    const retryAfter = Math.ceil((entry.resetAt - now) / 1000);
+    return reply
+      .status(429)
+      .header('Retry-After', String(retryAfter))
+      .send({
+        error: 'Too Many Requests',
+        message: `Rate limit exceeded. Limit: ${keyInfo.rateLimit} requests per minute`,
+        retryAfter,
+      });
+  }
+
+  // Decorate request with key info for downstream use
+  request.apiKeyInfo = keyInfo;
 }
 
-function validateKey(keyHash: string): boolean {
+function validateKey(keyHash: string): AuthenticatedKeyInfo | null {
   try {
     const db = getDb();
 
@@ -59,27 +124,34 @@ function validateKey(keyHash: string): boolean {
       )
     `);
 
-    const row = db.prepare('SELECT key_hash FROM api_keys WHERE revoked_at IS NULL').all() as {
+    const rows = db
+      .prepare('SELECT key_hash, key_prefix, rate_limit FROM api_keys WHERE revoked_at IS NULL')
+      .all() as {
       key_hash: string;
+      key_prefix: string;
+      rate_limit: number;
     }[];
 
-    if (row.length === 0) {
+    if (rows.length === 0) {
       // No keys registered — deny by default (require key creation first)
-      return false;
+      return null;
     }
 
     // Constant-time comparison against all valid key hashes
     const inputBuf = Buffer.from(keyHash, 'hex');
-    for (const r of row) {
+    for (const r of rows) {
       const storedBuf = Buffer.from(r.key_hash, 'hex');
       if (inputBuf.length === storedBuf.length && timingSafeEqual(inputBuf, storedBuf)) {
-        return true;
+        return {
+          keyPrefix: r.key_prefix,
+          rateLimit: r.rate_limit,
+        };
       }
     }
 
-    return false;
+    return null;
   } catch {
     // DB unavailable — deny access
-    return false;
+    return null;
   }
 }

@@ -21,10 +21,15 @@ from .models.strategy_bandit import StrategyBandit
 from .models.project_risk_scorer import ProjectRiskScorer
 from .models.portfolio_optimizer import PortfolioOptimizer
 from .models.intent_classifier import IntentClassifier
+from .models.pump_detector import PumpDetectorModel
+from .models.narrative_detector import NarrativeDetectorModel
+from .models.divergence_detector import DivergenceDetectorModel
 from .training.train_rug import RugTrainer
 from .training.train_trend import TrendTrainer
 from .training.train_regime import RegimeTrainer
 from .training.train_sentiment import SentimentTrainer
+from .training.train_pump import PumpTrainer
+from .training.train_narrative import NarrativeTrainer
 
 # ---------------------------------------------------------------------------
 # Request / Response models
@@ -405,8 +410,8 @@ class TrainRequest(BaseModel):
     model_name: str = Field(
         ...,
         max_length=50,
-        pattern=r"^(rug_detector|trend_scorer|regime_detector|sentiment_nlp)$",
-        description="Model to train: rug_detector, trend_scorer, regime_detector, sentiment_nlp",
+        pattern=r"^(rug_detector|trend_scorer|regime_detector|sentiment_nlp|pump_detector|narrative_detector)$",
+        description="Model to train: rug_detector, trend_scorer, regime_detector, sentiment_nlp, pump_detector, narrative_detector",
     )
 
 
@@ -425,8 +430,8 @@ class EvaluateRequest(BaseModel):
     model_name: str = Field(
         ...,
         max_length=50,
-        pattern=r"^(rug_detector|trend_scorer|regime_detector|sentiment_nlp)$",
-        description="Model to evaluate: rug_detector, trend_scorer, regime_detector, sentiment_nlp",
+        pattern=r"^(rug_detector|trend_scorer|regime_detector|sentiment_nlp|pump_detector|narrative_detector)$",
+        description="Model to evaluate: rug_detector, trend_scorer, regime_detector, sentiment_nlp, pump_detector, narrative_detector",
     )
 
 
@@ -454,6 +459,9 @@ strategy_bandit = StrategyBandit()
 project_risk_scorer = ProjectRiskScorer()
 portfolio_optimizer = PortfolioOptimizer()
 intent_classifier = IntentClassifier()
+pump_detector = PumpDetectorModel()
+narrative_detector = NarrativeDetectorModel()
+divergence_detector = DivergenceDetectorModel()
 start_time = time.time()
 predictions_served = 0
 
@@ -474,12 +482,15 @@ async def lifespan(_app: FastAPI):
     project_risk_scorer.load()
     portfolio_optimizer.load()
     intent_classifier.load()
+    pump_detector.load()
+    narrative_detector.load()
+    divergence_detector.load()
     yield
 
 
 app = FastAPI(
     title="Vizzor ML Sidecar",
-    version="0.11.0",
+    version="0.12.0",
     lifespan=lifespan,
 )
 
@@ -775,6 +786,110 @@ async def predict_portfolio_forward(features: PortfolioPredFeatures) -> Portfoli
     return PortfolioPredResponse(**result)
 
 
+# --- v0.12.0 Endpoints ---
+
+
+@app.post("/detect-pump")
+async def detect_pump(request: Request):
+    """Detect pump/dump activity using CUSUM."""
+    global predictions_served
+    predictions_served += 1
+
+    data = await request.json()
+    token = data.get("token", "unknown")
+    prices = data.get("prices", [])
+    volumes = data.get("volumes", [])
+
+    # Single feed mode
+    if not prices and "price" in data:
+        result = pump_detector.feed(
+            token, float(data["price"]), float(data.get("volume", 0))
+        )
+        if result is None:
+            return {
+                "detected": False,
+                "type": "none",
+                "severity": "low",
+                "cusum_value": 0.0,
+                "threshold": pump_detector.threshold * 0.01,
+                "price_change_pct": 0.0,
+                "volume_spike": 0.0,
+                "confidence": 0.0,
+            }
+        return {
+            "detected": result.detected,
+            "type": result.type,
+            "severity": result.severity,
+            "cusum_value": result.cusum_value,
+            "threshold": result.threshold,
+            "price_change_pct": result.price_change_pct,
+            "volume_spike": result.volume_spike,
+            "confidence": result.confidence,
+        }
+
+    # Batch mode
+    result = pump_detector.predict(
+        {"token": token, "prices": prices, "volumes": volumes}
+    )
+    return {
+        "detected": result.detected,
+        "type": result.type,
+        "severity": result.severity,
+        "cusum_value": result.cusum_value,
+        "threshold": result.threshold,
+        "price_change_pct": result.price_change_pct,
+        "volume_spike": result.volume_spike,
+        "confidence": result.confidence,
+    }
+
+
+@app.post("/detect-narrative")
+async def detect_narrative(request: Request):
+    """Detect trending narratives from text corpus."""
+    global predictions_served
+    predictions_served += 1
+
+    data = await request.json()
+    texts = data.get("texts", [])
+    top_k = data.get("top_k", 5)
+
+    results = narrative_detector.get_trending_narratives(texts, top_k=top_k)
+    return {
+        "narratives": [
+            {
+                "narrative": r.narrative,
+                "confidence": r.confidence,
+                "related_tokens": r.related_tokens,
+                "keywords": r.keywords,
+                "trend_direction": r.trend_direction,
+                "mention_count": r.mention_count,
+            }
+            for r in results
+        ]
+    }
+
+
+@app.post("/detect-divergence")
+async def detect_divergence(request: Request):
+    """Detect prediction market vs price divergence."""
+    global predictions_served
+    predictions_served += 1
+
+    data = await request.json()
+    market_odds = data.get("market_odds", [])
+    prices = data.get("prices", [])
+
+    result = divergence_detector.detect(market_odds, prices)
+    return {
+        "divergence_score": result.divergence_score,
+        "type": result.type,
+        "prediction_market_signal": result.prediction_market_signal,
+        "price_action_signal": result.price_action_signal,
+        "confidence": result.confidence,
+        "interpretation": result.interpretation,
+    }
+
+
 # --- Training Pipeline Endpoints ---
 
 
@@ -783,6 +898,8 @@ TRAINERS = {
     "trend_scorer": TrendTrainer,
     "regime_detector": RegimeTrainer,
     "sentiment_nlp": SentimentTrainer,
+    "pump_detector": PumpTrainer,
+    "narrative_detector": NarrativeTrainer,
 }
 
 
@@ -932,6 +1049,27 @@ async def health():
                 "loaded": intent_classifier.is_loaded,
                 "lastTrained": intent_classifier.last_trained,
                 "accuracy": intent_classifier.accuracy,
+            },
+            {
+                "name": "pump-detector",
+                "version": pump_detector.version,
+                "loaded": pump_detector.is_loaded,
+                "lastTrained": pump_detector.last_trained,
+                "accuracy": pump_detector.accuracy,
+            },
+            {
+                "name": "narrative-detector",
+                "version": narrative_detector.version,
+                "loaded": narrative_detector.is_loaded,
+                "lastTrained": narrative_detector.last_trained,
+                "accuracy": narrative_detector.accuracy,
+            },
+            {
+                "name": "divergence-detector",
+                "version": divergence_detector.version,
+                "loaded": divergence_detector.is_loaded,
+                "lastTrained": divergence_detector.last_trained,
+                "accuracy": divergence_detector.accuracy,
             },
         ],
         "uptime": int(time.time() - start_time),

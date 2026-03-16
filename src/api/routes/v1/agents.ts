@@ -89,4 +89,11 @@ export async function agentRoutes(fastify: FastifyInstance): Promise<void> {
     removeAgent(agent.id);
     return { message: `Agent "${name}" deleted` };
   });
+
+  // POST /v1/agents/emergency-stop
+  fastify.post('/v1/agents/emergency-stop', async (_request, _reply) => {
+    const { emergencyStopAll } = await import('../../../core/agent/portfolio/risk.js');
+    const stopped = emergencyStopAll('API emergency stop');
+    return { success: true, stoppedAgents: stopped };
+  });
 }

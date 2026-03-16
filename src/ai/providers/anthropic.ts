@@ -4,7 +4,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { DEFAULT_MODELS, MAX_ITERATIONS } from './types.js';
-import type { AIProvider, AITool, StreamCallbacks, ToolHandler } from './types.js';
+import type { AIProvider, AITool, ChatMessage, StreamCallbacks, ToolHandler } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Provider implementation
@@ -43,11 +43,19 @@ export class AnthropicProvider implements AIProvider {
     userMessage: string,
     tools?: AITool[],
     toolHandler?: ToolHandler,
+    history?: ChatMessage[],
   ): Promise<string> {
     const ai = this.getClient();
     const maxIterations = MAX_ITERATIONS; // safety cap for the agentic loop
 
-    const messages: Anthropic.Messages.MessageParam[] = [{ role: 'user', content: userMessage }];
+    const messages: Anthropic.Messages.MessageParam[] = [];
+    // Prepend conversation history for multi-turn context
+    if (history && history.length > 0) {
+      for (const msg of history) {
+        messages.push({ role: msg.role, content: msg.content });
+      }
+    }
+    messages.push({ role: 'user', content: userMessage });
 
     for (let iteration = 0; iteration < maxIterations; iteration++) {
       const params: Anthropic.Messages.MessageCreateParamsNonStreaming = {
@@ -139,11 +147,19 @@ export class AnthropicProvider implements AIProvider {
     callbacks: StreamCallbacks,
     tools?: AITool[],
     toolHandler?: ToolHandler,
+    history?: ChatMessage[],
   ): Promise<string> {
     const ai = this.getClient();
     const maxIterations = MAX_ITERATIONS; // safety cap for the agentic loop
 
-    const messages: Anthropic.Messages.MessageParam[] = [{ role: 'user', content: userMessage }];
+    const messages: Anthropic.Messages.MessageParam[] = [];
+    // Prepend conversation history for multi-turn context
+    if (history && history.length > 0) {
+      for (const msg of history) {
+        messages.push({ role: msg.role, content: msg.content });
+      }
+    }
+    messages.push({ role: 'user', content: userMessage });
 
     // Accumulates text across all iterations so onDone receives the full output.
     let fullText = '';

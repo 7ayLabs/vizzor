@@ -44,9 +44,9 @@ export function AgentCreateForm({ onCreated }: AgentCreateFormProps) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="bg-[var(--card)] border border-[var(--border)] rounded-lg p-4"
+      className="bg-white/[0.04] backdrop-blur-xl border border-white/[0.08] rounded-xl p-4"
     >
-      <h3 className="text-xs font-medium text-[var(--primary)] mb-3 uppercase tracking-wider">
+      <h3 className="text-xs font-medium text-white/60 mb-3 uppercase tracking-wider">
         Deploy New Agent
       </h3>
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -56,13 +56,13 @@ export function AgentCreateForm({ onCreated }: AgentCreateFormProps) {
           value={name}
           onChange={(e) => setName(e.target.value)}
           required
-          className="bg-[var(--background)] border border-[var(--border)] rounded px-3 py-2 text-xs focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]"
+          className="bg-white/[0.06] border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-white/[0.2]"
         />
         <div>
           <select
             value={strategy}
             onChange={(e) => setStrategy(e.target.value)}
-            className="w-full bg-[var(--background)] border border-[var(--border)] rounded px-3 py-2 text-xs focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]"
+            className="w-full bg-white/[0.06] border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-white/[0.2]"
           >
             {STRATEGIES.map((s) => (
               <option key={s.value} value={s.value}>
@@ -71,7 +71,7 @@ export function AgentCreateForm({ onCreated }: AgentCreateFormProps) {
             ))}
           </select>
           {selectedStrategy && (
-            <p className="text-[10px] text-[var(--muted)] mt-1">{selectedStrategy.desc}</p>
+            <p className="text-[10px] text-[#6b6b6b] mt-1">{selectedStrategy.desc}</p>
           )}
         </div>
         <input
@@ -79,11 +79,11 @@ export function AgentCreateForm({ onCreated }: AgentCreateFormProps) {
           placeholder="Pairs (BTC,ETH)"
           value={pairs}
           onChange={(e) => setPairs(e.target.value)}
-          className="bg-[var(--background)] border border-[var(--border)] rounded px-3 py-2 text-xs focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]"
+          className="bg-white/[0.06] border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-white/[0.2]"
         />
         <button
           type="submit"
-          className="bg-[var(--primary)] text-white rounded px-4 py-2 text-xs font-medium hover:opacity-90 transition-opacity"
+          className="bg-white/[0.1] text-white rounded-lg px-4 py-2 text-xs font-medium hover:bg-white/[0.15] transition-colors"
         >
           Deploy
         </button>

@@ -10,6 +10,14 @@ export interface AgentConfig {
   strategy: string;
   pairs: string[];
   interval: number; // cycle interval in seconds
+  chains: string[]; // supported chains for this agent
+  mode: 'paper' | 'live'; // trading mode
+  walletId: string; // HD wallet identifier
+  riskConfig: {
+    maxDailyLoss: number; // max daily loss in USD
+    maxPositionValue: number; // max single position value
+    maxDrawdownPct: number; // kill switch threshold %
+  };
   createdAt: number;
   updatedAt: number;
 }
@@ -33,6 +41,8 @@ export interface AgentSignals {
   fearGreed: number | null;
   priceChange24h: number | null;
   price: number | null;
+  predictionMarketSentiment: number | null; // -1 to 1
+  predictionMarketOdds: number | null; // 0 to 1
 }
 
 export type AgentAction = 'buy' | 'sell' | 'hold';

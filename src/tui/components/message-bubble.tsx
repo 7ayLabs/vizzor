@@ -2,6 +2,7 @@ import React from 'react';
 import { Box, Text } from 'ink';
 import type { Message, RichBlock } from './message-list.js';
 import { RichBlockRenderer } from './message-list.js';
+import { StyledText } from './styled-text.js';
 
 function formatTime(date: Date): string {
   return date.toLocaleTimeString('en-US', {
@@ -42,7 +43,11 @@ export function MessageBubble({ message }: MessageBubbleProps): React.JSX.Elemen
         marginLeft={1}
         flexDirection="column"
       >
-        <Text wrap="wrap">{message.content}</Text>
+        {isUser ? (
+          <Text wrap="wrap">{message.content}</Text>
+        ) : (
+          <StyledText text={message.content} />
+        )}
         {message.blocks?.map((block: RichBlock, idx: number) => (
           <Box key={idx} marginTop={1}>
             <RichBlockRenderer block={block} />

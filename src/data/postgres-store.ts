@@ -12,6 +12,39 @@ import type { DataStore, OHLCVRecord, MLPrediction, AccuracyReport } from './typ
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+function pgRowToConfig(r: {
+  id: string;
+  name: string;
+  strategy: string;
+  pairs: string[] | string;
+  interval_seconds: number;
+  created_at: string;
+  updated_at: string;
+  [key: string]: unknown;
+}): AgentConfig {
+  return {
+    id: r.id,
+    name: r.name,
+    strategy: r.strategy,
+    pairs: typeof r.pairs === 'string' ? (JSON.parse(r.pairs) as string[]) : r.pairs,
+    interval: r.interval_seconds,
+    chains: r['chains']
+      ? typeof r['chains'] === 'string'
+        ? (JSON.parse(r['chains']) as string[])
+        : (r['chains'] as string[])
+      : ['ethereum'],
+    mode: (r['mode'] as 'paper' | 'live') ?? 'paper',
+    walletId: String(r['wallet_id'] ?? ''),
+    riskConfig: {
+      maxDailyLoss: Number(r['max_daily_loss'] ?? 100),
+      maxPositionValue: Number(r['max_position_value'] ?? 1000),
+      maxDrawdownPct: Number(r['max_drawdown_pct'] ?? 10),
+    },
+    createdAt: Number(r.created_at),
+    updatedAt: Number(r.updated_at),
+  };
+}
+
 export class PostgresStore implements DataStore {
   private pool: pg.Pool;
   private initialized = false;
@@ -89,15 +122,7 @@ export class PostgresStore implements DataStore {
       updated_at: string;
     }>('SELECT * FROM agents ORDER BY created_at DESC');
 
-    return rows.map((r) => ({
-      id: r.id,
-      name: r.name,
-      strategy: r.strategy,
-      pairs: typeof r.pairs === 'string' ? (JSON.parse(r.pairs) as string[]) : r.pairs,
-      interval: r.interval_seconds,
-      createdAt: Number(r.created_at),
-      updatedAt: Number(r.updated_at),
-    }));
+    return rows.map((r) => pgRowToConfig(r));
   }
 
   async getAgentById(id: string): Promise<AgentConfig | null> {
@@ -112,16 +137,7 @@ export class PostgresStore implements DataStore {
     }>('SELECT * FROM agents WHERE id = $1', [id]);
 
     if (rows.length === 0) return null;
-    const r = rows[0];
-    return {
-      id: r.id,
-      name: r.name,
-      strategy: r.strategy,
-      pairs: typeof r.pairs === 'string' ? (JSON.parse(r.pairs) as string[]) : r.pairs,
-      interval: r.interval_seconds,
-      createdAt: Number(r.created_at),
-      updatedAt: Number(r.updated_at),
-    };
+    return pgRowToConfig(rows[0]);
   }
 
   async getAgentByName(name: string): Promise<AgentConfig | null> {
@@ -136,16 +152,7 @@ export class PostgresStore implements DataStore {
     }>('SELECT * FROM agents WHERE name = $1', [name]);
 
     if (rows.length === 0) return null;
-    const r = rows[0];
-    return {
-      id: r.id,
-      name: r.name,
-      strategy: r.strategy,
-      pairs: typeof r.pairs === 'string' ? (JSON.parse(r.pairs) as string[]) : r.pairs,
-      interval: r.interval_seconds,
-      createdAt: Number(r.created_at),
-      updatedAt: Number(r.updated_at),
-    };
+    return pgRowToConfig(rows[0]);
   }
 
   async deleteAgent(id: string): Promise<boolean> {

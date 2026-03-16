@@ -8,7 +8,7 @@ import { initializeProvider } from './providers/registry.js';
 import { buildContextBlock } from './context-injector.js';
 
 // Re-export types so existing consumers don't need to change their import paths.
-export type { ToolHandler, AITool } from './providers/types.js';
+export type { ToolHandler, AITool, ChatMessage } from './providers/types.js';
 
 // ---------------------------------------------------------------------------
 // Module state
@@ -93,7 +93,7 @@ export async function analyze(
   if (!p.supportsTools) {
     // Inject real-time data into the prompt for providers without tool use
     const { OLLAMA_SYSTEM_PROMPT } = await import('./prompts/chat.js');
-    const context = await buildContextBlock(userMessage);
+    const { contextText: context } = await buildContextBlock(userMessage);
     const enrichedPrompt = OLLAMA_SYSTEM_PROMPT + (context ? '\n' + context : '');
     return p.analyze(enrichedPrompt, userMessage);
   }

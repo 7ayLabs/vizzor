@@ -24,6 +24,12 @@ export interface AITool {
   };
 }
 
+/** A simple message with role and text content, used for conversation history. */
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 /** Interface that all AI providers must implement. */
 export interface AIProvider {
   /** Provider identifier (e.g. 'anthropic', 'openai'). */
@@ -41,17 +47,20 @@ export interface AIProvider {
   /**
    * Send a message and return the full text response.
    * Includes agentic tool-use loop if tools and handler are provided.
+   * @param history - Optional prior conversation messages for multi-turn context.
    */
   analyze(
     systemPrompt: string,
     userMessage: string,
     tools?: AITool[],
     toolHandler?: ToolHandler,
+    history?: ChatMessage[],
   ): Promise<string>;
 
   /**
    * Stream a message with callbacks for incremental text and tool events.
    * Includes agentic tool-use loop if tools and handler are provided.
+   * @param history - Optional prior conversation messages for multi-turn context.
    */
   analyzeStream(
     systemPrompt: string,
@@ -59,6 +68,7 @@ export interface AIProvider {
     callbacks: StreamCallbacks,
     tools?: AITool[],
     toolHandler?: ToolHandler,
+    history?: ChatMessage[],
   ): Promise<string>;
 }
 

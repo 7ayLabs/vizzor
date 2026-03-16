@@ -137,14 +137,15 @@ describe('sanitizeExternalData', () => {
   });
 
   it('respects max length truncation with default limit', () => {
-    const longInput = 'A'.repeat(1500);
+    // Use spaces to avoid triggering base64 heuristic
+    const longInput = 'Hello world. This is a test. '.repeat(60);
     const result = sanitizeExternalData(longInput);
     expect(result.length).toBeLessThanOrEqual(1003); // 1000 + "..."
     expect(result).toMatch(/\.\.\.$/);
   });
 
   it('respects custom max length', () => {
-    const input = 'A'.repeat(200);
+    const input = 'Hello world. '.repeat(20);
     const result = sanitizeExternalData(input, 50);
     expect(result.length).toBeLessThanOrEqual(53); // 50 + "..."
     expect(result).toMatch(/\.\.\.$/);

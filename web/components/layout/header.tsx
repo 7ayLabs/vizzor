@@ -3,7 +3,6 @@
 import { useRef, useEffect, useState } from 'react';
 import { useApi } from '@/hooks/use-api';
 import { formatUsd, formatPct } from '@/lib/utils';
-import { ThemeToggle } from './theme-toggle';
 import { CryptoIcon } from '@/components/ui/crypto-icon';
 import { VizzorLogo } from '@/components/ui/vizzor-logo';
 import type { MarketPrice, MLHealth } from '@/lib/types';
@@ -70,10 +69,8 @@ function Ticker() {
               className="inline-flex items-center gap-1 sm:gap-2 px-2 sm:px-4 whitespace-nowrap"
             >
               <CryptoIcon symbol={sym} size={14} className="opacity-90" />
-              <span className="text-[var(--foreground)] font-medium text-[10px] sm:text-xs">
-                {sym}
-              </span>
-              <span className="text-[10px] sm:text-xs font-mono">
+              <span className="text-white font-medium text-[10px] sm:text-xs">{sym}</span>
+              <span className="text-[10px] sm:text-xs font-mono text-[#a1a1a1]">
                 {d ? formatUsd(d.price) : '---'}
               </span>
               <span
@@ -96,7 +93,7 @@ function HealthDots() {
   const mlOk = ml?.available === true;
 
   return (
-    <div className="flex items-center gap-1.5 sm:gap-2 text-xs text-[var(--muted)]">
+    <div className="flex items-center gap-1.5 sm:gap-2 text-xs text-[#6b6b6b]">
       <div className="flex items-center gap-1" title={`API: ${apiOk ? 'online' : 'offline'}`}>
         <span
           className={`inline-block w-1.5 h-1.5 rounded-full ${apiOk ? 'bg-[var(--success)] pulse-dot' : 'bg-[var(--danger)]'}`}
@@ -105,7 +102,7 @@ function HealthDots() {
       </div>
       <div className="flex items-center gap-1" title={`ML: ${mlOk ? 'online' : 'offline'}`}>
         <span
-          className={`inline-block w-1.5 h-1.5 rounded-full ${mlOk ? 'bg-[var(--success)] pulse-dot' : 'bg-[var(--muted)]'}`}
+          className={`inline-block w-1.5 h-1.5 rounded-full ${mlOk ? 'bg-[var(--success)] pulse-dot' : 'bg-[#6b6b6b]'}`}
         />
         <span className="hidden sm:inline text-[10px] sm:text-xs">ML</span>
       </div>
@@ -115,16 +112,16 @@ function HealthDots() {
 
 export function Header({ onMenuClick }: { onMenuClick: () => void }) {
   return (
-    <header className="h-12 border-b border-[var(--border)] glass-header flex items-center px-2 sm:px-3 gap-2 sm:gap-3 shrink-0 z-10">
+    <header className="h-12 border-b border-white/[0.06] glass-header flex items-center px-2 sm:px-3 gap-2 sm:gap-3 shrink-0 z-10">
       {/* Left: hamburger (mobile) + logo */}
       <button
         onClick={onMenuClick}
-        className="md:hidden flex items-center justify-center size-10 rounded-lg text-[var(--muted)] hover:text-[var(--foreground)] active:bg-[var(--border)] transition-colors touch-target"
+        className="md:hidden flex items-center justify-center size-10 rounded-lg text-[#6b6b6b] hover:text-white active:bg-white/[0.08] transition-colors touch-target"
         aria-label="Toggle menu"
       >
         <i className="fa-solid fa-bars text-sm" />
       </button>
-      <span className="text-sm font-bold text-[var(--primary)] glow-cyan md:hidden">
+      <span className="text-sm font-bold text-white md:hidden">
         <VizzorLogo size={22} className="inline-block mr-1" />
         vizzor
       </span>
@@ -132,10 +129,9 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
       {/* Center: ticker */}
       <Ticker />
 
-      {/* Right: health + theme */}
+      {/* Right: health */}
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
         <HealthDots />
-        <ThemeToggle />
       </div>
     </header>
   );
