@@ -3,6 +3,8 @@ node_modules/
 
 # Build
 dist/
+*.tsbuildinfo
+web/next-env.d.ts
 
 # Environment
 .env
@@ -63,6 +65,18 @@ logs/
 *.pid
 *.seed
 *.pid.lock
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.pkl
+
+# ML Models (trained artifacts)
+ml-sidecar/models/
+
+# Next.js
+.next/
 
 # Docker
 docker-compose.override.yml

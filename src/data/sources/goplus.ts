@@ -69,6 +69,9 @@ const CHAIN_IDS: Record<string, string> = {
   base: '8453',
   avalanche: '43114',
   solana: 'solana',
+  sui: 'sui',
+  aptos: 'aptos',
+  ton: 'ton',
 };
 
 function resolveChainId(chain: string): string {
@@ -102,7 +105,9 @@ export async function checkTokenSecurity(
   const data = await fetchJson<{
     code: number;
     result: Record<string, Record<string, unknown>>;
-  }>(`${BASE_URL}/token_security/${chainId}?contract_addresses=${contractAddress.toLowerCase()}`);
+  }>(
+    `${BASE_URL}/token_security/${encodeURIComponent(chainId)}?contract_addresses=${encodeURIComponent(contractAddress.toLowerCase())}`,
+  );
 
   if (data.code !== 1) return null;
 
@@ -175,7 +180,9 @@ export async function checkAddressSecurity(
   const data = await fetchJson<{
     code: number;
     result: Record<string, unknown>;
-  }>(`${BASE_URL}/address_security/${chainId}?address=${address.toLowerCase()}`);
+  }>(
+    `${BASE_URL}/address_security/${encodeURIComponent(chainId)}?address=${encodeURIComponent(address.toLowerCase())}`,
+  );
 
   if (data.code !== 1) return null;
   const raw = data.result;
@@ -205,7 +212,7 @@ export async function checkApprovalSecurity(
     code: number;
     result: Record<string, unknown>;
   }>(
-    `${BASE_URL}/approval_security/${chainId}?contract_addresses=${contractAddress.toLowerCase()}`,
+    `${BASE_URL}/approval_security/${encodeURIComponent(chainId)}?contract_addresses=${encodeURIComponent(contractAddress.toLowerCase())}`,
   );
 
   if (data.code !== 1) {

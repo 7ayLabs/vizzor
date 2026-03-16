@@ -1,0 +1,413 @@
+{
+  "name": "14 — LLM Reasoning Chain (Webhook)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "reasoning-chain",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "b3b2c3d4-0014-4000-8000-000000000001",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "reasoning-chain-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst token = body.token || body.symbol || body.pair;\nconst chain = body.chain || 'ethereum';\nconst question = body.question || `Should I invest in ${token}?`;\n\nif (!token) throw new Error('Missing token/symbol/pair in request body');\n\nreturn [{ json: { token, chain, question } }];"
+      },
+      "id": "b3b2c3d4-0014-4000-8000-000000000002",
+      "name": "Parse Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://vizzor-api:3000/v1/market/price",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "pairs",
+              "value": "={{ $('Parse Request').first().json.token + '/USDT' }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "b3b2c3d4-0014-4000-8000-000000000003",
+      "name": "Fetch Market Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        700,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'http://vizzor-api:3000/v1/scanner/ta/' + $('Parse Request').first().json.token }}",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "interval",
+              "value": "4h"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "b3b2c3d4-0014-4000-8000-000000000004",
+      "name": "Fetch TA",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        920,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://vizzor-api:3000/v1/scanner/security",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "token",
+              "value": "={{ $('Parse Request').first().json.token }}"
+            },
+            {
+              "name": "chain",
+              "value": "={{ $('Parse Request').first().json.chain }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "b3b2c3d4-0014-4000-8000-000000000005",
+      "name": "Fetch Security",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1140,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ml-sidecar:8000/predict",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "symbol",
+              "value": "={{ $('Parse Request').first().json.token }}"
+            },
+            {
+              "name": "horizon",
+              "value": "24h"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "b3b2c3d4-0014-4000-8000-000000000006",
+      "name": "ML Prediction",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1360,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const market = $('Fetch Market Data').first().json;\nconst ta = $('Fetch TA').first().json;\nconst security = $('Fetch Security').first().json;\nconst ml = $('ML Prediction').first().json;\nconst params = $('Parse Request').first().json;\n\nconst price = market.prices?.[0] || {};\n\nconst dataContext = {\n  token: params.token,\n  chain: params.chain,\n  question: params.question,\n  currentPrice: price.price || 0,\n  change24h: price.change24h || 0,\n  volume24h: price.volume24h || 0,\n  marketCap: price.marketCap || 0,\n  ta: {\n    rsi: ta.rsi || 'N/A',\n    macd: ta.macd || 'N/A',\n    sma20: ta.sma20 || 'N/A',\n    sma50: ta.sma50 || 'N/A',\n    ema12: ta.ema12 || 'N/A',\n    bollingerBands: ta.bollingerBands || 'N/A',\n    support: ta.support || 'N/A',\n    resistance: ta.resistance || 'N/A',\n    trend: ta.trend || 'N/A'\n  },\n  security: {\n    riskScore: security.riskScore || security.risk_score || 'N/A',\n    contractVerified: security.contractVerified || false,\n    hasProxy: security.hasProxy || false,\n    ownershipRenounced: security.ownershipRenounced || false,\n    flags: security.flags || security.warnings || []\n  },\n  ml: {\n    direction: ml.direction || 'N/A',\n    confidence: ml.confidence || 0,\n    predictedChange: ml.predictedChange || ml.predicted_change || 0,\n    modelVersion: ml.modelVersion || ml.model_version || 'N/A'\n  }\n};\n\nconst step1Prompt = `You are Vizzor, an expert crypto analyst AI. You must analyze the following data for ${params.token} and produce a structured analysis. Do NOT make recommendations yet - only analyze.\\n\\n` +\n  `USER QUESTION: ${params.question}\\n\\n` +\n  `DATA:\\n${JSON.stringify(dataContext, null, 2)}\\n\\n` +\n  `Produce a structured analysis with these sections:\\n` +\n  `1. PRICE ACTION ANALYSIS: Current price context, momentum, key levels\\n` +\n  `2. TECHNICAL ANALYSIS: Interpret the indicators (RSI, MACD, moving averages, Bollinger Bands)\\n` +\n  `3. SECURITY ASSESSMENT: Contract risks, red flags, trust factors\\n` +\n  `4. ML MODEL SIGNAL: Interpret the ML prediction in context\\n` +\n  `5. KEY OBSERVATIONS: 3-5 bullet points of the most important findings\\n\\n` +\n  `Be precise, data-driven, and honest about uncertainties.`;\n\nreturn [{ json: { step1Prompt, dataContext } }];"
+      },
+      "id": "b3b2c3d4-0014-4000-8000-000000000007",
+      "name": "Structure Step 1 Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1580,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $json.step1Prompt }}"
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": 1500,
+          "temperature": 0.3
+        }
+      },
+      "id": "b3b2c3d4-0014-4000-8000-000000000008",
+      "name": "Step 1 — Analyze",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        1800,
+        300
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "vizzor-openai",
+          "name": "Vizzor OpenAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const analysis = $input.first().json.message?.content || $input.first().json.text || $input.first().json.choices?.[0]?.message?.content || '';\nconst dataContext = $('Structure Step 1 Prompt').first().json.dataContext;\n\nconst step2Prompt = `You are Vizzor, an expert crypto analyst AI. Based on the analysis below, provide a final recommendation.\\n\\n` +\n  `USER QUESTION: ${dataContext.question}\\n\\n` +\n  `ANALYSIS (from step 1):\\n${analysis}\\n\\n` +\n  `Now provide:\\n` +\n  `1. VERDICT: One of [STRONG_BUY, BUY, HOLD, SELL, STRONG_SELL, AVOID]\\n` +\n  `2. CONFIDENCE: Low / Medium / High — explain why\\n` +\n  `3. REASONING: 2-3 sentences explaining the verdict, referencing specific data points\\n` +\n  `4. RISKS: Top 3 risks to watch\\n` +\n  `5. TARGETS: If applicable, suggest entry, stop-loss, and take-profit levels based on the TA data\\n` +\n  `6. TIME HORIZON: Short-term (hours), medium (days), or long-term (weeks+) — and why\\n\\n` +\n  `IMPORTANT: This is not financial advice. Frame as analytical opinion based on available data.`;\n\nreturn [{ json: { step2Prompt, analysis } }];"
+      },
+      "id": "b3b2c3d4-0014-4000-8000-000000000009",
+      "name": "Structure Step 2 Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2020,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $json.step2Prompt }}"
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": 1000,
+          "temperature": 0.4
+        }
+      },
+      "id": "b3b2c3d4-0014-4000-8000-000000000010",
+      "name": "Step 2 — Recommend",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        2240,
+        300
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "vizzor-openai",
+          "name": "Vizzor OpenAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const analysis = $('Structure Step 2 Prompt').first().json.analysis;\nconst recommendation = $input.first().json.message?.content || $input.first().json.text || $input.first().json.choices?.[0]?.message?.content || '';\nconst dataContext = $('Structure Step 1 Prompt').first().json.dataContext;\n\nconst fullReport = {\n  token: dataContext.token,\n  chain: dataContext.chain,\n  question: dataContext.question,\n  analysis,\n  recommendation,\n  data: {\n    price: dataContext.currentPrice,\n    change24h: dataContext.change24h,\n    mlDirection: dataContext.ml.direction,\n    mlConfidence: dataContext.ml.confidence,\n    securityRisk: dataContext.security.riskScore\n  },\n  generatedAt: new Date().toISOString()\n};\n\nreturn [{ json: fullReport }];"
+      },
+      "id": "b3b2c3d4-0014-4000-8000-000000000011",
+      "name": "Compose Final Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "b3b2c3d4-0014-4000-8000-000000000012",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2680,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Parse Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Request": {
+      "main": [
+        [
+          {
+            "node": "Fetch Market Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Market Data": {
+      "main": [
+        [
+          {
+            "node": "Fetch TA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch TA": {
+      "main": [
+        [
+          {
+            "node": "Fetch Security",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Security": {
+      "main": [
+        [
+          {
+            "node": "ML Prediction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ML Prediction": {
+      "main": [
+        [
+          {
+            "node": "Structure Step 1 Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structure Step 1 Prompt": {
+      "main": [
+        [
+          {
+            "node": "Step 1 — Analyze",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 1 — Analyze": {
+      "main": [
+        [
+          {
+            "node": "Structure Step 2 Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structure Step 2 Prompt": {
+      "main": [
+        [
+          {
+            "node": "Step 2 — Recommend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 2 — Recommend": {
+      "main": [
+        [
+          {
+            "node": "Compose Final Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compose Final Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "ai"
+    },
+    {
+      "name": "reasoning"
+    }
+  ],
+  "pinData": {},
+  "versionId": "14-llm-reasoning-chain-v1",
+  "id": "114"
+}

@@ -3,6 +3,7 @@ import {
   getTopBoostedTokens,
   type DexPair,
 } from '../../data/sources/dexscreener.js';
+import { getMLClient } from '../../ml/client.js';
 
 export interface MarketData {
   symbol: string;
@@ -142,7 +143,7 @@ function dexPairToTrending(pair: DexPair): TrendingToken {
     name: pair.baseToken.name,
     symbol: pair.baseToken.symbol,
     chain: pair.chainId,
-    priceUsd: pair.priceUsd ?? '0',
+    priceUsd: pair.priceUsd || '',
     priceChange24h: pair.priceChange?.h24 ?? 0,
     volume24h: pair.volume?.h24 ?? 0,
     liquidity: pair.liquidity?.usd ?? 0,
@@ -150,6 +151,45 @@ function dexPairToTrending(pair: DexPair): TrendingToken {
     url: pair.url,
     source: 'dexscreener',
   };
+}
+
+/**
+ * ML-enhanced trend analysis. Falls back to rule-based analyzeTrend().
+ */
+export async function analyzeTrendML(data: MarketData): Promise<MarketTrend> {
+  const mlClient = getMLClient();
+  if (mlClient) {
+    try {
+      const volumeToMcap = data.marketCap > 0 ? data.volume24h / data.marketCap : 0;
+      const result = await mlClient.scoreTrend({
+        price_change_24h: data.priceChange24h,
+        price_change_7d: data.priceChange7d,
+        volume_24h: data.volume24h,
+        market_cap: data.marketCap,
+        volume_to_mcap_ratio: volumeToMcap,
+        rank: data.rank ?? 0,
+      });
+      if (result) {
+        const signals: string[] = [`ML trend score: ${result.score}/100 (${result.model})`];
+        if (result.feature_importances) {
+          const topFeature = Object.entries(result.feature_importances).sort(
+            (a, b) => b[1] - a[1],
+          )[0];
+          if (topFeature) {
+            signals.push(`Top driver: ${topFeature[0]}`);
+          }
+        }
+        return {
+          direction: result.direction,
+          strength: result.score,
+          signals,
+        };
+      }
+    } catch {
+      // ML unavailable — fallback
+    }
+  }
+  return analyzeTrend(data);
 }
 
 export function analyzeTrend(data: MarketData): MarketTrend {

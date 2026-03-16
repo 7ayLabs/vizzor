@@ -11,7 +11,8 @@ import {
   type Address,
   type Abi,
 } from 'viem';
-import { mainnet, polygon, arbitrum, optimism, base } from 'viem/chains';
+import { mainnet, polygon, arbitrum, optimism, base, bsc, avalanche } from 'viem/chains';
+import { assertValidAddress } from '../../utils/validate.js';
 
 import type {
   ChainAdapter,
@@ -39,6 +40,8 @@ const CHAIN_MAP: Record<string, Chain> = {
   arbitrum: arbitrum,
   optimism: optimism,
   base: base,
+  bsc: bsc,
+  avalanche: avalanche,
 };
 
 // ---------------------------------------------------------------------------
@@ -96,20 +99,26 @@ export class EvmAdapter implements ChainAdapter {
     return this.client !== null;
   }
 
+  /** Validate and cast to viem Address. */
+  private toAddress(address: string): Address {
+    assertValidAddress(address);
+    return this.toAddress(address);
+  }
+
   // ── Balances ────────────────────────────────────────────────────────────
 
   async getBalance(address: string): Promise<bigint> {
     const client = this.requireClient();
-    return client.getBalance({ address: address as Address });
+    return client.getBalance({ address: this.toAddress(address) });
   }
 
   async getTokenBalance(address: string, tokenAddress: string): Promise<bigint> {
     const client = this.requireClient();
     const balance = await client.readContract({
-      address: tokenAddress as Address,
+      address: this.toAddress(tokenAddress),
       abi: erc20Abi,
       functionName: 'balanceOf',
-      args: [address as Address],
+      args: [this.toAddress(address)],
     });
     return balance as bigint;
   }
@@ -138,7 +147,7 @@ export class EvmAdapter implements ChainAdapter {
 
   async getContractCode(address: string): Promise<string> {
     const client = this.requireClient();
-    const code = await client.getCode({ address: address as Address });
+    const code = await client.getCode({ address: this.toAddress(address) });
     return code ?? '0x';
   }
 
@@ -150,7 +159,7 @@ export class EvmAdapter implements ChainAdapter {
   ): Promise<unknown> {
     const client = this.requireClient();
     return client.readContract({
-      address: address as Address,
+      address: this.toAddress(address),
       abi: abi as Abi,
       functionName,
       args: args as readonly unknown[],
@@ -166,7 +175,7 @@ export class EvmAdapter implements ChainAdapter {
     const client = this.requireClient();
 
     const logs = await client.getContractEvents({
-      address: address as Address,
+      address: this.toAddress(address),
       abi: abi as Abi,
       eventName,
       fromBlock: options?.fromBlock,
@@ -187,7 +196,7 @@ export class EvmAdapter implements ChainAdapter {
 
   async getTokenInfo(address: string): Promise<TokenInfo> {
     const client = this.requireClient();
-    const tokenAddr = address as Address;
+    const tokenAddr = this.toAddress(address);
 
     const [name, symbol, decimals, totalSupply] = await Promise.all([
       client.readContract({

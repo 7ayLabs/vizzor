@@ -26,12 +26,13 @@ export async function handleTrends(options: {
     }
 
     if (options.json) {
-      const output = marketData.map((data) => {
-        const trend = analyzeTrend(data);
-        const sentiment = { overall: 0, sources: [], consensus: 'neutral' as const };
-        const prediction = generatePrediction(trend, sentiment, data);
-        return { data, trend, prediction };
-      });
+      const output = await Promise.all(
+        marketData.map(async (data) => {
+          const trend = analyzeTrend(data);
+          const prediction = await generatePrediction(data.symbol);
+          return { data, trend, prediction };
+        }),
+      );
       console.log(JSON.stringify(output, null, 2));
       return;
     }

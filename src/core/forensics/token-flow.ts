@@ -1,4 +1,6 @@
 import type { ChainAdapter } from '../../chains/types.js';
+import { getMLClient } from '../../ml/client.js';
+import type { AnomalyResult } from '../../ml/types.js';
 
 export interface TokenFlow {
   from: string;
@@ -16,6 +18,7 @@ export interface FlowAnalysis {
   uniqueReceivers: number;
   largestTransfer: TokenFlow | null;
   flows: TokenFlow[];
+  anomalies?: AnomalyResult[];
 }
 
 export async function analyzeTokenFlows(
@@ -51,6 +54,28 @@ export async function analyzeTokenFlows(
     if (flow.from.toLowerCase() === normalizedAddress) totalOut += flow.amount;
   }
 
+  // ML: detect anomalies in token flows
+  let anomalies: AnomalyResult[] | undefined;
+  const mlClient = getMLClient();
+  if (mlClient && flows.length > 0) {
+    try {
+      const mlFlows = flows.slice(0, 50).map((f) => ({
+        symbol: tokenAddress,
+        amount: Number(f.amount) / 1e18,
+        from: f.from,
+        to: f.to,
+        timestamp: f.timestamp ?? 0,
+        type: 'transfer' as const,
+      }));
+      const results = await mlClient.detectAnomalies(mlFlows);
+      if (results.length > 0) {
+        anomalies = results.filter((r) => r.isAnomaly);
+      }
+    } catch {
+      // ML unavailable — continue without anomalies
+    }
+  }
+
   return {
     totalInflow: totalIn,
     totalOutflow: totalOut,
@@ -58,5 +83,6 @@ export async function analyzeTokenFlows(
     uniqueReceivers: receivers.size,
     largestTransfer: largest,
     flows,
+    anomalies,
   };
 }

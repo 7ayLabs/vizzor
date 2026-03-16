@@ -1,0 +1,5 @@
+name: "Vizzor CodeQL Config"
+
+paths-ignore:
+  # One-time API key display — key cannot be retrieved after creation
+  - src/cli/commands/api.ts

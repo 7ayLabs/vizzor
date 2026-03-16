@@ -1,0 +1,234 @@
+{
+  "name": "12 \u2014 Database Monitor",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "f2b2c3d4-0012-4000-8000-000000000001",
+      "name": "Every Hour",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT schemaname, tablename, pg_size_pretty(pg_total_relation_size(schemaname || '.' || tablename)) AS total_size, pg_total_relation_size(schemaname || '.' || tablename) AS size_bytes, n_live_tup AS live_rows, n_dead_tup AS dead_rows, ROUND(100.0 * n_dead_tup / NULLIF(n_live_tup + n_dead_tup, 0), 2) AS dead_pct, last_vacuum, last_autovacuum, last_analyze FROM pg_stat_user_tables ORDER BY pg_total_relation_size(schemaname || '.' || tablename) DESC LIMIT 20;",
+        "additionalFields": {}
+      },
+      "id": "f2b2c3d4-0012-4000-8000-000000000002",
+      "name": "Query Table Sizes",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        480,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "vizzor-pg",
+          "name": "Vizzor Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT pid, now() - pg_stat_activity.query_start AS duration, query, state, wait_event_type, wait_event FROM pg_stat_activity WHERE (now() - pg_stat_activity.query_start) > INTERVAL '30 seconds' AND state != 'idle' AND query NOT ILIKE '%pg_stat_activity%' ORDER BY duration DESC LIMIT 10;",
+        "additionalFields": {}
+      },
+      "id": "f2b2c3d4-0012-4000-8000-000000000003",
+      "name": "Query Slow Queries",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        700,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "vizzor-pg",
+          "name": "Vizzor Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const tables = $('Query Table Sizes').all().map(i => i.json);\nconst slowQueries = $('Query Slow Queries').all().map(i => i.json);\n\nconst issues = [];\n\n// Check for large tables (> 1GB)\nconst largeTables = tables.filter(t => t.size_bytes > 1073741824);\nif (largeTables.length > 0) {\n  issues.push({\n    type: 'LARGE_TABLE',\n    severity: 'warning',\n    details: largeTables.map(t => `${t.tablename}: ${t.total_size}`)\n  });\n}\n\n// Check for high dead row percentage (> 20%)\nconst bloatedTables = tables.filter(t => parseFloat(t.dead_pct || 0) > 20);\nif (bloatedTables.length > 0) {\n  issues.push({\n    type: 'TABLE_BLOAT',\n    severity: 'warning',\n    details: bloatedTables.map(t => `${t.tablename}: ${t.dead_pct}% dead rows (${t.dead_rows} dead / ${t.live_rows} live)`)\n  });\n}\n\n// Check for tables not vacuumed recently (> 7 days)\nconst staleVacuum = tables.filter(t => {\n  if (!t.last_autovacuum && !t.last_vacuum) return true;\n  const lastVac = new Date(t.last_autovacuum || t.last_vacuum);\n  return (Date.now() - lastVac.getTime()) > 7 * 24 * 60 * 60 * 1000;\n});\nif (staleVacuum.length > 0) {\n  issues.push({\n    type: 'STALE_VACUUM',\n    severity: 'info',\n    details: staleVacuum.map(t => `${t.tablename}: last vacuum ${t.last_autovacuum || t.last_vacuum || 'never'}`)\n  });\n}\n\n// Slow queries\nif (slowQueries.length > 0) {\n  issues.push({\n    type: 'SLOW_QUERIES',\n    severity: 'critical',\n    details: slowQueries.map(q => `PID ${q.pid}: ${q.duration} \u2014 ${(q.query || '').substring(0, 100)}...`)\n  });\n}\n\n// Total DB size\nconst totalBytes = tables.reduce((sum, t) => sum + (t.size_bytes || 0), 0);\nconst totalSizeGB = (totalBytes / 1073741824).toFixed(2);\n\nreturn [{\n  json: {\n    issues,\n    hasIssues: issues.length > 0,\n    totalSizeGB,\n    tableCount: tables.length,\n    slowQueryCount: slowQueries.length,\n    tables: tables.slice(0, 5).map(t => ({ name: t.tablename, size: t.total_size, rows: t.live_rows }))\n  }\n}];"
+      },
+      "id": "f2b2c3d4-0012-4000-8000-000000000004",
+      "name": "Analyze DB Health",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        920,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-issues",
+              "leftValue": "={{ $json.hasIssues }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "f2b2c3d4-0012-4000-8000-000000000005",
+      "name": "Issues Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\n\nlet message = `DATABASE HEALTH ALERT\\n`;\nmessage += `${'='.repeat(30)}\\n\\n`;\nmessage += `Total DB Size: ${data.totalSizeGB} GB\\n`;\nmessage += `Tables Monitored: ${data.tableCount}\\n`;\nmessage += `Slow Queries: ${data.slowQueryCount}\\n\\n`;\n\nfor (const issue of data.issues) {\n  const icon = issue.severity === 'critical' ? 'CRITICAL' : issue.severity === 'warning' ? 'WARNING' : 'INFO';\n  message += `[${icon}] ${issue.type}\\n`;\n  for (const d of issue.details) {\n    message += `  - ${d}\\n`;\n  }\n  message += `\\n`;\n}\n\nmessage += `Top Tables:\\n`;\nfor (const t of data.tables) {\n  message += `  ${t.name}: ${t.size} (${Number(t.rows).toLocaleString()} rows)\\n`;\n}\n\nreturn [{ json: { message, chatId: process.env.TELEGRAM_ALERT_CHAT_ID || '' } }];"
+      },
+      "id": "f2b2c3d4-0012-4000-8000-000000000006",
+      "name": "Format Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1380,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "f2b2c3d4-0012-4000-8000-000000000007",
+      "name": "Telegram Alert",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1600,
+        200
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "vizzor-tg",
+          "name": "Vizzor Telegram Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every Hour": {
+      "main": [
+        [
+          {
+            "node": "Query Table Sizes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Table Sizes": {
+      "main": [
+        [
+          {
+            "node": "Query Slow Queries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Slow Queries": {
+      "main": [
+        [
+          {
+            "node": "Analyze DB Health",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze DB Health": {
+      "main": [
+        [
+          {
+            "node": "Issues Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Issues Found?": {
+      "main": [
+        [
+          {
+            "node": "Format Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Format Alert": {
+      "main": [
+        [
+          {
+            "node": "Telegram Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "monitoring"
+    },
+    {
+      "name": "database"
+    }
+  ],
+  "pinData": {},
+  "versionId": "12-db-monitor-v1",
+  "id": "112"
+}

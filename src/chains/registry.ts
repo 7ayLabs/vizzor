@@ -2,8 +2,14 @@
 // Chain adapter registry – factory-based creation of ChainAdapter instances
 // ---------------------------------------------------------------------------
 
-import type { ChainAdapter } from './types.js';
+import type { ChainAdapter, WritableChainAdapter } from './types.js';
 import { EvmAdapter } from './evm/adapter.js';
+import { WritableEvmAdapter } from './evm/writable-adapter.js';
+import { ZkEvmAdapter, getZkChainIds } from './zk/adapter.js';
+import { SolanaAdapter } from './solana/adapter.js';
+import { SuiAdapter } from './sui/adapter.js';
+import { AptosAdapter } from './aptos/adapter.js';
+import { TonAdapter } from './ton/adapter.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -28,6 +34,34 @@ const BUILTIN_EVM_CHAINS = ['ethereum', 'polygon', 'arbitrum', 'optimism', 'base
 
 for (const chainId of BUILTIN_EVM_CHAINS) {
   registry.set(chainId, evmFactory);
+}
+
+// ZK rollup chains (EVM-compatible)
+const zkFactory: ChainAdapterFactory = (chainId) => new ZkEvmAdapter(chainId);
+
+for (const chainId of getZkChainIds()) {
+  registry.set(chainId, zkFactory);
+}
+
+// Additional EVM-compatible chains
+registry.set('bsc', evmFactory);
+registry.set('avalanche', evmFactory);
+
+// Non-EVM chain adapters
+registry.set('solana', () => new SolanaAdapter());
+registry.set('sui', () => new SuiAdapter());
+registry.set('aptos', () => new AptosAdapter());
+registry.set('ton', () => new TonAdapter());
+
+// ---------------------------------------------------------------------------
+// Writable EVM adapter factory
+// ---------------------------------------------------------------------------
+
+const writableEvmFactory: ChainAdapterFactory = (chainId) => new WritableEvmAdapter(chainId);
+
+export function getWritableAdapter(chainId: string): WritableChainAdapter {
+  const adapter = writableEvmFactory(chainId);
+  return adapter as WritableChainAdapter;
 }
 
 // ---------------------------------------------------------------------------

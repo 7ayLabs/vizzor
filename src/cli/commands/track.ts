@@ -3,11 +3,13 @@ import ora from 'ora';
 import { getAdapter } from '../../chains/registry.js';
 import { getConfig } from '../../config/loader.js';
 import { analyzeWallet } from '../../core/forensics/wallet-analyzer.js';
+import { assertValidAddress } from '../../utils/validate.js';
 
 export async function handleTrack(
   wallet: string,
   options: { chain: string; json: boolean },
 ): Promise<void> {
+  assertValidAddress(wallet);
   const spinner = ora(`Analyzing wallet ${wallet.slice(0, 10)}... on ${options.chain}`).start();
 
   try {

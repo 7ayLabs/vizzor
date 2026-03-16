@@ -1,0 +1,252 @@
+{
+  "name": "11 \u2014 Backtest Pipeline (Webhook)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "backtest",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "e2b2c3d4-0011-4000-8000-000000000001",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "backtest-pipeline-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst strategy = body.strategy;\nconst pair = body.pair || 'BTC/USDT';\nconst startDate = body.startDate || new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];\nconst endDate = body.endDate || new Date().toISOString().split('T')[0];\nconst initialCapital = body.initialCapital || 10000;\n\nif (!strategy) throw new Error('Missing strategy in request body');\n\nreturn [{ json: { strategy, pair, startDate, endDate, initialCapital } }];"
+      },
+      "id": "e2b2c3d4-0011-4000-8000-000000000002",
+      "name": "Parse Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ `SELECT timestamp, open, high, low, close, volume FROM ohlcv_data WHERE pair = '${$json.pair}' AND timestamp >= '${$json.startDate}' AND timestamp <= '${$json.endDate}' ORDER BY timestamp ASC` }}",
+        "additionalFields": {}
+      },
+      "id": "e2b2c3d4-0011-4000-8000-000000000003",
+      "name": "Query OHLCV",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        680,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "vizzor-pg",
+          "name": "Vizzor Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ml-sidecar:8000/backtest",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ strategy: $('Parse Request').first().json.strategy, pair: $('Parse Request').first().json.pair, initialCapital: $('Parse Request').first().json.initialCapital, ohlcv: $input.all().map(i => i.json) }) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "e2b2c3d4-0011-4000-8000-000000000004",
+      "name": "Run Backtest",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = $input.first().json;\nconst params = $('Parse Request').first().json;\n\nconst sharpe = result.sharpeRatio || result.sharpe_ratio || 0;\nconst totalReturn = result.totalReturn || result.total_return || 0;\nconst maxDrawdown = result.maxDrawdown || result.max_drawdown || 0;\nconst totalTrades = result.totalTrades || result.total_trades || 0;\nconst winRate = result.winRate || result.win_rate || 0;\nconst profitFactor = result.profitFactor || result.profit_factor || 0;\n\nconst passed = sharpe >= 0.5;\n\nlet report = `BACKTEST RESULTS\\n`;\nreport += `${'='.repeat(35)}\\n\\n`;\nreport += `Strategy: ${params.strategy}\\n`;\nreport += `Pair: ${params.pair}\\n`;\nreport += `Period: ${params.startDate} to ${params.endDate}\\n`;\nreport += `Initial Capital: $${params.initialCapital.toLocaleString()}\\n\\n`;\n\nreport += `PERFORMANCE\\n`;\nreport += `  Total Return: ${(totalReturn * 100).toFixed(2)}%\\n`;\nreport += `  Sharpe Ratio: ${sharpe.toFixed(3)} ${passed ? 'PASS' : 'FAIL (< 0.5)'}\\n`;\nreport += `  Max Drawdown: ${(maxDrawdown * 100).toFixed(2)}%\\n`;\nreport += `  Profit Factor: ${profitFactor.toFixed(2)}\\n\\n`;\n\nreport += `TRADES\\n`;\nreport += `  Total: ${totalTrades}\\n`;\nreport += `  Win Rate: ${(winRate * 100).toFixed(1)}%\\n`;\n\nif (result.equityCurve) {\n  const finalEquity = result.equityCurve[result.equityCurve.length - 1]?.value || 0;\n  report += `  Final Equity: $${Number(finalEquity).toLocaleString()}\\n`;\n}\n\nreturn [{\n  json: {\n    report,\n    passed,\n    sharpe,\n    strategy: params.strategy,\n    chatId: process.env.TELEGRAM_ALERT_CHAT_ID || ''\n  }\n}];"
+      },
+      "id": "e2b2c3d4-0011-4000-8000-000000000005",
+      "name": "Parse Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "sharpe-check",
+              "leftValue": "={{ $json.sharpe }}",
+              "rightValue": 0.5,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "e2b2c3d4-0011-4000-8000-000000000006",
+      "name": "Sharpe < 0.5?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ 'BACKTEST FAILED\\n\\nStrategy: ' + $json.strategy + '\\nSharpe Ratio: ' + $json.sharpe.toFixed(3) + ' (below 0.5 threshold)\\n\\n' + $json.report }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "e2b2c3d4-0011-4000-8000-000000000007",
+      "name": "Telegram Fail Alert",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1580,
+        200
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "vizzor-tg",
+          "name": "Vizzor Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, passed: $json.passed, sharpe: $json.sharpe, report: $json.report }) }}",
+        "options": {
+          "responseCode": "={{ $json.passed ? 200 : 422 }}"
+        }
+      },
+      "id": "e2b2c3d4-0011-4000-8000-000000000008",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1580,
+        420
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Parse Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Request": {
+      "main": [
+        [
+          {
+            "node": "Query OHLCV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query OHLCV": {
+      "main": [
+        [
+          {
+            "node": "Run Backtest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Backtest": {
+      "main": [
+        [
+          {
+            "node": "Parse Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Results": {
+      "main": [
+        [
+          {
+            "node": "Sharpe < 0.5?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sharpe < 0.5?": {
+      "main": [
+        [
+          {
+            "node": "Telegram Fail Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "backtest"
+    },
+    {
+      "name": "ml"
+    }
+  ],
+  "pinData": {},
+  "versionId": "11-backtest-pipeline-v1",
+  "id": "111"
+}

@@ -1,0 +1,108 @@
+services:
+  vizzor-api:
+    build: .
+    command: ["serve", "--port", "3000"]
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_TYPE: postgres
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      ML_ENABLED: "true"
+      ML_SIDECAR_URL: http://ml-sidecar:8000
+      NODE_ENV: production
+      API_ENABLE_AUTH: "true"
+    restart: unless-stopped
+
+  ml-sidecar:
+    build: ./ml-sidecar
+    # No port mapping — only accessible via internal Docker network
+    expose:
+      - "8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      MODEL_DIR: /app/models
+      ML_API_SECRET: ${ML_API_SECRET}
+    volumes:
+      - ml_models:/app/models:ro
+    restart: unless-stopped
+
+  collector:
+    build: .
+    command: ["collect", "start"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_TYPE: postgres
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    restart: unless-stopped
+
+  n8n:
+    image: n8nio/n8n:latest
+    # Bind to localhost only — not exposed to external network
+    ports:
+      - "127.0.0.1:5678:5678"
+    depends_on:
+      - vizzor-api
+      - ml-sidecar
+    environment:
+      N8N_DEFAULT_BINARY_DATA_MODE: filesystem
+      N8N_BASIC_AUTH_ACTIVE: "true"
+      N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER:-admin}
+      N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD}
+      VIZZOR_API_URL: http://vizzor-api:3000
+      ML_SIDECAR_URL: http://ml-sidecar:8000
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: n8n
+      DB_POSTGRESDB_USER: ${POSTGRES_USER}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n/workflows:/home/node/workflows:ro
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://vizzor-api:3000
+    depends_on:
+      - vizzor-api
+    restart: unless-stopped
+
+  postgres:
+    image: timescale/timescaledb:latest-pg15
+    # No external port — only accessible via internal Docker network
+    expose:
+      - "5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./src/data/migrations/000-create-n8n-db.sh:/docker-entrypoint-initdb.d/000-create-n8n-db.sh:ro
+      - ./src/data/migrations/001-init.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vizzor}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  pg_data:
+  n8n_data:
+  ml_models:

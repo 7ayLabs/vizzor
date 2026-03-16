@@ -9,7 +9,7 @@ import type {
   ChatCompletionMessageParam,
 } from 'openai/resources/chat/completions';
 import { DEFAULT_MODELS, MAX_ITERATIONS } from './types.js';
-import type { AIProvider, AITool, StreamCallbacks, ToolHandler } from './types.js';
+import type { AIProvider, AITool, ChatMessage, StreamCallbacks, ToolHandler } from './types.js';
 
 /** Convert provider-agnostic tool definitions to the OpenAI function-calling format. */
 function toOpenAITools(tools: AITool[]): OpenAI.Chat.Completions.ChatCompletionTool[] {
@@ -42,7 +42,7 @@ export class OpenAIProvider implements AIProvider {
   readonly supportsTools = true;
 
   private client: OpenAI | undefined;
-  private model = DEFAULT_MODELS['openai']!;
+  private model = DEFAULT_MODELS['openai'] ?? 'gpt-4o';
   private maxTokens = 4096;
 
   // -----------------------------------------------------------------------
@@ -69,13 +69,17 @@ export class OpenAIProvider implements AIProvider {
     userMessage: string,
     tools?: AITool[],
     toolHandler?: ToolHandler,
+    history?: ChatMessage[],
   ): Promise<string> {
     const client = this.requireClient();
 
-    const messages: ChatCompletionMessageParam[] = [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userMessage },
-    ];
+    const messages: ChatCompletionMessageParam[] = [{ role: 'system', content: systemPrompt }];
+    if (history && history.length > 0) {
+      for (const msg of history) {
+        messages.push({ role: msg.role, content: msg.content });
+      }
+    }
+    messages.push({ role: 'user', content: userMessage });
 
     const openaiTools = tools && tools.length > 0 ? toOpenAITools(tools) : undefined;
 
@@ -165,13 +169,17 @@ export class OpenAIProvider implements AIProvider {
     callbacks: StreamCallbacks,
     tools?: AITool[],
     toolHandler?: ToolHandler,
+    history?: ChatMessage[],
   ): Promise<string> {
     const client = this.requireClient();
 
-    const messages: ChatCompletionMessageParam[] = [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userMessage },
-    ];
+    const messages: ChatCompletionMessageParam[] = [{ role: 'system', content: systemPrompt }];
+    if (history && history.length > 0) {
+      for (const msg of history) {
+        messages.push({ role: msg.role, content: msg.content });
+      }
+    }
+    messages.push({ role: 'user', content: userMessage });
 
     const openaiTools = tools && tools.length > 0 ? toOpenAITools(tools) : undefined;
 

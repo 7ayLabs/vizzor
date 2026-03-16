@@ -2,10 +2,10 @@ import chalk from 'chalk';
 import { writeFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { stringify as yamlStringify } from 'yaml';
-import { getConfigDir, loadConfig, getConfig } from '../../config/loader.js';
+import { getConfigDir, loadConfig, getConfig, saveConfigValue } from '../../config/loader.js';
 import { DEFAULT_CHAIN } from '../../config/constants.js';
 import { DEFAULT_MODELS } from '../../ai/providers/types.js';
-import { maskKey } from '../../config/keys.js';
+import { maskKey, validateKey } from '../../config/keys.js';
 
 export async function handleConfigInit(): Promise<void> {
   const configDir = getConfigDir();
@@ -38,28 +38,36 @@ export async function handleConfigInit(): Promise<void> {
   console.log();
   console.log('Next steps:');
   console.log(
-    `  1. Set your Anthropic API key: ${chalk.cyan('vizzor config set anthropicApiKey sk-ant-...')}`,
+    `  1. Set your Anthropic API key: ${chalk.cyan('vizzor config set anthropicApiKey <your-key>')}`,
   );
   console.log(
-    `  2. Set your Etherscan API key:  ${chalk.cyan('vizzor config set etherscanApiKey ...')}`,
+    `  2. Set your Etherscan API key:  ${chalk.cyan('vizzor config set etherscanApiKey <your-key>')}`,
   );
   console.log(`  3. Try scanning a project:      ${chalk.cyan('vizzor scan ethereum')}`);
 }
 
 export async function handleConfigSet(key: string, value: string): Promise<void> {
-  const configDir = getConfigDir();
-  const configPath = resolve(configDir, 'config.yaml');
+  // Validate keys for security (phishing, injection, format)
+  const isSensitive = key.toLowerCase().includes('key') || key.toLowerCase().includes('token');
+  if (isSensitive) {
+    const error = validateKey(key, value);
+    if (error && !error.startsWith('Warning:')) {
+      console.log(chalk.red(`Rejected: ${error}`));
+      return;
+    }
+    if (error?.startsWith('Warning:')) {
+      console.log(chalk.yellow(error));
+    }
+  }
 
-  await loadConfig();
-  const config = getConfig();
+  try {
+    saveConfigValue(key, value);
+  } catch (err) {
+    console.log(chalk.red(err instanceof Error ? err.message : String(err)));
+    return;
+  }
 
-  const updatedConfig = { ...config, [key]: value };
-  writeFileSync(configPath, yamlStringify(updatedConfig), 'utf-8');
-
-  const displayValue =
-    key.toLowerCase().includes('key') || key.toLowerCase().includes('token')
-      ? maskKey(value)
-      : value;
+  const displayValue = isSensitive ? maskKey(value) : value;
 
   console.log(chalk.green(`Set ${key} = ${displayValue}`));
 }

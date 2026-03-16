@@ -6,11 +6,23 @@ import type { RichBlock } from './components/message-list.js';
 import { getAdapter } from '../chains/registry.js';
 import { analyzeProject } from '../core/scanner/project-analyzer.js';
 import { assessRisk } from '../core/scanner/risk-scorer.js';
-import { fetchMarketData, fetchTrendingTokens } from '../core/trends/market.js';
+import { fetchTrendingTokens } from '../core/trends/market.js';
 import { analyzeWallet } from '../core/forensics/wallet-analyzer.js';
 import { auditContract } from '../core/forensics/contract-auditor.js';
-import { getConfig } from '../config/loader.js';
-import { DEFAULT_CHAIN, TREND_SYMBOLS } from '../config/constants.js';
+import { getConfig, saveConfigValue, getSettableKeys } from '../config/loader.js';
+import { DEFAULT_CHAIN } from '../config/constants.js';
+import { fetchTopGainersLosers } from '../data/sources/binance.js';
+import {
+  createAgent,
+  listAgents,
+  deleteAgent,
+  startAgent,
+  stopAgent,
+  getAgentStatus,
+  getRecentDecisions,
+  listStrategies,
+  getAgentByName,
+} from '../core/agent/index.js';
 import { getProvider, switchProvider } from '../ai/client.js';
 import { getAvailableProviders } from '../ai/providers/registry.js';
 import { DEFAULT_MODELS } from '../ai/providers/types.js';
@@ -78,7 +90,8 @@ function positionalArgs(args: string[]): string[] {
       i++; // skip the next arg (chain value)
       continue;
     }
-    result.push(args[i]!);
+    const arg = args[i];
+    if (arg !== undefined) result.push(arg);
   }
   return result;
 }
@@ -89,8 +102,9 @@ function positionalArgs(args: string[]): string[] {
 
 function maskKey(value: string | undefined): string {
   if (!value) return '(not set)';
-  if (value.length <= 8) return '****';
-  return value.slice(0, 4) + '****' + value.slice(-4);
+  if (value.length <= 4) return '****';
+  if (value.length <= 8) return value.slice(0, 1) + '****' + value.slice(-1);
+  return value.slice(0, 2) + '*'.repeat(Math.min(value.length - 4, 12)) + value.slice(-2);
 }
 
 // ---------------------------------------------------------------------------
@@ -118,7 +132,11 @@ export async function executeCommand(name: string, args: string[]): Promise<Comm
     case 'provider':
       return handleProvider(args);
     case 'config':
-      return handleConfig();
+      return handleConfig(args);
+    case 'agent':
+      return handleAgent(args);
+    case 'backtest':
+      return handleBacktest(args);
     case 'clear':
       return { blocks: [], text: '' };
     case 'exit':
@@ -213,55 +231,74 @@ async function handleTrack(args: string[]): Promise<CommandResult> {
 }
 
 async function handleTrends(): Promise<CommandResult> {
-  const symbols = TREND_SYMBOLS;
-
-  // Fetch CoinGecko market data + DexScreener trending in parallel
-  const [marketResults, trendingResult] = await Promise.all([
-    Promise.allSettled(symbols.map((s) => fetchMarketData(s))),
-    fetchTrendingTokens().catch(() => []),
+  // Fetch trending tokens + top gainers/losers in parallel (no hardcoded symbols)
+  const [trendingResult, gainersLosersResult] = await Promise.allSettled([
+    fetchTrendingTokens(),
+    fetchTopGainersLosers(5),
   ]);
 
   const blocks: RichBlock[] = [];
-  const lines: string[] = ['Market trends:'];
+  const lines: string[] = [];
 
-  for (let i = 0; i < marketResults.length; i++) {
-    const result = marketResults[i]!;
-    const symbol = symbols[i]!;
-    if (result.status === 'fulfilled' && result.value) {
-      const data = result.value;
-      blocks.push({
-        type: 'market',
-        data: {
-          symbol: data.symbol,
-          price: data.price,
-          change24h: data.priceChange24h,
-          volume: data.volume24h,
-        },
-      });
-    } else {
-      lines.push(`  ${symbol.toUpperCase()}: data unavailable`);
-    }
-  }
+  // Merge and deduplicate trending tokens
+  const trending = trendingResult.status === 'fulfilled' ? trendingResult.value : [];
+  const seen = new Set<string>();
 
-  // Append trending tokens from DexScreener
-  if (trendingResult.length > 0) {
-    lines.push('');
-    lines.push('Trending tokens (DexScreener):');
-    for (const t of trendingResult.slice(0, 5)) {
+  if (trending.length > 0) {
+    lines.push('Trending tokens:');
+    for (const t of trending.slice(0, 10)) {
+      const key = t.symbol.toUpperCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
       const change =
         t.priceChange24h > 0
           ? `+${t.priceChange24h.toFixed(1)}%`
           : `${t.priceChange24h.toFixed(1)}%`;
+      blocks.push({
+        type: 'market',
+        data: {
+          symbol: t.symbol,
+          price: parseFloat(t.priceUsd) || 0,
+          change24h: t.priceChange24h,
+          volume: t.volume24h,
+        },
+      });
       lines.push(
-        `  ${t.symbol} (${t.chain}): $${t.priceUsd} | 24h: ${change} | Vol: $${t.volume24h.toLocaleString()}`,
+        `  ${t.symbol} (${t.chain}): $${t.priceUsd} | 24h: ${change} | Vol: $${t.volume24h.toLocaleString()} [${t.source}]`,
       );
     }
   }
 
-  return {
-    blocks,
-    text: lines.length > 1 ? lines.join('\n') : 'Market data loaded.',
-  };
+  // Top gainers and losers from Binance
+  if (gainersLosersResult.status === 'fulfilled') {
+    const { gainers, losers } = gainersLosersResult.value;
+    if (gainers.length > 0) {
+      lines.push('');
+      lines.push('Top gainers (24h):');
+      for (const g of gainers) {
+        if (seen.has(g.symbol)) continue;
+        lines.push(
+          `  ${g.symbol}: $${g.price.toLocaleString()} | +${g.change24h.toFixed(1)}% | Vol: $${g.quoteVolume.toLocaleString()}`,
+        );
+      }
+    }
+    if (losers.length > 0) {
+      lines.push('');
+      lines.push('Top losers (24h):');
+      for (const l of losers) {
+        if (seen.has(l.symbol)) continue;
+        lines.push(
+          `  ${l.symbol}: $${l.price.toLocaleString()} | ${l.change24h.toFixed(1)}% | Vol: $${l.quoteVolume.toLocaleString()}`,
+        );
+      }
+    }
+  }
+
+  if (lines.length === 0) {
+    return { blocks: [], text: 'Could not fetch market trends. Try again later.' };
+  }
+
+  return { blocks, text: lines.join('\n') };
 }
 
 async function handleAudit(args: string[]): Promise<CommandResult> {
@@ -364,16 +401,169 @@ function handleProvider(args: string[]): CommandResult {
   }
 }
 
+function handleAgent(args: string[]): CommandResult {
+  const sub = args[0];
+
+  if (!sub) {
+    return {
+      blocks: [],
+      text: [
+        'Usage: /agent <subcommand>',
+        '',
+        '  create <name> --strategy <name> --pairs <SYM1,SYM2> [--interval <sec>]',
+        '  list                    List all agents',
+        '  start <name>            Start an agent',
+        '  stop <name>             Stop a running agent',
+        '  status <name>           View agent status and recent decisions',
+        '  delete <name>           Delete an agent',
+        '  strategies              List available strategies',
+      ].join('\n'),
+    };
+  }
+
+  try {
+    switch (sub) {
+      case 'create': {
+        const nameArg = args[1];
+        if (!nameArg)
+          return {
+            blocks: [],
+            text: 'Usage: /agent create <name> --strategy <name> --pairs <SYM1,SYM2>',
+          };
+
+        const stratIdx = args.indexOf('--strategy');
+        const pairsIdx = args.indexOf('--pairs');
+        const intervalIdx = args.indexOf('--interval');
+
+        const strategy =
+          stratIdx !== -1 && stratIdx + 1 < args.length
+            ? (args[stratIdx + 1] ?? 'momentum')
+            : 'momentum';
+        const pairsRaw =
+          pairsIdx !== -1 && pairsIdx + 1 < args.length
+            ? (args[pairsIdx + 1] ?? 'BTC,ETH')
+            : 'BTC,ETH';
+        const interval =
+          intervalIdx !== -1 && intervalIdx + 1 < args.length
+            ? parseInt(args[intervalIdx + 1] ?? '60', 10)
+            : 60;
+
+        const pairs = pairsRaw.split(',').map((p) => p.trim().toUpperCase());
+        const agent = createAgent(nameArg, strategy, pairs, interval);
+        return {
+          blocks: [],
+          text: `Agent "${agent.name}" created (${agent.strategy}, pairs: ${agent.pairs.join(', ')}, interval: ${agent.interval}s)`,
+        };
+      }
+
+      case 'list': {
+        const agents = listAgents();
+        if (agents.length === 0)
+          return { blocks: [], text: 'No agents created. Use /agent create to create one.' };
+
+        const lines = ['Agents:', ''];
+        for (const a of agents) {
+          const status = getAgentStatus(a.id);
+          const statusTag = status?.status ?? 'idle';
+          lines.push(
+            `  ${a.name} [${statusTag}] — ${a.strategy} | ${a.pairs.join(', ')} | ${a.interval}s`,
+          );
+        }
+        return { blocks: [], text: lines.join('\n') };
+      }
+
+      case 'start': {
+        const name = args[1];
+        if (!name) return { blocks: [], text: 'Usage: /agent start <name>' };
+        const agent = getAgentByName(name);
+        if (!agent) return { blocks: [], text: `Agent "${name}" not found.` };
+        const state = startAgent(agent.id);
+        return {
+          blocks: [],
+          text: `Agent "${name}" started (${state.config.strategy}). Monitoring ${state.config.pairs.join(', ')}.`,
+        };
+      }
+
+      case 'stop': {
+        const name = args[1];
+        if (!name) return { blocks: [], text: 'Usage: /agent stop <name>' };
+        const agent = getAgentByName(name);
+        if (!agent) return { blocks: [], text: `Agent "${name}" not found.` };
+        const state = stopAgent(agent.id);
+        return { blocks: [], text: `Agent "${name}" stopped after ${state.cycleCount} cycles.` };
+      }
+
+      case 'status': {
+        const name = args[1];
+        if (!name) return { blocks: [], text: 'Usage: /agent status <name>' };
+        const agent = getAgentByName(name);
+        if (!agent) return { blocks: [], text: `Agent "${name}" not found.` };
+        const state = getAgentStatus(agent.id);
+        if (!state) return { blocks: [], text: `Agent "${name}" not found.` };
+
+        const lines = [
+          `Agent: ${state.config.name}`,
+          `  Status: ${state.status}`,
+          `  Strategy: ${state.config.strategy}`,
+          `  Pairs: ${state.config.pairs.join(', ')}`,
+          `  Interval: ${state.config.interval}s`,
+          `  Cycles: ${state.cycleCount}`,
+        ];
+
+        if (state.error) lines.push(`  Error: ${state.error}`);
+
+        const decisions = getRecentDecisions(agent.id, 5);
+        if (decisions.length > 0) {
+          lines.push('', '  Recent decisions:');
+          for (const d of decisions) {
+            const time = new Date(d.timestamp).toLocaleTimeString();
+            lines.push(
+              `    [${time}] ${d.symbol}: ${d.decision.action.toUpperCase()} (${d.decision.confidence}%)`,
+            );
+            for (const r of d.decision.reasoning.slice(0, 2)) {
+              lines.push(`      - ${r}`);
+            }
+          }
+        }
+
+        return { blocks: [], text: lines.join('\n') };
+      }
+
+      case 'delete': {
+        const name = args[1];
+        if (!name) return { blocks: [], text: 'Usage: /agent delete <name>' };
+        const agent = getAgentByName(name);
+        if (!agent) return { blocks: [], text: `Agent "${name}" not found.` };
+        deleteAgent(agent.id);
+        return { blocks: [], text: `Agent "${name}" deleted.` };
+      }
+
+      case 'strategies': {
+        const strats = listStrategies();
+        return { blocks: [], text: `Available strategies: ${strats.join(', ')}` };
+      }
+
+      default:
+        return { blocks: [], text: `Unknown agent subcommand: ${sub}. Type /agent for help.` };
+    }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { blocks: [], text: `Agent error: ${message}` };
+  }
+}
+
 function handleHelp(): CommandResult {
   const text = [
     'Available commands:',
     '',
     '  /scan <address> [--chain <chain>]    Scan a token/project for risk indicators',
     '  /track <wallet> [--chain <chain>]    Analyze a wallet address',
-    '  /trends                              Market trends + DexScreener trending tokens',
+    '  /trends                              Live trending tokens + top gainers/losers',
     '  /audit <contract> [--chain <chain>]  Audit a smart contract (bytecode scanning)',
+    '  /agent <sub>                         Manage autonomous trading agents',
+    '  /backtest -s <strat> --pair <P> --from <D> --to <D>  Run a historical backtest',
     '  /provider [list|<name>]              Show/switch AI provider',
-    '  /config                              Show current configuration (keys masked)',
+    '  /config [set <key> <value>]           Show or update configuration',
     '  /clear                               Clear message history',
     '  /exit                                Exit Vizzor',
     '  /help                                Show this help message',
@@ -386,36 +576,187 @@ function handleHelp(): CommandResult {
   return { blocks: [], text };
 }
 
-function handleConfig(): CommandResult {
+async function handleBacktest(args: string[]): Promise<CommandResult> {
+  const stratIdx = args.indexOf('-s') !== -1 ? args.indexOf('-s') : args.indexOf('--strategy');
+  const pairIdx = args.indexOf('--pair');
+  const fromIdx = args.indexOf('--from');
+  const toIdx = args.indexOf('--to');
+  const tfIdx = args.indexOf('--timeframe');
+
+  const strategy = stratIdx !== -1 && stratIdx + 1 < args.length ? (args[stratIdx + 1] ?? '') : '';
+  const pair = pairIdx !== -1 && pairIdx + 1 < args.length ? (args[pairIdx + 1] ?? '') : '';
+  const from = fromIdx !== -1 && fromIdx + 1 < args.length ? (args[fromIdx + 1] ?? '') : '';
+  const to = toIdx !== -1 && toIdx + 1 < args.length ? (args[toIdx + 1] ?? '') : '';
+  const timeframe = tfIdx !== -1 && tfIdx + 1 < args.length ? (args[tfIdx + 1] ?? '4h') : '4h';
+
+  if (!strategy || !pair || !from || !to) {
+    return {
+      blocks: [],
+      text: 'Usage: /backtest -s <strategy> --pair <PAIR> --from <YYYY-MM-DD> --to <YYYY-MM-DD> [--timeframe <tf>]',
+    };
+  }
+
+  try {
+    const { BacktestEngine } = await import('../core/backtest/engine.js');
+    const engine = new BacktestEngine({
+      strategy,
+      pair,
+      from,
+      to,
+      initialCapital: 10000,
+      timeframe,
+      slippageBps: 10,
+      commissionPct: 0.1,
+    });
+
+    const result = await engine.run();
+    const lines = [
+      `Backtest: ${result.config.strategy} on ${result.config.pair} (${result.config.from} → ${result.config.to})`,
+      `Initial Capital: $${result.config.initialCapital.toLocaleString()}`,
+      '',
+      `Total Return: $${result.metrics.totalReturn.toFixed(2)} (${result.metrics.totalReturnPct.toFixed(2)}%)`,
+      `Win Rate: ${(result.metrics.winRate * 100).toFixed(1)}%`,
+      `Total Trades: ${result.metrics.totalTrades}`,
+      `Profit Factor: ${result.metrics.profitFactor === Infinity ? '∞' : result.metrics.profitFactor.toFixed(2)}`,
+      `Sharpe Ratio: ${result.metrics.sharpeRatio.toFixed(2)}`,
+      `Max Drawdown: ${result.metrics.maxDrawdown.toFixed(2)}%`,
+    ];
+
+    if (result.trades.length > 0) {
+      lines.push('', 'Last 5 Trades:');
+      for (const t of result.trades.slice(-5)) {
+        const dir = t.pnl >= 0 ? '+' : '';
+        lines.push(
+          `  ${new Date(t.entryTime).toISOString().split('T')[0]} → ${new Date(t.exitTime).toISOString().split('T')[0]} | ${t.side} | $${t.entryPrice.toFixed(2)} → $${t.exitPrice.toFixed(2)} | ${dir}$${t.pnl.toFixed(2)} (${dir}${t.pnlPct.toFixed(2)}%)`,
+        );
+      }
+    }
+
+    return { blocks: [], text: lines.join('\n') };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { blocks: [], text: `Backtest failed: ${message}` };
+  }
+}
+
+async function handleConfig(args: string[]): Promise<CommandResult> {
+  // /config set <key> <value>
+  if (args[0] === 'set') {
+    const key = args[1];
+    const value = args.slice(2).join(' ');
+    if (!key || !value) {
+      return {
+        blocks: [],
+        text:
+          'Usage: /config set <key> <value>\n\nValid keys: ' +
+          Object.keys(getSettableKeys()).join(', '),
+      };
+    }
+    // Validate sensitive keys for security
+    const isSensitive = key.toLowerCase().includes('key') || key.toLowerCase().includes('token');
+    if (isSensitive) {
+      const { validateKey } = await import('../config/keys.js');
+      const error = validateKey(key, value);
+      if (error && !error.startsWith('Warning:')) {
+        return { blocks: [], text: `Rejected: ${error}` };
+      }
+    }
+    try {
+      saveConfigValue(key, value);
+      return { blocks: [], text: `Saved ${key}. Config reloaded.` };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { blocks: [], text: `Config set failed: ${message}` };
+    }
+  }
+
   try {
     const cfg = getConfig();
+    const settable = getSettableKeys();
 
     let activeModel: string;
     try {
-      getProvider(); // ensure a provider is active
+      getProvider();
       activeModel = cfg.ai.model ?? DEFAULT_MODELS[cfg.ai.provider] ?? '(default)';
     } catch {
       activeModel = cfg.ai.model ?? '(default)';
     }
 
+    const apiKeys: { label: string; key: string; value: string | undefined; env: string }[] = [
+      {
+        label: 'Anthropic API Key',
+        key: 'anthropicApiKey',
+        value: cfg.anthropicApiKey,
+        env: settable['anthropicApiKey']?.env ?? '',
+      },
+      {
+        label: 'OpenAI API Key',
+        key: 'openaiApiKey',
+        value: cfg.openaiApiKey,
+        env: settable['openaiApiKey']?.env ?? '',
+      },
+      {
+        label: 'Google API Key',
+        key: 'googleApiKey',
+        value: cfg.googleApiKey,
+        env: settable['googleApiKey']?.env ?? '',
+      },
+      {
+        label: 'Etherscan API Key',
+        key: 'etherscanApiKey',
+        value: cfg.etherscanApiKey,
+        env: settable['etherscanApiKey']?.env ?? '',
+      },
+      {
+        label: 'Alchemy API Key',
+        key: 'alchemyApiKey',
+        value: cfg.alchemyApiKey,
+        env: settable['alchemyApiKey']?.env ?? '',
+      },
+      {
+        label: 'CoinGecko API Key',
+        key: 'coingeckoApiKey',
+        value: cfg.coingeckoApiKey,
+        env: settable['coingeckoApiKey']?.env ?? '',
+      },
+      {
+        label: 'CryptoPanic Key',
+        key: 'cryptopanicApiKey',
+        value: cfg.cryptopanicApiKey,
+        env: settable['cryptopanicApiKey']?.env ?? '',
+      },
+    ];
+
+    let configured = 0;
+    const keyLines: string[] = [];
+    for (const k of apiKeys) {
+      const masked = maskKey(k.value);
+      if (k.value) configured++;
+      const hint = k.value ? '' : `  -> /config set ${k.key} <value> or ${k.env}=xxx`;
+      keyLines.push(`  ${k.label.padEnd(20)} ${masked}${hint}`);
+    }
+
     const text = [
-      'Current configuration:',
+      'Configuration:',
       '',
-      `  AI Provider:        ${cfg.ai.provider}`,
-      `  AI Model:           ${activeModel}`,
+      '  [AI Provider]',
+      `  Provider:           ${cfg.ai.provider}`,
+      `  Model:              ${activeModel}`,
       `  Max Tokens:         ${cfg.ai.maxTokens}`,
-      `  Anthropic API Key:  ${maskKey(cfg.anthropicApiKey)}`,
-      `  OpenAI API Key:     ${maskKey(cfg.openaiApiKey)}`,
-      `  Google API Key:     ${maskKey(cfg.googleApiKey)}`,
-      `  Etherscan API Key:  ${maskKey(cfg.etherscanApiKey)}`,
-      `  Alchemy API Key:    ${maskKey(cfg.alchemyApiKey)}`,
-      `  CoinGecko API Key:  ${maskKey(cfg.coingeckoApiKey)}`,
-      `  CryptoPanic Key:   ${maskKey(cfg.cryptopanicApiKey)}`,
-      `  Default Chain:      ${cfg.defaultChain}`,
       `  Ollama Host:        ${cfg.ai.ollamaHost}`,
-      `  Output Format:      ${cfg.output.format}`,
+      '',
+      `  [API Keys] (${configured}/${apiKeys.length} configured)`,
+      ...keyLines,
+      '',
+      '  [Chain]',
+      `  Default Chain:      ${cfg.defaultChain}`,
+      '',
+      '  [Output]',
+      `  Format:             ${cfg.output.format}`,
       `  Color:              ${cfg.output.color}`,
       `  Verbose:            ${cfg.output.verbose}`,
+      '',
+      'Set a value: /config set <key> <value>',
     ].join('\n');
 
     return { blocks: [], text };

@@ -5,7 +5,7 @@
 /** Default blockchain when none is specified. */
 export const DEFAULT_CHAIN = 'ethereum';
 
-/** Default symbols for the /trends command. */
+/** @deprecated Used only by CLI trends fallback. TUI uses dynamic trending data. */
 export const TREND_SYMBOLS = ['bitcoin', 'ethereum', 'solana'];
 
 /** Default ticker symbols shown in the price bar. */

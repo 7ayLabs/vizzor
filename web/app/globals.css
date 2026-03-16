@@ -1,0 +1,475 @@
+@import "tailwindcss";
+
+:root {
+  --bg-primary: #0a0a0a;
+  --bg-secondary: #141414;
+  --bg-glass: rgba(255, 255, 255, 0.04);
+  --border: rgba(255, 255, 255, 0.08);
+  --text-primary: #ffffff;
+  --text-secondary: #a1a1a1;
+  --text-muted: #6b6b6b;
+  --success: #22c55e;
+  --success-bg: rgba(34, 197, 94, 0.15);
+  --danger: #ef4444;
+  --danger-bg: rgba(239, 68, 68, 0.15);
+  --warning: #a1a1a1;
+
+  /* Legacy aliases for components still referencing old vars */
+  --background: #0a0a0a;
+  --background-secondary: #141414;
+  --foreground: #ffffff;
+  --card: rgba(255, 255, 255, 0.04);
+  --card-hover: rgba(255, 255, 255, 0.06);
+  --primary: rgba(255, 255, 255, 0.6);
+  --muted: #6b6b6b;
+  --accent-blue: rgba(255, 255, 255, 0.5);
+  --accent-purple: rgba(255, 255, 255, 0.45);
+  --accent-orange: rgba(255, 255, 255, 0.4);
+}
+
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+/* ═══ Glass card utility ═══ */
+.glass-card {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Ticker scroll animation */
+@keyframes ticker-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.ticker-scroll:hover {
+  animation-play-state: paused;
+}
+
+/* Pulse dot for live indicators */
+@keyframes pulse-dot {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+  }
+  50% {
+    opacity: 0.7;
+    box-shadow: 0 0 0 4px rgba(34, 197, 94, 0);
+  }
+}
+
+.pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+/* Glow effects */
+.glow-green {
+  text-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
+}
+
+.glow-red {
+  text-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+}
+
+.glow-white {
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.4);
+}
+
+/* Mobile sidebar slide-in */
+@keyframes slide-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.2s ease-out;
+}
+
+/* ═══ Chat markdown styles ═══ */
+
+.chat-content p {
+  margin-bottom: 0.25rem;
+  line-height: 1.6;
+}
+
+.chat-content ul,
+.chat-content ol {
+  padding-left: 1.25rem;
+  margin: 0.5rem 0;
+}
+
+.chat-content li {
+  margin-bottom: 0.125rem;
+  line-height: 1.5;
+}
+
+.chat-content a {
+  color: rgba(255, 255, 255, 0.7);
+  text-decoration: underline;
+}
+
+.chat-content strong {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+/* Section headers — ======TITLE====== styled blocks */
+.chat-content .chat-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--section-color, #868E96) 12%, transparent);
+  border-left: 3px solid var(--section-color, #868E96);
+  color: var(--section-color, #868E96);
+  font-weight: 700;
+  font-size: 0.8125rem;
+  letter-spacing: 0.02em;
+}
+
+.chat-content .chat-section-header .chat-section-icon {
+  font-size: 0.875rem;
+  flex-shrink: 0;
+}
+
+/* Markdown headers with optional section color */
+.chat-content .chat-h1,
+.chat-content .chat-h2,
+.chat-content .chat-h3,
+.chat-content .chat-h4 {
+  font-weight: 700;
+  margin-top: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.chat-content .chat-h1 {
+  font-size: 0.9375rem;
+  color: var(--section-color, #ffffff);
+}
+
+.chat-content .chat-h2 {
+  font-size: 0.875rem;
+  color: var(--section-color, rgba(255, 255, 255, 0.85));
+}
+
+.chat-content .chat-h3 {
+  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.chat-content .chat-h4 {
+  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* $SYMBOL crypto token tags */
+.chat-content .chat-token-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--token-color, #888) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--token-color, #888) 30%, transparent);
+  color: var(--token-color, #888);
+  font-weight: 600;
+  font-size: 0.8em;
+  white-space: nowrap;
+  vertical-align: baseline;
+}
+
+.chat-content .chat-token-tag .chat-token-icon {
+  font-size: 0.9em;
+}
+
+/* Tables */
+.chat-content .chat-table-wrap {
+  overflow-x: auto;
+  margin: 0.5rem 0;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.chat-content .chat-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.chat-content .chat-table td {
+  padding: 0.35rem 0.6rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  white-space: nowrap;
+}
+
+.chat-content .chat-table tr:first-child td {
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.chat-content .chat-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* Code */
+.chat-inline-code {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  padding: 0.1rem 0.3rem;
+  font-size: 0.8em;
+}
+
+.chat-code-block {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 0.75rem;
+  margin: 0.5rem 0;
+  overflow-x: auto;
+  font-size: 0.75rem;
+}
+
+/* ═══ TUI-inspired animations ═══ */
+
+/* Dots spinner */
+@keyframes dots-spin {
+  0%, 20% { content: '\2687'; }
+  10% { content: '\2689'; }
+  20% { content: '\2689'; }
+  30% { content: '\2688'; }
+  40% { content: '\268c'; }
+  50% { content: '\2694'; }
+  60% { content: '\2686'; }
+  70% { content: '\2687'; }
+  80% { content: '\2687'; }
+  90% { content: '\268f'; }
+}
+
+/* Typing indicator — 3-dot bounce */
+@keyframes typing-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
+.typing-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
+  animation: typing-bounce 1.4s ease-in-out infinite;
+}
+
+.typing-dot:nth-child(2) { animation-delay: 0.16s; }
+.typing-dot:nth-child(3) { animation-delay: 0.32s; }
+
+/* Streaming cursor — white */
+@keyframes cursor-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.streaming-cursor::after {
+  content: '\2588';
+  color: rgba(255, 255, 255, 0.6);
+  animation: cursor-blink 1s step-end infinite;
+  font-size: 0.85em;
+}
+
+/* ═══ Message animations ═══ */
+
+/* Bot messages: slide from left */
+@keyframes msg-slide-left {
+  from { opacity: 0; transform: translateX(-12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* User messages: slide from right */
+@keyframes msg-slide-right {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Fade up — generic entrance */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Fade in — smooth streaming */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Scale pop — for cards and chips */
+@keyframes scale-pop {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Shimmer skeleton loader — white/gray gradient */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-msg-left {
+  animation: msg-slide-left 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+
+.animate-msg-right {
+  animation: msg-slide-right 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+
+.animate-fade-up {
+  animation: fade-up 0.35s ease-out both;
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out both;
+}
+
+.animate-scale-pop {
+  animation: scale-pop 0.25s ease-out both;
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* Stagger delays for sequential animations */
+.stagger-1 { animation-delay: 0.05s; }
+.stagger-2 { animation-delay: 0.1s; }
+.stagger-3 { animation-delay: 0.15s; }
+.stagger-4 { animation-delay: 0.2s; }
+.stagger-5 { animation-delay: 0.25s; }
+
+/* Tool card expand/collapse */
+@keyframes card-expand {
+  from { opacity: 0; max-height: 0; }
+  to { opacity: 1; max-height: 500px; }
+}
+
+.animate-card-expand {
+  animation: card-expand 0.3s ease-out both;
+  overflow: hidden;
+}
+
+/* Progress bar fill */
+@keyframes bar-fill {
+  from { width: 0; }
+}
+
+.animate-bar-fill {
+  animation: bar-fill 0.6s ease-out both;
+}
+
+/* Breathing pulse for bot avatar — white glow */
+@keyframes breathe {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.2); }
+  50% { box-shadow: 0 0 0 4px rgba(255, 255, 255, 0); }
+}
+
+.animate-breathe {
+  animation: breathe 3s ease-in-out infinite;
+}
+
+/* Suggestion chip hover */
+.suggestion-chip {
+  transition: all 0.2s ease;
+}
+
+.suggestion-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.suggestion-chip:active {
+  transform: translateY(0);
+}
+
+/* Smooth tool status transitions */
+.tool-status-enter {
+  animation: fade-up 0.25s ease-out both;
+}
+
+/* TUI-style left border accent on messages — white/gray */
+.tui-border-left {
+  border-left: 2px solid rgba(255, 255, 255, 0.2);
+  padding-left: 0.75rem;
+}
+
+.tui-border-left-user {
+  border-left: 2px solid rgba(255, 255, 255, 0.1);
+  padding-left: 0.75rem;
+}
+
+/* Mobile-optimized touch targets */
+@media (max-width: 640px) {
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Frosted glass header on scroll */
+.glass-header {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  background: rgba(20, 20, 20, 0.85);
+}
+
+/* Dashboard card hover accent — white glow */
+.dash-card {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.dash-card:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.03);
+}
+
+/* Extended stagger delays for dashboard grids */
+.stagger-6 { animation-delay: 0.3s; }
+.stagger-7 { animation-delay: 0.35s; }
+.stagger-8 { animation-delay: 0.4s; }

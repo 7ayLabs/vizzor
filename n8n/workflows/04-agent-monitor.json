@@ -1,0 +1,247 @@
+{
+  "name": "04 \u2014 Agent Monitor",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "d1b2c3d4-0004-4000-8000-000000000001",
+      "name": "Every 5 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://vizzor-api:3000/v1/agents",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "d1b2c3d4-0004-4000-8000-000000000002",
+      "name": "Fetch Agents",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const agents = $input.first().json.agents || [];\nreturn agents.map(a => ({ json: a }));"
+      },
+      "id": "d1b2c3d4-0004-4000-8000-000000000003",
+      "name": "Split Agents",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "d1b2c3d4-0004-4000-8000-000000000004",
+      "name": "For Each Agent",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const agent = $input.first().json;\nconst now = Date.now();\nconst lastHeartbeat = new Date(agent.lastHeartbeat || 0).getTime();\nconst staleSec = (now - lastHeartbeat) / 1000;\nconst staleThresholdSec = 600; // 10 minutes\n\nconst isError = agent.status === 'error' || agent.status === 'crashed';\nconst isStale = staleSec > staleThresholdSec && agent.status !== 'stopped';\n\nreturn [{\n  json: {\n    ...agent,\n    staleSec: Math.round(staleSec),\n    isError,\n    isStale,\n    hasIssue: isError || isStale\n  }\n}];"
+      },
+      "id": "d1b2c3d4-0004-4000-8000-000000000005",
+      "name": "Check Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-issue",
+              "leftValue": "={{ $json.hasIssue }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "d1b2c3d4-0004-4000-8000-000000000006",
+      "name": "Error or Stale?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const a = $input.first().json;\nlet reason = '';\nif (a.isError) reason = `Status: ${a.status} \u2014 ${a.errorMessage || 'unknown error'}`;\nif (a.isStale) reason += `${reason ? '\\n' : ''}Stale: last heartbeat ${a.staleSec}s ago`;\n\nconst message = `Agent Alert\\n\\n` +\n  `Name: ${a.name}\\n` +\n  `ID: ${a.id}\\n` +\n  `Strategy: ${a.strategy || 'N/A'}\\n` +\n  `${reason}\\n\\n` +\n  `Action: Check agent logs and restart if needed.`;\n\nreturn [{ json: { message, chatId: process.env.TELEGRAM_ALERT_CHAT_ID || '' } }];"
+      },
+      "id": "d1b2c3d4-0004-4000-8000-000000000007",
+      "name": "Format Agent Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1580,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "d1b2c3d4-0004-4000-8000-000000000008",
+      "name": "Telegram Alert",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1800,
+        200
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "vizzor-tg",
+          "name": "Vizzor Telegram Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every 5 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Fetch Agents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Agents": {
+      "main": [
+        [
+          {
+            "node": "Split Agents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Agents": {
+      "main": [
+        [
+          {
+            "node": "For Each Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "For Each Agent": {
+      "main": [
+        [
+          {
+            "node": "Check Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Status": {
+      "main": [
+        [
+          {
+            "node": "Error or Stale?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error or Stale?": {
+      "main": [
+        [
+          {
+            "node": "Format Agent Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Format Agent Alert": {
+      "main": [
+        [
+          {
+            "node": "Telegram Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "agents"
+    },
+    {
+      "name": "monitoring"
+    }
+  ],
+  "pinData": {},
+  "versionId": "04-agent-monitor-v1",
+  "id": "104"
+}

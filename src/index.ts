@@ -76,14 +76,6 @@ program
     await handleAudit(contract, options);
   });
 
-program
-  .command('chat')
-  .description('Conversational AI mode')
-  .action(async () => {
-    const { handleChat } = await import('./cli/commands/chat.js');
-    await handleChat();
-  });
-
 const configCmd = program.command('config').description('Configuration management');
 
 configCmd
@@ -123,10 +115,112 @@ botCmd
     await handleBotStart(options);
   });
 
+botCmd
+  .command('validate')
+  .description('Check bot token configuration')
+  .action(async () => {
+    const { handleBotValidate } = await import('./cli/commands/bot.js');
+    handleBotValidate();
+  });
+
+const collectCmd = program.command('collect').description('Data collection pipeline');
+
+collectCmd
+  .command('start')
+  .description('Start background OHLCV data collection (requires PostgreSQL)')
+  .option('--symbols <symbols>', 'Comma-separated symbols to collect (default: 23 major pairs)')
+  .option('--interval <seconds>', 'Collection interval in seconds (default: 300)', parseInt)
+  .action(async (options: { symbols?: string; interval?: number }) => {
+    const { handleCollectStart } = await import('./cli/commands/collect.js');
+    await handleCollectStart(options);
+  });
+
+collectCmd
+  .command('status')
+  .description('Show data collection status')
+  .action(async () => {
+    const { handleCollectStatus } = await import('./cli/commands/collect.js');
+    handleCollectStatus();
+  });
+
+program
+  .command('serve')
+  .description('Start the REST API server')
+  .option('--port <port>', 'Server port', (v: string) => parseInt(v, 10), 3000)
+  .option('--host <host>', 'Server host', '0.0.0.0')
+  .option('--auth', 'Enable API key authentication', false)
+  .action(async (options: { port: number; host: string; auth: boolean }) => {
+    const { handleServe } = await import('./cli/commands/serve.js');
+    await handleServe(options);
+  });
+
+const apiCmd = program.command('api').description('API management');
+const apiKeyCmd = apiCmd.command('key').description('API key management');
+
+apiKeyCmd
+  .command('create [label]')
+  .description('Generate a new API key')
+  .action(async (label: string) => {
+    const { handleApiKeyCreate } = await import('./cli/commands/api.js');
+    handleApiKeyCreate(label);
+  });
+
+apiKeyCmd
+  .command('list')
+  .description('List active API keys')
+  .action(async () => {
+    const { handleApiKeyList } = await import('./cli/commands/api.js');
+    handleApiKeyList();
+  });
+
+apiKeyCmd
+  .command('revoke <id>')
+  .description('Revoke an API key')
+  .action(async (id: string) => {
+    const { handleApiKeyRevoke } = await import('./cli/commands/api.js');
+    handleApiKeyRevoke(id);
+  });
+
+apiCmd
+  .command('start')
+  .description('Start the REST API server')
+  .option('--port <port>', 'Server port', (v: string) => parseInt(v, 10), 3000)
+  .option('--host <host>', 'Server host', '0.0.0.0')
+  .option('--auth', 'Enable API key authentication', false)
+  .action(async (options: { port: number; host: string; auth: boolean }) => {
+    const { handleServe } = await import('./cli/commands/serve.js');
+    await handleServe(options);
+  });
+
+// Register the backtest CLI command
+const { registerBacktestCommand } = await import('./cli/commands/backtest.js');
+registerBacktestCommand(program);
+
+// Register the wallet CLI command
+const { registerWalletCommand } = await import('./cli/commands/wallet.js');
+registerWalletCommand(program);
+
 // If no arguments provided, launch interactive TUI
 const args = process.argv.slice(2);
 if (args.length === 0) {
   await loadConfig();
+
+  // Start WebSocket manager if realtime is enabled
+  const { getConfig } = await import('./config/loader.js');
+  try {
+    const config = getConfig();
+    if (config.realtime?.enabled) {
+      const { initWSManager } = await import('./data/sources/ws-manager.js');
+      const wsManager = initWSManager();
+      for (const symbol of config.realtime.symbols) {
+        wsManager.subscribe(symbol);
+      }
+      wsManager.start();
+    }
+  } catch {
+    // Config may not have realtime section — that's fine
+  }
+
   const { startTUI } = await import('./tui/app.js');
   startTUI();
 } else {

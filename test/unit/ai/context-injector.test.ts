@@ -48,6 +48,11 @@ vi.mock('@/data/sources/binance.js', () => ({
     price: 67000,
     change24h: 2.5,
   }),
+  fetchTickerPriceRT: vi.fn().mockResolvedValue({
+    symbol: 'BTC',
+    price: 67000,
+    change24h: 2.5,
+  }),
   fetchFundingRate: vi.fn().mockResolvedValue({
     symbol: 'BTC',
     fundingRate: 0.0001,
@@ -81,59 +86,112 @@ beforeEach(() => {
 
 describe('buildContextBlock', () => {
   it('injects REAL-TIME DATA markers', async () => {
-    const result = await buildContextBlock('what is bitcoin price');
-    expect(result).toContain('--- REAL-TIME DATA (fetched just now) ---');
-    expect(result).toContain('--- END REAL-TIME DATA ---');
+    const { contextText } = await buildContextBlock('what is bitcoin price');
+    expect(contextText).toContain('--- REAL-TIME DATA (fetched just now');
+    expect(contextText).toContain('--- END REAL-TIME DATA ---');
   });
 
   it('includes critical instructions for AI', async () => {
-    const result = await buildContextBlock('bitcoin price');
-    expect(result).toContain('CRITICAL INSTRUCTIONS');
-    expect(result).toContain('do NOT make something up');
+    const { contextText } = await buildContextBlock('bitcoin price');
+    expect(contextText).toContain('CRITICAL INSTRUCTIONS');
+    expect(contextText).toContain('Do NOT invent or fabricate');
   });
 
   it('detects price keywords and fetches token data', async () => {
-    const result = await buildContextBlock('what is the price of bitcoin');
-    expect(result).toContain('BTC');
+    const { contextText } = await buildContextBlock('what is the price of bitcoin');
+    expect(contextText).toContain('BTC');
   });
 
   it('detects trending keywords', async () => {
-    const result = await buildContextBlock('what is trending in crypto');
-    expect(result).toContain('Trending');
+    const { contextText } = await buildContextBlock('what is trending in crypto');
+    expect(contextText).toContain('Trending');
   });
 
   it('detects broad market queries', async () => {
-    const result = await buildContextBlock("what's happening in the crypto market today");
-    expect(result).toContain('REAL-TIME DATA');
+    const { contextText } = await buildContextBlock("what's happening in the crypto market today");
+    expect(contextText).toContain('REAL-TIME DATA');
   });
 
   it('always includes Fear & Greed index', async () => {
-    const result = await buildContextBlock('hello');
-    expect(result).toContain('Fear & Greed');
+    const { contextText } = await buildContextBlock('hello');
+    expect(contextText).toContain('Fear & Greed');
   });
 
   it('always includes Binance prices as baseline', async () => {
-    const result = await buildContextBlock('random question');
-    expect(result).toContain('Binance');
+    const { contextText } = await buildContextBlock('random question');
+    expect(contextText).toContain('Binance');
   });
 
   it('detects 0x addresses', async () => {
-    const result = await buildContextBlock('analyze 0x1234567890123456789012345678901234567890');
-    expect(result).toContain('REAL-TIME DATA');
+    const { contextText } = await buildContextBlock(
+      'analyze 0x1234567890123456789012345678901234567890',
+    );
+    expect(contextText).toContain('REAL-TIME DATA');
   });
 
   it('detects token symbols like eth, sol', async () => {
-    const result = await buildContextBlock('what about eth');
-    expect(result).toContain('REAL-TIME DATA');
+    const { contextText } = await buildContextBlock('what about eth');
+    expect(contextText).toContain('REAL-TIME DATA');
   });
 
   it('includes derivatives data for price queries', async () => {
-    const result = await buildContextBlock('bitcoin price analysis');
-    expect(result).toContain('REAL-TIME DATA');
+    const { contextText } = await buildContextBlock('bitcoin price analysis');
+    expect(contextText).toContain('REAL-TIME DATA');
   });
 
   it('returns non-empty for any input (baseline injection)', async () => {
-    const result = await buildContextBlock('just chatting');
-    expect(result.length).toBeGreaterThan(0);
+    const { contextText } = await buildContextBlock('just chatting');
+    expect(contextText.length).toBeGreaterThan(0);
+  });
+
+  it('populates tokenData array for token queries', async () => {
+    const { tokenData } = await buildContextBlock('what is bitcoin price');
+    expect(tokenData.length).toBeGreaterThan(0);
+    const btc = tokenData.find((t) => t.symbol === 'BTC');
+    expect(btc).toBeDefined();
+    expect(btc!.price).toBeGreaterThan(0);
+    expect(btc!.source).toBeDefined();
+  });
+
+  it('returns tokenData from Binance baseline even without specific tokens', async () => {
+    const { tokenData } = await buildContextBlock('hello there');
+    // Binance baseline always fetches BTC, ETH, SOL
+    expect(tokenData.length).toBeGreaterThan(0);
+  });
+
+  it('compact mode produces shorter context', async () => {
+    const { contextText: full } = await buildContextBlock('bitcoin price');
+    const { contextText: compact } = await buildContextBlock('bitcoin price', { compact: true });
+    expect(compact.length).toBeLessThan(full.length);
+    expect(compact).toContain('RULES');
+    expect(compact).not.toContain('QUERY TYPE:');
+  });
+
+  it('compact mode includes verified prices header when tokens found', async () => {
+    const { contextText } = await buildContextBlock('bitcoin price', { compact: true });
+    expect(contextText).toContain('VERIFIED PRICES');
+  });
+
+  it('compact mode anchors prediction to current price range', async () => {
+    const { contextText } = await buildContextBlock('bitcoin prediction', { compact: true });
+    expect(contextText).toContain('MUST START FROM THESE EXACT PRICES');
+    expect(contextText).toContain('±5%');
+  });
+
+  it('queriedSymbols returns only tokens the user mentioned', async () => {
+    const { queriedSymbols } = await buildContextBlock('what is bitcoin price');
+    expect(queriedSymbols).toContain('BTC');
+    expect(queriedSymbols).not.toContain('SOL');
+  });
+
+  it('queriedSymbols is empty for generic queries', async () => {
+    const { queriedSymbols } = await buildContextBlock('hello there');
+    expect(queriedSymbols).toHaveLength(0);
+  });
+
+  it('queriedSymbols includes multiple tokens', async () => {
+    const { queriedSymbols } = await buildContextBlock('compare btc and eth');
+    expect(queriedSymbols).toContain('BTC');
+    expect(queriedSymbols).toContain('ETH');
   });
 });

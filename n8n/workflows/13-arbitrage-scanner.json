@@ -1,0 +1,326 @@
+{
+  "name": "13 — Arbitrage Scanner",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "a3b2c3d4-0013-4000-8000-000000000001",
+      "name": "Every 1 Minute",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://vizzor-api:3000/v1/market/price",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "pairs",
+              "value": "BTC/USDT,ETH/USDT,SOL/USDT,BNB/USDT,ARB/USDT,OP/USDT,AVAX/USDT,MATIC/USDT"
+            },
+            {
+              "name": "source",
+              "value": "cex"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "a3b2c3d4-0013-4000-8000-000000000002",
+      "name": "CEX Prices",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://vizzor-api:3000/v1/market/price",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "pairs",
+              "value": "BTC/USDT,ETH/USDT,SOL/USDT,BNB/USDT,ARB/USDT,OP/USDT,AVAX/USDT,MATIC/USDT"
+            },
+            {
+              "name": "source",
+              "value": "dex"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "a3b2c3d4-0013-4000-8000-000000000003",
+      "name": "DEX Prices",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        700,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cexData = $('CEX Prices').first().json;\nconst dexData = $('DEX Prices').first().json;\n\nconst cexPrices = cexData.prices || [];\nconst dexPrices = dexData.prices || [];\n\nconst opportunities = [];\n\nfor (const cex of cexPrices) {\n  const dex = dexPrices.find(d => d.pair === cex.pair);\n  if (!dex || !cex.price || !dex.price) continue;\n\n  const spread = Math.abs(cex.price - dex.price) / Math.min(cex.price, dex.price) * 100;\n  const direction = cex.price > dex.price ? 'BUY DEX -> SELL CEX' : 'BUY CEX -> SELL DEX';\n\n  if (spread > 0.5) { // Track anything > 0.5% for logging\n    opportunities.push({\n      pair: cex.pair,\n      cexPrice: cex.price,\n      dexPrice: dex.price,\n      spread: spread.toFixed(4),\n      direction,\n      cexSource: cex.exchange || cex.source || 'unknown',\n      dexSource: dex.exchange || dex.source || 'unknown',\n      timestamp: new Date().toISOString(),\n      actionable: spread > 1.5\n    });\n  }\n}\n\n// Sort by spread descending\nopportunities.sort((a, b) => parseFloat(b.spread) - parseFloat(a.spread));\n\nconst actionable = opportunities.filter(o => o.actionable);\n\nreturn [{\n  json: {\n    opportunities,\n    actionable,\n    hasActionable: actionable.length > 0,\n    totalScanned: cexPrices.length\n  }\n}];"
+      },
+      "id": "a3b2c3d4-0013-4000-8000-000000000004",
+      "name": "Calculate Spreads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        920,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "actionable-spread",
+              "leftValue": "={{ $json.hasActionable }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "a3b2c3d4-0013-4000-8000-000000000005",
+      "name": "Spread > 1.5%?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ml-sidecar:8000/validate/arbitrage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ opportunities: $json.actionable }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "a3b2c3d4-0013-4000-8000-000000000006",
+      "name": "ML Confirm",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1380,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const mlResult = $input.first().json;\nconst validated = (mlResult.validated || mlResult.opportunities || []).filter(o => o.confirmed !== false);\n\nif (validated.length === 0) {\n  return [{ json: { skip: true } }];\n}\n\nlet message = `ARBITRAGE OPPORTUNITY DETECTED\\n`;\nmessage += `${'='.repeat(35)}\\n\\n`;\n\nfor (const opp of validated) {\n  message += `Pair: ${opp.pair}\\n`;\n  message += `Spread: ${opp.spread}%\\n`;\n  message += `CEX: $${Number(opp.cexPrice).toLocaleString()} (${opp.cexSource})\\n`;\n  message += `DEX: $${Number(opp.dexPrice).toLocaleString()} (${opp.dexSource})\\n`;\n  message += `Direction: ${opp.direction}\\n`;\n  message += `ML Confidence: ${((opp.mlConfidence || opp.confidence || 0) * 100).toFixed(0)}%\\n`;\n  message += `Risk: ${opp.risk || 'medium'}\\n\\n`;\n}\n\nmessage += `Scanned at: ${new Date().toISOString()}\\n`;\nmessage += `Note: Verify liquidity and fees before executing.`;\n\nreturn [{ json: { message, chatId: process.env.TELEGRAM_ALERT_CHAT_ID || '', skip: false } }];"
+      },
+      "id": "a3b2c3d4-0013-4000-8000-000000000007",
+      "name": "Format Opportunity",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "not-skip",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "a3b2c3d4-0013-4000-8000-000000000008",
+      "name": "ML Confirmed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1820,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "a3b2c3d4-0013-4000-8000-000000000009",
+      "name": "Telegram Alert",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2060,
+        140
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "vizzor-tg",
+          "name": "Vizzor Telegram Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every 1 Minute": {
+      "main": [
+        [
+          {
+            "node": "CEX Prices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CEX Prices": {
+      "main": [
+        [
+          {
+            "node": "DEX Prices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DEX Prices": {
+      "main": [
+        [
+          {
+            "node": "Calculate Spreads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Spreads": {
+      "main": [
+        [
+          {
+            "node": "Spread > 1.5%?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Spread > 1.5%?": {
+      "main": [
+        [
+          {
+            "node": "ML Confirm",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "ML Confirm": {
+      "main": [
+        [
+          {
+            "node": "Format Opportunity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Opportunity": {
+      "main": [
+        [
+          {
+            "node": "ML Confirmed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ML Confirmed?": {
+      "main": [
+        [
+          {
+            "node": "Telegram Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "arbitrage"
+    },
+    {
+      "name": "trading"
+    }
+  ],
+  "pinData": {},
+  "versionId": "13-arbitrage-scanner-v1",
+  "id": "113"
+}

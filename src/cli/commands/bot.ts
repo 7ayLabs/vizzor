@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import { getConfig } from '../../config/loader.js';
-import { requireKey } from '../../config/keys.js';
+import { requireKey, hasKey } from '../../config/keys.js';
 
 export async function handleBotStart(options: {
   discord: boolean;
@@ -45,4 +45,58 @@ export async function handleBotStart(options: {
   process.on('SIGTERM', shutdown);
 
   await Promise.all(promises);
+}
+
+export function handleBotValidate(): void {
+  const config = getConfig();
+
+  console.log(chalk.bold('\nVizzor Bot Configuration Check\n'));
+
+  const checks = [
+    { label: 'Anthropic API Key', isSet: hasKey(config.anthropicApiKey), required: true },
+    { label: 'Etherscan API Key', isSet: hasKey(config.etherscanApiKey), required: true },
+    { label: 'Discord Token', isSet: hasKey(config.discordToken), required: false },
+    { label: 'Discord Guild ID', isSet: hasKey(config.discordGuildId), required: false },
+    { label: 'Telegram Token', isSet: hasKey(config.telegramToken), required: false },
+    { label: 'CryptoPanic Key', isSet: hasKey(config.cryptopanicApiKey), required: false },
+  ];
+
+  let allRequired = true;
+  for (const check of checks) {
+    const status = check.isSet
+      ? chalk.green('OK')
+      : check.required
+        ? chalk.red('MISSING')
+        : chalk.yellow('NOT SET');
+    console.log(`  ${status.padEnd(18)} ${check.label}`);
+    if (check.required && !check.isSet) allRequired = false;
+  }
+
+  console.log();
+
+  // Bot readiness
+  if (hasKey(config.discordToken)) {
+    console.log(chalk.green('  Discord bot:  Ready to start'));
+  } else {
+    console.log(chalk.yellow('  Discord bot:  Set discordToken to enable'));
+    console.log(chalk.dim('                vizzor config set discordToken <token>'));
+  }
+
+  if (hasKey(config.telegramToken)) {
+    console.log(chalk.green('  Telegram bot: Ready to start'));
+  } else {
+    console.log(chalk.yellow('  Telegram bot: Set telegramToken to enable'));
+    console.log(chalk.dim('                vizzor config set telegramToken <token>'));
+  }
+
+  console.log();
+
+  if (!allRequired) {
+    console.log(chalk.red('Required keys are missing. Run: vizzor config set <key> <value>'));
+  } else if (hasKey(config.discordToken) && hasKey(config.telegramToken)) {
+    console.log(chalk.green('All bots ready. Run: vizzor bot start --all'));
+  } else if (hasKey(config.discordToken) || hasKey(config.telegramToken)) {
+    const which = hasKey(config.discordToken) ? '--discord' : '--telegram';
+    console.log(chalk.green(`Bot ready. Run: vizzor bot start ${which}`));
+  }
 }

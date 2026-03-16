@@ -55,10 +55,20 @@ export async function fetchCryptoNews(symbol?: string, apiToken?: string): Promi
   const res = await fetch(url);
 
   if (!res.ok) {
-    throw new Error(`CryptoPanic API error: ${res.status} ${res.statusText}`);
+    return [];
   }
 
-  const data = (await res.json()) as { results: RawPost[] };
+  const contentType = res.headers.get('content-type') ?? '';
+  if (!contentType.includes('application/json')) {
+    return [];
+  }
+
+  let data: { results: RawPost[] };
+  try {
+    data = (await res.json()) as { results: RawPost[] };
+  } catch {
+    return [];
+  }
   const posts = data.results ?? [];
 
   return posts.map((post): CryptoNews => {
