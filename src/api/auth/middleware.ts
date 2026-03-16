@@ -61,7 +61,7 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
   if (!keyInfo) {
     logAuditEvent({
       type: 'auth_failure',
-      actor: apiKey.slice(0, 12) + '...',
+      actor: `hash:${keyHash.slice(0, 8)}...`,
       resource: request.url,
       action: 'Invalid API key used',
       ip: request.ip,

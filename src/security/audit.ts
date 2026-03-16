@@ -94,8 +94,10 @@ export function logAuditEvent(event: Omit<AuditEvent, 'timestamp'>): void {
   memoryBuffer.push(fullEvent);
 
   // Also log to structured logger for file-based persistence
+  // Redact actor field to prevent sensitive data leaking into logs
+  const safeActor = event.actor.length > 16 ? event.actor.slice(0, 8) + '***' : event.actor;
   log.info(
-    `[AUDIT] ${event.type}: ${event.action} | actor=${event.actor} resource=${event.resource}`,
+    `[AUDIT] ${event.type}: ${event.action} | actor=${safeActor} resource=${event.resource}`,
   );
 }
 

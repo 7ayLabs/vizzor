@@ -93,7 +93,10 @@
     "onlyBuiltDependencies": [
       "better-sqlite3",
       "esbuild"
-    ]
+    ],
+    "overrides": {
+      "undici": ">=6.24.0"
+    }
   },
   "lint-staged": {
     "*.{ts,tsx}": [
