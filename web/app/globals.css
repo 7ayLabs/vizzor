@@ -117,9 +117,11 @@ body {
   animation: slide-in 0.2s ease-out;
 }
 
-/* Chat markdown styles */
+/* ═══ Chat markdown styles ═══ */
+
 .chat-content p {
   margin-bottom: 0.25rem;
+  line-height: 1.6;
 }
 
 .chat-content ul,
@@ -130,6 +132,7 @@ body {
 
 .chat-content li {
   margin-bottom: 0.125rem;
+  line-height: 1.5;
 }
 
 .chat-content a {
@@ -142,6 +145,29 @@ body {
   font-weight: 600;
 }
 
+/* Section headers — ======TITLE====== styled blocks */
+.chat-content .chat-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--section-color, #868E96) 12%, transparent);
+  border-left: 3px solid var(--section-color, #868E96);
+  color: var(--section-color, #868E96);
+  font-weight: 700;
+  font-size: 0.8125rem;
+  letter-spacing: 0.02em;
+}
+
+.chat-content .chat-section-header .chat-section-icon {
+  font-size: 0.875rem;
+  flex-shrink: 0;
+}
+
+/* Markdown headers with optional section color */
 .chat-content .chat-h1,
 .chat-content .chat-h2,
 .chat-content .chat-h3,
@@ -151,10 +177,77 @@ body {
   margin-bottom: 0.25rem;
 }
 
-.chat-content .chat-h1 { font-size: 1rem; }
-.chat-content .chat-h2 { font-size: 0.875rem; }
-.chat-content .chat-h3 { font-size: 0.8125rem; }
+.chat-content .chat-h1 {
+  font-size: 0.9375rem;
+  color: var(--section-color, #ffffff);
+}
 
+.chat-content .chat-h2 {
+  font-size: 0.875rem;
+  color: var(--section-color, rgba(255, 255, 255, 0.85));
+}
+
+.chat-content .chat-h3 {
+  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.chat-content .chat-h4 {
+  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* $SYMBOL crypto token tags */
+.chat-content .chat-token-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--token-color, #888) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--token-color, #888) 30%, transparent);
+  color: var(--token-color, #888);
+  font-weight: 600;
+  font-size: 0.8em;
+  white-space: nowrap;
+  vertical-align: baseline;
+}
+
+.chat-content .chat-token-tag .chat-token-icon {
+  font-size: 0.9em;
+}
+
+/* Tables */
+.chat-content .chat-table-wrap {
+  overflow-x: auto;
+  margin: 0.5rem 0;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.chat-content .chat-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.chat-content .chat-table td {
+  padding: 0.35rem 0.6rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  white-space: nowrap;
+}
+
+.chat-content .chat-table tr:first-child td {
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.chat-content .chat-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* Code */
 .chat-inline-code {
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.08);

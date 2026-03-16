@@ -39,8 +39,13 @@ export function ChatInterface() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
 
+  // Auto-scroll: scroll the parent <main> so the entire page scrolls down
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Small delay so DOM has updated with new content
+    const timer = setTimeout(() => {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }, 50);
+    return () => clearTimeout(timer);
   }, [messages]);
 
   const handleReply = useCallback((messageId: string) => {
@@ -63,12 +68,12 @@ export function ChatInterface() {
   const replyMessage = replyingTo ? messages.find((m) => m.id === replyingTo) : null;
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Messages area */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto">
+    <div className="flex flex-col min-h-full">
+      {/* Messages area — grows naturally, parent <main> handles scroll */}
+      <div ref={scrollRef} className="flex-1">
         {messages.length === 0 ? (
           /* Empty state — TUI-inspired welcome */
-          <div className="flex flex-col items-center justify-center h-full px-4 sm:px-6">
+          <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 sm:px-6">
             <div className="flex flex-col items-center gap-5 max-w-lg w-full text-center animate-fade-up">
               {/* Vizzor diamond logo */}
               <VizzorLogo size={56} className="sm:w-16 sm:h-16" />
@@ -119,8 +124,8 @@ export function ChatInterface() {
 
       {/* Reply indicator */}
       {replyMessage && (
-        <div className="max-w-5xl mx-auto w-full px-4 sm:px-6 md:px-10">
-          <div className="flex items-center gap-2 px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-t-xl text-xs text-[var(--text-muted)]">
+        <div className="sticky bottom-[72px] z-10 max-w-5xl mx-auto w-full px-4 sm:px-6 md:px-10">
+          <div className="flex items-center gap-2 px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-t-xl text-xs text-[var(--text-muted)] backdrop-blur-md">
             <i className="fa-solid fa-reply text-[10px]" />
             <span className="truncate flex-1">
               Replying to: {replyMessage.content.slice(0, 80)}
@@ -133,8 +138,8 @@ export function ChatInterface() {
         </div>
       )}
 
-      {/* Input */}
-      <div className="max-w-5xl mx-auto w-full">
+      {/* Input — sticky at bottom of scroll area */}
+      <div className="sticky bottom-0 z-10 bg-[var(--bg-primary)] max-w-5xl mx-auto w-full">
         <ChatInput
           onSend={handleSend}
           onStop={stopStreaming}
