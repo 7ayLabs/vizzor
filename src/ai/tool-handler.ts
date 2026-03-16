@@ -17,7 +17,27 @@ import {
 } from '../core/scanner/ico-tracker.js';
 import { fetchCryptoNews } from '../data/sources/cryptopanic.js';
 import { fetchRecentRaises } from '../data/sources/defillama.js';
-import { fetchTickerPrice, fetchFundingRate, fetchOpenInterest } from '../data/sources/binance.js';
+import {
+  fetchTickerPrice,
+  fetchFundingRate,
+  fetchOpenInterest,
+  fetchKlines,
+  fetchOrderBookDepth,
+  fetchLongShortRatio,
+  fetchTopTraderRatio,
+  fetchTakerBuySellRatio,
+} from '../data/sources/binance.js';
+import {
+  calculateVWAP,
+  calculateVolumeDelta,
+  detectMarketStructure,
+  detectFVGs,
+  detectSRZones,
+  estimateLiquidationZones,
+  detectSqueezeConditions,
+  computePsychLevel,
+} from '../core/technical-analysis/microstructure-indicators.js';
+import { calculateATR } from '../core/technical-analysis/indicators.js';
 import { checkTokenSecurity } from '../data/sources/goplus.js';
 import { fetchFearGreedIndex } from '../data/sources/fear-greed.js';
 import { analyzeTechnicals } from '../core/technical-analysis/index.js';
@@ -909,6 +929,192 @@ async function handleToolUnsafe(name: string, input: unknown): Promise<unknown> 
         slippageEstimate: '0.1-0.5%',
         safetyCheck: 'pending',
         note: 'Use execute_trade to proceed after reviewing this preview.',
+      };
+    }
+
+    // -----------------------------------------------------------------------
+    // Microstructure & Order Flow tools
+    // -----------------------------------------------------------------------
+
+    case 'get_market_structure': {
+      const symbol = String(params['symbol'] ?? 'BTC');
+      const timeframe = String(params['timeframe'] ?? '1h');
+      const klines = await fetchKlines(symbol, timeframe, 100);
+      const highs = klines.map((k) => k.high);
+      const lows = klines.map((k) => k.low);
+      const structure = detectMarketStructure(highs, lows);
+      return {
+        symbol: symbol.toUpperCase(),
+        timeframe,
+        currentPrice: klines[klines.length - 1]?.close ?? 0,
+        ...(structure ?? {
+          bias: 'ranging',
+          swingHighs: [],
+          swingLows: [],
+          sequence: [],
+          lastBreak: null,
+        }),
+      };
+    }
+
+    case 'get_fvg_analysis': {
+      const symbol = String(params['symbol'] ?? 'BTC');
+      const timeframe = String(params['timeframe'] ?? '1h');
+      const klines = await fetchKlines(symbol, timeframe, 100);
+      const highs = klines.map((k) => k.high);
+      const lows = klines.map((k) => k.low);
+      const closes = klines.map((k) => k.close);
+      const atr = calculateATR(highs, lows, closes);
+      const fvgs = detectFVGs(highs, lows, closes, atr);
+      return {
+        symbol: symbol.toUpperCase(),
+        timeframe,
+        currentPrice: closes[closes.length - 1] ?? 0,
+        fvgs: fvgs.slice(0, 10),
+        totalFound: fvgs.length,
+        unfilledCount: fvgs.filter((f) => !f.filled).length,
+      };
+    }
+
+    case 'get_vwap': {
+      const symbol = String(params['symbol'] ?? 'BTC');
+      const timeframe = String(params['timeframe'] ?? '1h');
+      const klines = await fetchKlines(symbol, timeframe, 100);
+      const vwap = calculateVWAP(
+        klines.map((k) => k.high),
+        klines.map((k) => k.low),
+        klines.map((k) => k.close),
+        klines.map((k) => k.volume),
+      );
+      return {
+        symbol: symbol.toUpperCase(),
+        timeframe,
+        currentPrice: klines[klines.length - 1]?.close ?? 0,
+        ...(vwap ?? { vwap: 0, upperBand: 0, lowerBand: 0, deviation: 0 }),
+      };
+    }
+
+    case 'get_volume_delta': {
+      const symbol = String(params['symbol'] ?? 'BTC');
+      const timeframe = String(params['timeframe'] ?? '1h');
+      const klines = await fetchKlines(symbol, timeframe, 100);
+      const delta = calculateVolumeDelta(
+        klines.map((k) => k.open),
+        klines.map((k) => k.close),
+        klines.map((k) => k.volume),
+      );
+      return {
+        symbol: symbol.toUpperCase(),
+        timeframe,
+        currentPrice: klines[klines.length - 1]?.close ?? 0,
+        ...(delta ?? { delta: 0, cumulativeDelta: [], deltaMA: 0, divergence: 'none' }),
+      };
+    }
+
+    case 'get_liquidation_map': {
+      const symbol = String(params['symbol'] ?? 'BTC');
+      const [ticker, oi] = await Promise.all([fetchTickerPrice(symbol), fetchOpenInterest(symbol)]);
+      const liqZones = estimateLiquidationZones(ticker.price, oi.openInterest);
+      const psychLevel = computePsychLevel(ticker.price, symbol);
+      return {
+        symbol: symbol.toUpperCase(),
+        currentPrice: ticker.price,
+        openInterest: oi.openInterest,
+        openInterestNotional: oi.notionalValue,
+        nearestPsychLevel: psychLevel,
+        ...liqZones,
+      };
+    }
+
+    case 'get_order_book_depth': {
+      const symbol = String(params['symbol'] ?? 'BTC');
+      const depth = Number(params['depth'] || 20);
+      const ob = await fetchOrderBookDepth(symbol, depth);
+      return ob;
+    }
+
+    case 'get_sr_zones': {
+      const symbol = String(params['symbol'] ?? 'BTC');
+      const timeframe = String(params['timeframe'] ?? '1h');
+      const klines = await fetchKlines(symbol, timeframe, 100);
+      const zones = detectSRZones(
+        klines.map((k) => k.high),
+        klines.map((k) => k.low),
+        klines.map((k) => k.close),
+      );
+      return {
+        symbol: symbol.toUpperCase(),
+        timeframe,
+        currentPrice: klines[klines.length - 1]?.close ?? 0,
+        zones: zones.slice(0, 10),
+        totalZones: zones.length,
+      };
+    }
+
+    case 'get_squeeze_detector': {
+      const symbol = String(params['symbol'] ?? 'BTC');
+      const results = await Promise.allSettled([
+        fetchFundingRate(symbol),
+        fetchOpenInterest(symbol),
+        fetchLongShortRatio(symbol),
+        fetchTopTraderRatio(symbol),
+        fetchTakerBuySellRatio(symbol),
+        fetchKlines(symbol, '1h', 100),
+        fetchOrderBookDepth(symbol, 20),
+      ]);
+
+      const funding = results[0].status === 'fulfilled' ? results[0].value : null;
+      const oi = results[1].status === 'fulfilled' ? results[1].value : null;
+      const ls = results[2].status === 'fulfilled' ? results[2].value : null;
+      const topTrader = results[3].status === 'fulfilled' ? results[3].value : null;
+      const taker = results[4].status === 'fulfilled' ? results[4].value : null;
+      const klines = results[5].status === 'fulfilled' ? results[5].value : [];
+      const ob = results[6].status === 'fulfilled' ? results[6].value : null;
+
+      const currentPrice = klines[klines.length - 1]?.close ?? funding?.markPrice ?? 0;
+      const highs = klines.map((k) => k.high);
+      const lows = klines.map((k) => k.low);
+      const closes = klines.map((k) => k.close);
+
+      const structure = detectMarketStructure(highs, lows);
+      const volDelta = calculateVolumeDelta(
+        klines.map((k) => k.open),
+        closes,
+        klines.map((k) => k.volume),
+      );
+      const atr = calculateATR(highs, lows, closes);
+      const liqZones = oi ? estimateLiquidationZones(currentPrice, oi.openInterest) : null;
+      const latestLSRatio = ls?.history[ls.history.length - 1]?.longShortRatio ?? null;
+      const latestTopRatio =
+        topTrader?.history[topTrader.history.length - 1]?.longShortRatio ?? null;
+
+      const squeeze = detectSqueezeConditions(
+        funding?.fundingRate ?? null,
+        latestLSRatio,
+        latestTopRatio,
+        structure,
+        volDelta,
+        liqZones,
+        ob?.imbalanceRatio ?? null,
+        currentPrice,
+        atr,
+      );
+
+      return {
+        symbol: symbol.toUpperCase(),
+        currentPrice,
+        shortSqueeze: squeeze.shortSqueeze,
+        longSqueeze: squeeze.longSqueeze,
+        supportingData: {
+          fundingRate: funding?.fundingRate ?? null,
+          openInterest: oi?.notionalValue ?? null,
+          longShortRatio: latestLSRatio,
+          topTraderRatio: latestTopRatio,
+          takerBuySellRatio: taker?.history[taker.history.length - 1]?.buySellRatio ?? null,
+          orderBookImbalance: ob?.imbalanceRatio ?? null,
+          marketBias: structure?.bias ?? 'unknown',
+          volumeDeltaDivergence: volDelta?.divergence ?? 'unknown',
+        },
       };
     }
 

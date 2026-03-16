@@ -615,4 +615,113 @@ export const VIZZOR_TOOLS: AITool[] = [
       required: ['symbol', 'action', 'amountUsd'],
     },
   },
+
+  // -------------------------------------------------------------------------
+  // Microstructure & Order Flow tools
+  // -------------------------------------------------------------------------
+  {
+    name: 'get_market_structure',
+    description:
+      'Detect market structure: swing highs/lows, HH/HL/LH/LL sequence, bias (bullish/bearish/ranging), Break of Structure (BOS), Change of Character (CHoCH). Uses pivot detection on kline data.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        symbol: { type: 'string', description: 'Token symbol (e.g. "BTC", "ETH").' },
+        timeframe: {
+          type: 'string',
+          description: 'Kline timeframe: "5m", "15m", "1h" (default), "4h".',
+        },
+      },
+      required: ['symbol'],
+    },
+  },
+  {
+    name: 'get_fvg_analysis',
+    description:
+      'Detect Fair Value Gaps (FVG) — imbalances where price moved too fast, leaving unfilled gaps. Returns bullish and bearish FVGs with fill status and strength score. Essential for identifying reversal and retracement zones.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        symbol: { type: 'string', description: 'Token symbol.' },
+        timeframe: { type: 'string', description: 'Kline timeframe. Default: "1h".' },
+      },
+      required: ['symbol'],
+    },
+  },
+  {
+    name: 'get_vwap',
+    description:
+      'Calculate Volume-Weighted Average Price (VWAP) with ±1σ bands. Shows institutional fair value. Price above VWAP upper band = overextended, below lower band = undervalued. Deviation percentage indicates distance from fair value.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        symbol: { type: 'string', description: 'Token symbol.' },
+        timeframe: { type: 'string', description: 'Kline timeframe. Default: "1h".' },
+      },
+      required: ['symbol'],
+    },
+  },
+  {
+    name: 'get_volume_delta',
+    description:
+      'Calculate cumulative volume delta (buy volume minus sell volume). Detects divergences: price rising + delta falling = bearish divergence (hidden selling), price falling + delta rising = bullish divergence (hidden buying). Key for manipulation and absorption detection.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        symbol: { type: 'string', description: 'Token symbol.' },
+        timeframe: { type: 'string', description: 'Kline timeframe. Default: "1h".' },
+      },
+      required: ['symbol'],
+    },
+  },
+  {
+    name: 'get_liquidation_map',
+    description:
+      'Estimate liquidation zone clusters above and below current price at 10x/25x/50x/100x leverage. Shows where cascading liquidations will trigger based on open interest distribution. Essential for identifying market maker manipulation targets and stop-hunt zones.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        symbol: { type: 'string', description: 'Token symbol.' },
+      },
+      required: ['symbol'],
+    },
+  },
+  {
+    name: 'get_order_book_depth',
+    description:
+      'Fetch Binance Futures L2 order book depth. Returns bid/ask price levels with quantities, wall clusters (large resting orders), and imbalance ratio (>1 = buy pressure, <1 = sell pressure). Detects institutional absorption zones and potential spoofing.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        symbol: { type: 'string', description: 'Token symbol.' },
+        depth: { type: 'number', description: 'Order book levels: 5, 10, or 20 (default).' },
+      },
+      required: ['symbol'],
+    },
+  },
+  {
+    name: 'get_sr_zones',
+    description:
+      'Auto-detect support and resistance zones from price action. Clusters swing highs/lows, counts touches at each level, classifies as support/resistance/pivot. Higher touch count = stronger zone. Essential for identifying where price is likely to reverse.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        symbol: { type: 'string', description: 'Token symbol.' },
+        timeframe: { type: 'string', description: 'Kline timeframe. Default: "1h".' },
+      },
+      required: ['symbol'],
+    },
+  },
+  {
+    name: 'get_squeeze_detector',
+    description:
+      'Detect short squeeze and long squeeze conditions. Analyzes funding rate extremes, long/short positioning, top trader ratios, market structure, volume delta divergence, liquidation clusters, and order book imbalance to identify potential cascading liquidation events. Returns entry/stop/targets if squeeze conditions are met.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        symbol: { type: 'string', description: 'Token symbol.' },
+      },
+      required: ['symbol'],
+    },
+  },
 ];
