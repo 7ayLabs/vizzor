@@ -7,7 +7,11 @@ import { getProvider, getConfig, switchProvider } from '../../../ai/client.js';
 import { buildChatSystemPrompt } from '../../../ai/prompts/chat.js';
 import { VIZZOR_TOOLS } from '../../../ai/tools.js';
 import { handleTool } from '../../../ai/tool-handler.js';
-import type { ToolHandler, StreamCallbacks } from '../../../ai/providers/types.js';
+import type {
+  ToolHandler,
+  StreamCallbacks,
+  ChatMessage as ProviderChatMessage,
+} from '../../../ai/providers/types.js';
 import { buildContextBlock } from '../../../ai/context-injector.js';
 import { getAvailableProviders } from '../../../ai/providers/registry.js';
 import { createLogger } from '../../../utils/logger.js';
@@ -106,18 +110,9 @@ export async function registerChatRoutes(server: FastifyInstance): Promise<void>
         const provider = getProvider();
         const systemPrompt = buildChatSystemPrompt();
 
-        // Build conversation context from prior messages
+        // Build conversation history from prior messages
         const lastUserMsg = messages[messages.length - 1] as ChatMessage;
-        const priorMessages = messages.slice(0, -1);
-        let contextBlock = '';
-        if (priorMessages.length > 0) {
-          contextBlock = '\n\n## Conversation History\n\n';
-          for (const msg of priorMessages) {
-            contextBlock += `**${msg.role === 'user' ? 'User' : 'Assistant'}**: ${msg.content}\n\n`;
-          }
-        }
-
-        const fullSystemPrompt = systemPrompt + contextBlock;
+        const priorMessages = messages.slice(0, -1) as ProviderChatMessage[];
         const userMessage = lastUserMsg.content;
 
         if (!provider.supportsTools) {
@@ -138,8 +133,7 @@ export async function registerChatRoutes(server: FastifyInstance): Promise<void>
             write('token_data', { tokens });
           }
 
-          const enrichedPrompt =
-            OLLAMA_SYSTEM_PROMPT + (contextText ? '\n' + contextText : '') + contextBlock;
+          const enrichedPrompt = OLLAMA_SYSTEM_PROMPT + (contextText ? '\n' + contextText : '');
 
           const callbacks: StreamCallbacks = {
             onText: (delta) => write('text', { delta }),
@@ -152,7 +146,14 @@ export async function registerChatRoutes(server: FastifyInstance): Promise<void>
             onDone: (fullText) => write('done', { fullText }),
           };
 
-          await provider.analyzeStream(enrichedPrompt, userMessage, callbacks);
+          await provider.analyzeStream(
+            enrichedPrompt,
+            userMessage,
+            callbacks,
+            undefined,
+            undefined,
+            priorMessages,
+          );
           reply.raw.end();
           return;
         }
@@ -173,11 +174,12 @@ export async function registerChatRoutes(server: FastifyInstance): Promise<void>
         };
 
         await provider.analyzeStream(
-          fullSystemPrompt,
+          systemPrompt,
           userMessage,
           callbacks,
           VIZZOR_TOOLS,
           wrappedHandler,
+          priorMessages,
         );
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';

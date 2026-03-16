@@ -8,7 +8,7 @@ import { initializeProvider } from './providers/registry.js';
 import { buildContextBlock } from './context-injector.js';
 
 // Re-export types so existing consumers don't need to change their import paths.
-export type { ToolHandler, AITool } from './providers/types.js';
+export type { ToolHandler, AITool, ChatMessage } from './providers/types.js';
 
 // ---------------------------------------------------------------------------
 // Module state

@@ -11,7 +11,7 @@ import {
   type Part,
 } from '@google/generative-ai';
 import { DEFAULT_MODELS, MAX_ITERATIONS } from './types.js';
-import type { AIProvider, AITool, StreamCallbacks, ToolHandler } from './types.js';
+import type { AIProvider, AITool, ChatMessage, StreamCallbacks, ToolHandler } from './types.js';
 
 /**
  * Convert provider-agnostic tool definitions to Gemini's FunctionDeclaration format.
@@ -84,6 +84,7 @@ export class GeminiProvider implements AIProvider {
     userMessage: string,
     tools?: AITool[],
     toolHandler?: ToolHandler,
+    chatHistory?: ChatMessage[],
   ): Promise<string> {
     const genAI = this.requireGenAI();
 
@@ -92,6 +93,15 @@ export class GeminiProvider implements AIProvider {
 
     // Conversation history for multi-turn tool use.
     const history: Content[] = [];
+    // Prepend conversation history for multi-turn context
+    if (chatHistory && chatHistory.length > 0) {
+      for (const msg of chatHistory) {
+        history.push({
+          role: msg.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: msg.content }],
+        });
+      }
+    }
 
     // Start with the user message; subsequent iterations use function responses.
     let currentContents: Content[] = [{ role: 'user', parts: [{ text: userMessage }] }];
@@ -171,12 +181,22 @@ export class GeminiProvider implements AIProvider {
     callbacks: StreamCallbacks,
     tools?: AITool[],
     toolHandler?: ToolHandler,
+    chatHistory?: ChatMessage[],
   ): Promise<string> {
     const genAI = this.requireGenAI();
 
     const geminiModel = this.createModel(genAI, systemPrompt, tools);
 
     const history: Content[] = [];
+    // Prepend conversation history for multi-turn context
+    if (chatHistory && chatHistory.length > 0) {
+      for (const msg of chatHistory) {
+        history.push({
+          role: msg.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: msg.content }],
+        });
+      }
+    }
     let fullText = '';
 
     // Start with the user message.

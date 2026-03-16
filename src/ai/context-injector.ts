@@ -12,7 +12,23 @@ import {
   fetchTickerPriceRT,
   fetchFundingRate,
   fetchOpenInterest,
+  fetchKlines,
+  fetchOrderBookDepth,
+  fetchLongShortRatio,
+  fetchTopTraderRatio,
+  fetchTakerBuySellRatio,
 } from '../data/sources/binance.js';
+import {
+  calculateVWAP,
+  calculateVolumeDelta,
+  detectMarketStructure,
+  detectFVGs,
+  detectSRZones,
+  estimateLiquidationZones,
+  detectSqueezeConditions,
+  computePsychLevel,
+  calculateATR,
+} from '../core/technical-analysis/index.js';
 import { fetchFearGreedIndex } from '../data/sources/fear-greed.js';
 import { checkTokenSecurity, checkAddressSecurity } from '../data/sources/goplus.js';
 import { getConfig } from '../config/loader.js';
@@ -165,6 +181,145 @@ const BROAD_KEYWORDS = [
   'tell me about crypto',
   'crypto market',
 ];
+
+const MICROSTRUCTURE_KEYWORDS = [
+  'microstructure',
+  'microestructura',
+  'order flow',
+  'flujo de ordenes',
+  'flujo de órdenes',
+  'trampa',
+  'trap',
+  'bull trap',
+  'bear trap',
+  'escenario',
+  'scenario',
+  'manipulation',
+  'manipulación',
+  'manipulacion',
+  'liquidation',
+  'liquidación',
+  'liquidacion',
+  'volume delta',
+  'delta de volumen',
+  'fvg',
+  'fair value gap',
+  'smart money',
+  'dinero inteligente',
+  'market structure',
+  'estructura de mercado',
+  'estructura',
+  'squeeze',
+  'short squeeze',
+  'long squeeze',
+  'vwap',
+  'soporte y resistencia',
+  'support and resistance',
+  'order book',
+  'libro de ordenes',
+  'libro de órdenes',
+  'imbalance',
+  'desequilibrio',
+  'institutional',
+  'institucional',
+  'liquidity trap',
+  'trampa de liquidez',
+  'barrido',
+  'sweep',
+  'bos',
+  'choch',
+  'break of structure',
+  'change of character',
+];
+
+// ---------------------------------------------------------------------------
+// Single-skill detection — extracts only the relevant section for focused queries
+// ---------------------------------------------------------------------------
+
+type MicroSkill =
+  | 'fvg'
+  | 'vwap'
+  | 'volume_delta'
+  | 'liquidation'
+  | 'order_book'
+  | 'sr_zones'
+  | 'squeeze'
+  | 'structure';
+
+const SINGLE_SKILL_MAP: [RegExp, MicroSkill][] = [
+  [/\b(fvg|fair value gap|gaps? de valor|imbalance)\b/i, 'fvg'],
+  [/\bvwap\b/i, 'vwap'],
+  [/\b(volume delta|delta de volumen|delta volumen|buy.?sell)\b/i, 'volume_delta'],
+  [/\b(liquidat|liquidaci|mapa de liquidac)\b/i, 'liquidation'],
+  [/\b(order book|libro de orden|depth|profundidad)\b/i, 'order_book'],
+  [/\b(soporte|resistencia|support|resistance|s\/r|sr zone)\b/i, 'sr_zones'],
+  [/\b(squeeze|short squeeze|long squeeze)\b/i, 'squeeze'],
+  [/\b(market structure|estructura de mercado|bos|choch|swing|hh|hl|lh|ll)\b/i, 'structure'],
+];
+
+/** Detect if the user asked about a SINGLE microstructure skill (not full analysis). */
+function detectSingleSkill(lower: string): MicroSkill | null {
+  // If user asks for "full", "complete", "all", "escenarios" — not a single skill
+  if (
+    /\b(full|complet|todo|all|escenario|microestructura completa|institutional|institucional)\b/i.test(
+      lower,
+    )
+  ) {
+    return null;
+  }
+  const matches: MicroSkill[] = [];
+  for (const [re, skill] of SINGLE_SKILL_MAP) {
+    if (re.test(lower)) matches.push(skill);
+  }
+  // Only single skill if exactly 1 matched
+  return matches.length === 1 ? matches[0] : null;
+}
+
+/** Section markers in the pre-computed microstructure data for extraction. */
+const SKILL_SECTION_MARKERS: Record<MicroSkill, string[]> = {
+  fvg: ['Fair Value Gaps'],
+  vwap: ['VWAP:'],
+  volume_delta: ['Volume Delta:'],
+  liquidation: ['Liquidaciones estimadas'],
+  order_book: ['Order Book Imbalance:'],
+  sr_zones: ['Zonas S/R detectadas:'],
+  squeeze: ['ESCENARIO 3', 'ESCENARIO 4', 'SHORT SQUEEZE', 'LONG SQUEEZE'],
+  structure: ['CONTEXTO GENERAL', 'Sesgo intradía:', 'Estructura en'],
+};
+
+/** Extract only the relevant sub-section from a full microstructure data block. */
+function extractSkillSection(fullData: string, skill: MicroSkill): string {
+  const markers = SKILL_SECTION_MARKERS[skill];
+  const lines = fullData.split('\n');
+  const result: string[] = [];
+
+  // Always include the header line (## SYMBOL MICROSTRUCTURE ANALYSIS) and price
+  for (const line of lines) {
+    if (line.startsWith('## ') || line.includes('Precio actual:')) {
+      result.push(line);
+    }
+  }
+
+  // Extract lines that belong to the relevant section
+  let capturing = false;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? '';
+    // Start capturing if line matches any marker
+    if (!capturing && markers.some((m) => line.includes(m))) {
+      capturing = true;
+    }
+    if (capturing) {
+      result.push(line);
+      // Stop at the next section header (======) or empty line after content
+      const nextLine = lines[i + 1] ?? '';
+      if (nextLine.startsWith('=====') && !markers.some((m) => nextLine.includes(m))) {
+        break;
+      }
+    }
+  }
+
+  return result.join('\n');
+}
 
 // KNOWN_SYMBOLS is now imported from config/constants.ts
 
@@ -462,6 +617,25 @@ export async function buildContextBlock(
     );
   }
 
+  // Microstructure analysis — full ESCENARIO format with pre-computed data
+  const isMicrostructureQuery = matchesAny(lower, MICROSTRUCTURE_KEYWORDS);
+  if (isMicrostructureQuery) {
+    const microTokens =
+      mentionedTokens.length > 0
+        ? mentionedTokens
+        : unknownTokens.length > 0
+          ? unknownTokens
+          : ['btc'];
+    // Process EACH token separately so multi-token queries (BTC + ETH) both get analyzed
+    for (const token of microTokens.slice(0, 3)) {
+      tasks.push(
+        fetchMicrostructureData([token], tokenData).then((data) => {
+          if (data) sections.push(data);
+        }),
+      );
+    }
+  }
+
   await Promise.allSettled(tasks);
 
   // Resolve queried symbols early so all returns include them
@@ -480,10 +654,18 @@ export async function buildContextBlock(
   const isPredictionQuery = matchesAny(lower, COMPLEX_KEYWORDS);
   const isComplexQuery = isPredictionQuery;
 
-  type QueryType = 'token_analysis' | 'prediction' | 'news' | 'trends' | 'general';
+  type QueryType =
+    | 'token_analysis'
+    | 'prediction'
+    | 'news'
+    | 'trends'
+    | 'microstructure'
+    | 'general';
   let queryType: QueryType;
 
-  if (hasSpecificToken && (isAnalysisQuery || isPredictionQuery)) {
+  if (isMicrostructureQuery) {
+    queryType = 'microstructure';
+  } else if (hasSpecificToken && (isAnalysisQuery || isPredictionQuery)) {
     queryType = isPredictionQuery ? 'prediction' : 'token_analysis';
   } else if (isNewsQuery) {
     queryType = 'news';
@@ -514,8 +696,71 @@ export async function buildContextBlock(
   const now = new Date();
 
   if (compact) {
-    // Compact mode — aggressive price anchoring for small models (Ollama/llama3.2)
+    // -----------------------------------------------------------------------
+    // MICROSTRUCTURE QUERY — special path for Ollama
+    // Strategy: the ESCENARIO data IS the response. We give the model the
+    // already-formatted text and tell it to output it directly.
+    // -----------------------------------------------------------------------
+    if (isMicrostructureQuery) {
+      // Detect single-skill queries — only show the relevant section, not all escenarios
+      const singleSkill = detectSingleSkill(lower);
+
+      // Find the microstructure section(s) from the fetched data
+      const microSections = sections.filter(
+        (s) => s.includes('MICROSTRUCTURE ANALYSIS') || s.includes('CONTEXTO GENERAL'),
+      );
+      const otherSections = sections.filter(
+        (s) => !s.includes('MICROSTRUCTURE ANALYSIS') && !s.includes('CONTEXTO GENERAL'),
+      );
+
+      // If single skill, extract only the relevant sub-section from full microstructure data
+      let relevantData: string[];
+      if (singleSkill && microSections.length > 0) {
+        relevantData = microSections.map((section) => extractSkillSection(section, singleSkill));
+      } else {
+        relevantData = microSections;
+      }
+
+      const output: string[] = [
+        '',
+        `TIMESTAMP: ${now.toISOString()}`,
+        '',
+        '--- REAL-TIME DATA ---',
+        '',
+        ...relevantData,
+      ];
+
+      // Add other data (Fear & Greed, news, etc.) as supplementary context only
+      if (otherSections.length > 0) {
+        output.push('', '--- SUPPLEMENTARY CONTEXT ---');
+        output.push(...otherSections);
+      }
+
+      const skillLabel = singleSkill
+        ? `SINGLE SKILL: ${singleSkill.toUpperCase()}. Present ONLY the ${singleSkill} data.`
+        : 'FULL ANALYSIS: Present ALL sections in order.';
+      output.push(
+        '',
+        '--- END DATA ---',
+        '',
+        `STRICT INSTRUCTION (${skillLabel}):`,
+        '1. Copy the data above EXACTLY as-is. Do NOT rephrase, summarize, or add commentary.',
+        '2. You may add ONE sentence of context per data section. Maximum 15 words.',
+        '3. Do NOT add paragraphs of explanation. Do NOT repeat information already shown.',
+        '4. After the last data section, output "--- END ---" and STOP GENERATING.',
+        '5. Do NOT switch languages mid-response. Match the user language throughout.',
+        '6. TOTAL response must be under 500 words. Be concise.',
+        '--- END ---',
+      );
+
+      const raw = output.join('\n');
+      return { contextText: wrapUntrustedData('MARKET_CONTEXT', raw), tokenData, queriedSymbols };
+    }
+
+    // -----------------------------------------------------------------------
+    // STANDARD QUERY — price predictions, news, trends, analysis
     // Strategy: put exact prices FIRST, repeat them, constrain predictions to ±5%
+    // -----------------------------------------------------------------------
     const output: string[] = [''];
 
     // Build per-token price anchors from tokenData (most reliable source)
@@ -760,6 +1005,23 @@ function buildInstructions(
         '- Do NOT list unrelated trending tokens.',
         '- MULTI-TOKEN: Present EACH token in its OWN section with a clear heading. Copy the EXACT dollar values from its "PRICE PREDICTION SCENARIOS" block. NEVER use one token\'s prices for another.',
         '- FORMAT PER TOKEN: 1) User-requested timeframe prediction 2) Key levels 3) Brief risk note',
+      );
+      break;
+
+    case 'microstructure':
+      base.push(
+        '',
+        'QUERY TYPE: MICROSTRUCTURE ANALYSIS',
+        'CRITICAL: The data above is PRE-COMPUTED from live APIs. Your ONLY job is to present it cleanly.',
+        'RULES:',
+        '1. Copy ALL section headers and their data VERBATIM. Do NOT rephrase numbers.',
+        '2. You may add ONE short sentence (max 15 words) per ESCENARIO for context.',
+        '3. If the user asked about a specific skill (FVG, VWAP, delta, etc.), present ONLY that section.',
+        '4. For full analysis, present in order: CONTEXTO GENERAL → ESCENARIOS → ZONAS DE MANIPULACIÓN → ALERTA INSTITUCIONAL → CONCLUSIÓN OPERATIVA.',
+        '5. After CONCLUSIÓN OPERATIVA, write "--- END ---" and STOP. Do NOT continue.',
+        '6. NEVER add paragraphs of explanation, disclaimers, or repeated text.',
+        '7. NEVER switch to a different language mid-response.',
+        '8. NEVER generate filler text or restate what was already said.',
       );
       break;
 
@@ -1374,6 +1636,367 @@ async function fetchDerivativesData(tokens: string[]): Promise<string[]> {
     return perToken;
   } catch {
     return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Microstructure data fetcher — computes all 8 skills for Ollama path
+// ---------------------------------------------------------------------------
+
+async function fetchMicrostructureData(
+  tokens: string[],
+  tokenData: TokenDataPoint[],
+): Promise<string | null> {
+  const symbol = tokens[0];
+  if (!symbol) return null;
+  const sym = resolveSymbol(symbol);
+
+  try {
+    // Fetch all raw data in parallel
+    const [klines1h, klines15m, ticker, oi, funding, ls, topTrader, taker, ob] =
+      await Promise.allSettled([
+        fetchKlines(sym, '1h', 100),
+        fetchKlines(sym, '15m', 100),
+        fetchTickerPriceRT(sym),
+        fetchOpenInterest(sym),
+        fetchFundingRate(sym),
+        fetchLongShortRatio(sym),
+        fetchTopTraderRatio(sym),
+        fetchTakerBuySellRatio(sym),
+        fetchOrderBookDepth(sym),
+      ]);
+
+    const k1h = klines1h.status === 'fulfilled' ? klines1h.value : null;
+    const k15m = klines15m.status === 'fulfilled' ? klines15m.value : null;
+    const price = ticker.status === 'fulfilled' ? ticker.value.price : null;
+    const oiVal = oi.status === 'fulfilled' ? oi.value : null;
+    const fundingVal = funding.status === 'fulfilled' ? funding.value : null;
+    const lsVal = ls.status === 'fulfilled' ? ls.value : null;
+    const topTraderVal = topTrader.status === 'fulfilled' ? topTrader.value : null;
+    const takerVal = taker.status === 'fulfilled' ? taker.value : null;
+    const obVal = ob.status === 'fulfilled' ? ob.value : null;
+
+    if (!k1h || k1h.length < 20 || !price) return null;
+
+    // Push price into tokenData
+    tokenData.push({
+      symbol: sym,
+      price,
+      change24h: ticker.status === 'fulfilled' ? ticker.value.change24h : 0,
+      source: 'binance',
+    });
+
+    // Extract arrays from klines
+    const extract = (klines: typeof k1h) => ({
+      highs: klines.map((k) => k.high),
+      lows: klines.map((k) => k.low),
+      closes: klines.map((k) => k.close),
+      opens: klines.map((k) => k.open),
+      volumes: klines.map((k) => k.volume),
+    });
+
+    const d1h = extract(k1h);
+    const d15m = k15m && k15m.length >= 20 ? extract(k15m) : null;
+
+    // Run all indicators
+    const structure1h = detectMarketStructure(d1h.highs, d1h.lows);
+    const structure15m = d15m ? detectMarketStructure(d15m.highs, d15m.lows) : null;
+    const atr1h = calculateATR(d1h.highs, d1h.lows, d1h.closes);
+    const fvgs = detectFVGs(d1h.highs, d1h.lows, d1h.closes, atr1h);
+    const vwap = calculateVWAP(d1h.highs, d1h.lows, d1h.closes, d1h.volumes);
+    const volDelta = calculateVolumeDelta(d1h.opens, d1h.closes, d1h.volumes);
+    const srZones = detectSRZones(d1h.highs, d1h.lows, d1h.closes);
+    const psychLevel = computePsychLevel(price, sym);
+
+    const liqZones = oiVal ? estimateLiquidationZones(price, oiVal.openInterest) : null;
+
+    const latestLs = lsVal?.history?.[0]?.longShortRatio ?? null;
+    const latestTopTrader = topTraderVal?.history?.[0]?.longShortRatio ?? null;
+    const latestFunding = fundingVal?.fundingRate ?? null;
+    const obImbalance = obVal?.imbalanceRatio ?? null;
+
+    const squeeze = detectSqueezeConditions(
+      latestFunding ?? 0,
+      latestLs ?? 1,
+      latestTopTrader ?? 1,
+      structure1h,
+      volDelta,
+      liqZones,
+      obImbalance ?? 1,
+      price,
+      atr1h,
+    );
+
+    // Build formatted output
+    const lines: string[] = [];
+    lines.push(`## ${sym} MICROSTRUCTURE ANALYSIS`);
+    lines.push('');
+
+    // CONTEXTO GENERAL
+    lines.push('==============================');
+    lines.push('CONTEXTO GENERAL');
+    lines.push('==============================');
+    lines.push(`Precio actual: $${price.toLocaleString()}`);
+    lines.push(`Sesgo intradía: ${structure1h?.bias ?? 'unknown'}`);
+    lines.push(
+      `Estructura en 1H: ${structure1h ? `${structure1h.bias} — secuencia: ${structure1h.sequence.join(', ')}${structure1h.lastBreak ? ` — último break: ${structure1h.lastBreak}` : ''}` : 'N/A'}`,
+    );
+    if (structure15m) {
+      lines.push(
+        `Estructura en 15m: ${structure15m.bias} — secuencia: ${structure15m.sequence.join(', ')}${structure15m.lastBreak ? ` — último break: ${structure15m.lastBreak}` : ''}`,
+      );
+    }
+    lines.push(`Nivel psicológico: $${psychLevel.toLocaleString()}`);
+    if (vwap) {
+      lines.push(
+        `VWAP: $${vwap.vwap.toFixed(2)} | Banda superior: $${vwap.upperBand.toFixed(2)} | Banda inferior: $${vwap.lowerBand.toFixed(2)} | Desviación: ${vwap.deviation.toFixed(2)}%`,
+      );
+    }
+    if (volDelta) {
+      lines.push(
+        `Volume Delta: ${volDelta.delta.toFixed(2)} | Delta MA: ${volDelta.deltaMA.toFixed(2)} | Divergencia: ${volDelta.divergence}`,
+      );
+    }
+    if (latestFunding !== null) {
+      lines.push(`Funding Rate: ${(latestFunding * 100).toFixed(4)}%`);
+    }
+    if (oiVal) {
+      lines.push(
+        `Open Interest: ${oiVal.openInterest.toLocaleString()} (notional: $${oiVal.notionalValue.toLocaleString()})`,
+      );
+    }
+    if (latestLs !== null) {
+      lines.push(`Long/Short Ratio: ${latestLs.toFixed(3)}`);
+    }
+    if (latestTopTrader !== null) {
+      lines.push(`Top Trader L/S: ${latestTopTrader.toFixed(3)}`);
+    }
+    const latestTaker = takerVal?.history?.[0]?.buySellRatio ?? null;
+    if (latestTaker !== null) {
+      lines.push(`Taker Buy/Sell Ratio: ${latestTaker.toFixed(3)} (>1 = buy aggression)`);
+    }
+    if (obVal) {
+      lines.push(`Order Book Imbalance: ${obVal.imbalanceRatio.toFixed(3)} (>1 = buy pressure)`);
+    }
+
+    // Liquidation zones
+    if (liqZones) {
+      const longLiqs = liqZones.longLiquidations;
+      const shortLiqs = liqZones.shortLiquidations;
+      lines.push('');
+      lines.push('Liquidaciones estimadas ABAJO (longs):');
+      for (const lz of longLiqs) {
+        lines.push(
+          `  ${lz.leverage}x → $${lz.price.toFixed(2)} (liquidez: $${lz.estimatedLiquidity.toLocaleString()})`,
+        );
+      }
+      lines.push('Liquidaciones estimadas ARRIBA (shorts):');
+      for (const lz of shortLiqs) {
+        lines.push(
+          `  ${lz.leverage}x → $${lz.price.toFixed(2)} (liquidez: $${lz.estimatedLiquidity.toLocaleString()})`,
+        );
+      }
+    }
+
+    // S/R Zones
+    if (srZones.length > 0) {
+      lines.push('');
+      lines.push('Zonas S/R detectadas:');
+      for (const z of srZones.slice(0, 8)) {
+        lines.push(
+          `  $${z.price.toFixed(2)} — ${z.type} (fuerza: ${z.strength.toFixed(0)}, toques: ${z.touches})`,
+        );
+      }
+    }
+
+    // FVGs
+    const unfilled = fvgs.filter((f) => !f.filled);
+    if (unfilled.length > 0) {
+      lines.push('');
+      lines.push('Fair Value Gaps (sin llenar):');
+      for (const f of unfilled.slice(0, 6)) {
+        lines.push(
+          `  ${f.type} FVG: $${f.bottom.toFixed(2)} — $${f.top.toFixed(2)} (midpoint: $${f.midpoint.toFixed(2)}, fuerza: ${f.strength.toFixed(2)})`,
+        );
+      }
+    }
+
+    // ESCENARIOS
+    const resistances = srZones.filter((z) => z.type === 'resistance').slice(0, 3);
+    const supports = srZones.filter((z) => z.type === 'support').slice(0, 3);
+    lines.push('');
+    lines.push('==============================');
+    lines.push('ESCENARIO 1 – BARRIDO ARRIBA (BULL TRAP / SHORT)');
+    lines.push('==============================');
+    if (resistances.length > 0 && liqZones) {
+      const manipZone = resistances[0]!;
+      const shortLiqAbove = liqZones.shortLiquidations[0];
+      lines.push(`Zona de manipulación: $${manipZone.price.toFixed(2)}`);
+      lines.push(`Entrada short: $${(manipZone.price * 1.002).toFixed(2)} (rechazo en zona)`);
+      lines.push(`Confirmación: Rechazo en FVG + delta negativo + quiebre de estructura en 5m`);
+      const atrLast = atr1h ?? price * 0.01;
+      lines.push(`Stop loss: $${(manipZone.price + atrLast * 1.5).toFixed(2)}`);
+      for (let i = 0; i < Math.min(supports.length, 3); i++) {
+        lines.push(`TP${i + 1}: $${supports[i]!.price.toFixed(2)}`);
+      }
+      if (shortLiqAbove) {
+        lines.push(
+          `Liquidez capturada arriba: $${shortLiqAbove.price.toFixed(2)} (${shortLiqAbove.leverage}x shorts)`,
+        );
+      }
+    } else {
+      lines.push('Datos insuficientes para este escenario.');
+    }
+
+    lines.push('');
+    lines.push('==============================');
+    lines.push('ESCENARIO 2 – BARRIDO ABAJO (BEAR TRAP / LONG)');
+    lines.push('==============================');
+    if (supports.length > 0 && liqZones) {
+      const manipZone = supports[0]!;
+      const longLiqBelow = liqZones.longLiquidations[0];
+      lines.push(`Zona de manipulación: $${manipZone.price.toFixed(2)}`);
+      lines.push(`Entrada long: $${(manipZone.price * 0.998).toFixed(2)} (rebote en zona)`);
+      lines.push(`Confirmación: Rebote en FVG + delta positivo + recuperación de estructura en 5m`);
+      const atrLast = atr1h ?? price * 0.01;
+      lines.push(`Stop loss: $${(manipZone.price - atrLast * 1.5).toFixed(2)}`);
+      for (let i = 0; i < Math.min(resistances.length, 3); i++) {
+        lines.push(`TP${i + 1}: $${resistances[i]!.price.toFixed(2)}`);
+      }
+      if (longLiqBelow) {
+        lines.push(
+          `Liquidez capturada abajo: $${longLiqBelow.price.toFixed(2)} (${longLiqBelow.leverage}x longs)`,
+        );
+      }
+    } else {
+      lines.push('Datos insuficientes para este escenario.');
+    }
+
+    // Squeeze scenarios
+    if (squeeze.shortSqueeze) {
+      lines.push('');
+      lines.push('==============================');
+      lines.push('ESCENARIO 3 – SHORT SQUEEZE');
+      lines.push('==============================');
+      lines.push(
+        `Shorts atrapados en: $${squeeze.shortSqueeze.trappedZone[0].toFixed(2)} — $${squeeze.shortSqueeze.trappedZone[1].toFixed(2)}`,
+      );
+      lines.push(`Nivel de ruptura: $${squeeze.shortSqueeze.breakoutLevel.toFixed(2)}`);
+      lines.push(`Cascada de liquidaciones: $${squeeze.shortSqueeze.cascadeStart.toFixed(2)}`);
+      lines.push(`Entrada: $${squeeze.shortSqueeze.entry.toFixed(2)}`);
+      lines.push(`Stop: $${squeeze.shortSqueeze.stopLoss.toFixed(2)}`);
+      for (let i = 0; i < squeeze.shortSqueeze.targets.length; i++) {
+        lines.push(`Target ${i + 1}: $${squeeze.shortSqueeze.targets[i]!.toFixed(2)}`);
+      }
+      lines.push(`Probabilidad: ${(squeeze.shortSqueeze.probability * 100).toFixed(0)}%`);
+      lines.push(`Razón: ${squeeze.shortSqueeze.reasoning.join(', ')}`);
+    }
+
+    if (squeeze.longSqueeze) {
+      lines.push('');
+      lines.push('==============================');
+      lines.push('ESCENARIO 4 – LONG SQUEEZE');
+      lines.push('==============================');
+      lines.push(
+        `Longs atrapados en: $${squeeze.longSqueeze.trappedZone[0].toFixed(2)} — $${squeeze.longSqueeze.trappedZone[1].toFixed(2)}`,
+      );
+      lines.push(`Nivel de ruptura bajista: $${squeeze.longSqueeze.breakoutLevel.toFixed(2)}`);
+      lines.push(`Cascada de liquidaciones: $${squeeze.longSqueeze.cascadeStart.toFixed(2)}`);
+      lines.push(`Entrada: $${squeeze.longSqueeze.entry.toFixed(2)}`);
+      lines.push(`Stop: $${squeeze.longSqueeze.stopLoss.toFixed(2)}`);
+      for (let i = 0; i < squeeze.longSqueeze.targets.length; i++) {
+        lines.push(`Target ${i + 1}: $${squeeze.longSqueeze.targets[i]!.toFixed(2)}`);
+      }
+      lines.push(`Probabilidad: ${(squeeze.longSqueeze.probability * 100).toFixed(0)}%`);
+      lines.push(`Razón: ${squeeze.longSqueeze.reasoning.join(', ')}`);
+    }
+
+    // Daily manipulation zones
+    lines.push('');
+    lines.push('==============================');
+    lines.push('ZONAS DE MANIPULACIÓN DIARIA');
+    lines.push('==============================');
+    const manipZones: string[] = [];
+    if (structure1h) {
+      for (const sh of structure1h.swingHighs.slice(-3)) {
+        manipZones.push(`Swing high barreable: $${sh.price.toFixed(2)}`);
+      }
+      for (const sl of structure1h.swingLows.slice(-3)) {
+        manipZones.push(`Swing low barreable: $${sl.price.toFixed(2)}`);
+      }
+    }
+    for (const fvg of unfilled.slice(0, 3)) {
+      manipZones.push(
+        `FVG ${fvg.type} sin llenar: $${fvg.bottom.toFixed(2)} — $${fvg.top.toFixed(2)}`,
+      );
+    }
+    if (manipZones.length > 0) {
+      lines.push(...manipZones);
+    } else {
+      lines.push('No se detectaron zonas claras de manipulación.');
+    }
+
+    // Institutional alert
+    let alignedSignals = 0;
+    const alertReasons: string[] = [];
+    if (
+      liqZones &&
+      (liqZones.longLiquidations.length > 0 || liqZones.shortLiquidations.length > 0)
+    ) {
+      alignedSignals++;
+      alertReasons.push('clusters de liquidación detectados');
+    }
+    if (volDelta && volDelta.divergence !== 'none') {
+      alignedSignals++;
+      alertReasons.push(`divergencia de delta: ${volDelta.divergence}`);
+    }
+    if (latestFunding !== null && Math.abs(latestFunding) > 0.0005) {
+      alignedSignals++;
+      alertReasons.push(`funding rate extremo: ${(latestFunding * 100).toFixed(4)}%`);
+    }
+    if (obImbalance !== null && (obImbalance > 1.5 || obImbalance < 0.67)) {
+      alignedSignals++;
+      alertReasons.push(`desequilibrio de order book: ${obImbalance.toFixed(3)}`);
+    }
+    if (squeeze.shortSqueeze || squeeze.longSqueeze) {
+      alignedSignals++;
+      alertReasons.push('condiciones de squeeze detectadas');
+    }
+
+    if (alignedSignals >= 3) {
+      lines.push('');
+      lines.push('==============================');
+      lines.push('⚠️ ALERTA INSTITUCIONAL');
+      lines.push('==============================');
+      lines.push(`${alignedSignals} señales institucionales alineadas:`);
+      lines.push(...alertReasons.map((r) => `  • ${r}`));
+    }
+
+    // Conclusion
+    lines.push('');
+    lines.push('==============================');
+    lines.push('CONCLUSIÓN OPERATIVA');
+    lines.push('==============================');
+    if (structure1h) {
+      const bias = structure1h.bias;
+      if (bias === 'bullish') {
+        lines.push(`Sesgo alcista. Escenario 2 (Bear Trap / Long) tiene mayor probabilidad.`);
+        if (supports.length > 0) {
+          lines.push(`Buscar entradas long cerca de $${supports[0]!.price.toFixed(2)}.`);
+        }
+      } else if (bias === 'bearish') {
+        lines.push(`Sesgo bajista. Escenario 1 (Bull Trap / Short) tiene mayor probabilidad.`);
+        if (resistances.length > 0) {
+          lines.push(`Buscar entradas short cerca de $${resistances[0]!.price.toFixed(2)}.`);
+        }
+      } else {
+        lines.push(`Mercado en rango. Esperar quiebre de estructura para confirmar dirección.`);
+      }
+    }
+
+    return lines.join('\n');
+  } catch {
+    return null;
   }
 }
 
