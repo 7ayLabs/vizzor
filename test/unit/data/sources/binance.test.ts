@@ -4,6 +4,10 @@ import {
   fetchMultipleTickerPrices,
   fetchKlines,
   fetchOrderBookSummary,
+  fetchOrderBookDepth,
+  fetchLongShortRatio,
+  fetchTopTraderRatio,
+  fetchTakerBuySellRatio,
 } from '@/data/sources/binance.js';
 
 // ---------------------------------------------------------------------------
@@ -168,5 +172,123 @@ describe('fetchOrderBookSummary', () => {
     expect(book.spread).toBeCloseTo(1.0);
     expect(book.spreadPct).toBeGreaterThan(0);
     expect(book.spreadPct).toBeLessThan(0.01);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fetchOrderBookDepth
+// ---------------------------------------------------------------------------
+
+describe('fetchOrderBookDepth', () => {
+  it('returns parsed depth with wall clusters and imbalance', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        bids: [
+          ['67000.00', '5.0'],
+          ['66999.00', '3.0'],
+          ['66998.00', '2.0'],
+        ],
+        asks: [
+          ['67001.00', '4.0'],
+          ['67002.00', '2.5'],
+          ['67003.00', '1.5'],
+        ],
+      }),
+    });
+
+    const depth = await fetchOrderBookDepth('BTC', 5);
+    expect(depth.symbol).toBe('BTC');
+    expect(depth.bids).toHaveLength(3);
+    expect(depth.asks).toHaveLength(3);
+    expect(depth.bids[0]![0]).toBe(67000);
+    expect(depth.bids[0]![1]).toBe(5);
+    expect(depth.asks[0]![0]).toBe(67001);
+    // imbalanceRatio = totalBids / totalAsks = 10 / 8 = 1.25
+    expect(depth.imbalanceRatio).toBeCloseTo(1.25, 1);
+    expect(depth.bidWallZones.length).toBeGreaterThan(0);
+    expect(depth.askWallZones.length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fetchLongShortRatio
+// ---------------------------------------------------------------------------
+
+describe('fetchLongShortRatio', () => {
+  it('returns parsed L/S ratio history', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => [
+        {
+          timestamp: 1700000000000,
+          longAccount: '0.5500',
+          shortAccount: '0.4500',
+          longShortRatio: '1.2222',
+        },
+      ],
+    });
+
+    const result = await fetchLongShortRatio('BTC');
+    expect(result.symbol).toBe('BTC');
+    expect(result.period).toBe('1h');
+    expect(result.history).toHaveLength(1);
+    expect(result.history[0]!.longAccount).toBe(0.55);
+    expect(result.history[0]!.shortAccount).toBe(0.45);
+    expect(result.history[0]!.longShortRatio).toBeCloseTo(1.2222);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fetchTopTraderRatio
+// ---------------------------------------------------------------------------
+
+describe('fetchTopTraderRatio', () => {
+  it('returns parsed top trader ratio history', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => [
+        {
+          timestamp: 1700000000000,
+          longAccount: '0.6000',
+          shortAccount: '0.4000',
+          longShortRatio: '1.5000',
+        },
+      ],
+    });
+
+    const result = await fetchTopTraderRatio('ETH');
+    expect(result.symbol).toBe('ETH');
+    expect(result.period).toBe('1h');
+    expect(result.history).toHaveLength(1);
+    expect(result.history[0]!.longShortRatio).toBe(1.5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fetchTakerBuySellRatio
+// ---------------------------------------------------------------------------
+
+describe('fetchTakerBuySellRatio', () => {
+  it('returns parsed taker buy/sell ratio history', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => [
+        {
+          timestamp: 1700000000000,
+          buySellRatio: '1.1500',
+          buyVol: '5000000',
+          sellVol: '4347826',
+        },
+      ],
+    });
+
+    const result = await fetchTakerBuySellRatio('BTC');
+    expect(result.symbol).toBe('BTC');
+    expect(result.period).toBe('1h');
+    expect(result.history).toHaveLength(1);
+    expect(result.history[0]!.buySellRatio).toBe(1.15);
+    expect(result.history[0]!.buyVol).toBe(5000000);
+    expect(result.history[0]!.sellVol).toBe(4347826);
   });
 });
