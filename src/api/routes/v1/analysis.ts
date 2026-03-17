@@ -6,6 +6,59 @@ import type { FastifyInstance } from 'fastify';
 import { handleTool } from '../../../ai/tool-handler.js';
 
 export async function registerAnalysisRoutes(server: FastifyInstance): Promise<void> {
+  // GET /v1/analysis/batch — run technical + prediction + ML for multiple symbols
+  server.get('/batch', {
+    schema: {
+      tags: ['Analysis'],
+      summary: 'Run full analysis (technical + prediction + ML) for multiple symbols',
+      querystring: {
+        type: 'object',
+        properties: {
+          symbols: { type: 'string', description: 'Comma-separated symbols (max 20)' },
+          timeframe: { type: 'string', default: '4h' },
+        },
+        required: ['symbols'],
+      },
+    },
+    handler: async (request) => {
+      const { symbols, timeframe } = request.query as { symbols: string; timeframe?: string };
+      const list = symbols
+        .split(',')
+        .map((s) => s.trim().toUpperCase())
+        .filter(Boolean)
+        .slice(0, 20);
+
+      const results = await Promise.allSettled(
+        list.map(async (symbol) => {
+          const [technical, prediction, ml] = await Promise.allSettled([
+            handleTool('get_technical_analysis', { symbol, timeframe }),
+            handleTool('get_prediction', { symbol }),
+            handleTool('get_ml_prediction', { symbol }),
+          ]);
+          return {
+            symbol,
+            technical: technical.status === 'fulfilled' ? technical.value : null,
+            prediction: prediction.status === 'fulfilled' ? prediction.value : null,
+            ml: ml.status === 'fulfilled' ? ml.value : null,
+          };
+        }),
+      );
+
+      const successes: Record<string, unknown>[] = [];
+      const errors: { symbol: string; error: string }[] = [];
+      for (let i = 0; i < results.length; i++) {
+        const r = results[i]!;
+        if (r.status === 'fulfilled') {
+          successes.push(r.value);
+        } else {
+          errors.push({ symbol: list[i]!, error: r.reason?.message ?? String(r.reason) });
+        }
+      }
+
+      return { results: successes, errors, total: list.length };
+    },
+  });
+
   server.get('/technical/:symbol', {
     schema: {
       tags: ['Analysis'],

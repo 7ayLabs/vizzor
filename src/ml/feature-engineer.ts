@@ -6,7 +6,7 @@ import { analyzeTechnicals } from '../core/technical-analysis/index.js';
 import { fetchFundingRate, fetchTickerPrice, fetchKlines } from '../data/sources/binance.js';
 import { fetchFearGreedIndex } from '../data/sources/fear-greed.js';
 import { calculateRSI } from '../core/technical-analysis/indicators.js';
-import type { FeatureVector } from './types.js';
+import type { FeatureVector, BlockchainCycleMLFeatures } from './types.js';
 
 export async function buildFeatureVector(symbol: string): Promise<FeatureVector> {
   // Gather all data in parallel
@@ -71,5 +71,56 @@ export async function buildFeatureVector(symbol: string): Promise<FeatureVector>
     atrPct,
     symbol: symbol.toUpperCase(),
     timestamp: Date.now(),
+  };
+}
+
+/**
+ * Build a feature vector for blockchain cycle ML analysis.
+ * Gathers on-chain data from blockchain-info and onchain-metrics sources.
+ */
+export async function buildBlockchainFeatureVector(): Promise<BlockchainCycleMLFeatures> {
+  const { fetchBitcoinNetworkStats, fetchBitcoinSupplyStats, fetchBitcoinMiningStats } =
+    await import('../data/sources/blockchain-info.js');
+  const { fetchNVTRatio, fetchMVRVZScore, fetchSupplyDynamics } =
+    await import('../data/sources/onchain-metrics.js');
+  const { analyzeHalvingCycle, computeHashRibbon } =
+    await import('../core/fundamentals/blockchain-analyzer.js');
+
+  const [networkResult, supplyResult, miningResult, nvtResult, mvrvResult, supplyDynResult] =
+    await Promise.allSettled([
+      fetchBitcoinNetworkStats(),
+      fetchBitcoinSupplyStats(),
+      fetchBitcoinMiningStats(),
+      fetchNVTRatio(),
+      fetchMVRVZScore(),
+      fetchSupplyDynamics(),
+    ]);
+
+  const network = networkResult.status === 'fulfilled' ? networkResult.value : null;
+  const supply = supplyResult.status === 'fulfilled' ? supplyResult.value : null;
+  const mining = miningResult.status === 'fulfilled' ? miningResult.value : null;
+  const nvt = nvtResult.status === 'fulfilled' ? nvtResult.value : null;
+  const mvrv = mvrvResult.status === 'fulfilled' ? mvrvResult.value : null;
+  const supplyDyn = supplyDynResult.status === 'fulfilled' ? supplyDynResult.value : null;
+
+  const blockHeight = network?.blockHeight ?? 0;
+  const halving = blockHeight > 0 ? analyzeHalvingCycle(blockHeight) : null;
+  const hashRibbon = network ? computeHashRibbon(network.hashrate, network.hashrate * 0.98) : null;
+
+  return {
+    halving_cycle_progress: halving?.cycleProgress ?? 0,
+    days_since_halving: halving?.daysInCycle ?? 0,
+    days_to_next_halving: halving?.daysToNextHalving ?? 0,
+    block_reward: supply?.blockReward ?? 0,
+    hashrate_change_30d: mining?.difficultyAdjustmentPct ?? 0,
+    difficulty_change_14d: mining?.difficultyAdjustmentPct ?? 0,
+    nvt_ratio: nvt?.ratio ?? 0,
+    mvrv_z_score: mvrv?.zScore ?? 0,
+    inflation_rate: supplyDyn?.inflationRate ?? 0,
+    fee_revenue_share: supplyDyn?.feeRevenueShare ?? 0,
+    mempool_size_mb: (network?.mempoolTxCount ?? 0) * 0.0004, // rough estimate
+    avg_fee_rate: mining?.avgFeeRate ?? 0,
+    hash_ribbon_signal:
+      hashRibbon?.signal === 'capitulation' ? -1 : hashRibbon?.signal === 'golden_cross' ? 1 : 0,
   };
 }

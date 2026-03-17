@@ -468,4 +468,114 @@ describe('MLClient', () => {
     // The internal baseUrl should not have trailing slash
     expect(c.isHealthy()).toBe(false); // just initialized
   });
+
+  // -----------------------------------------------------------------------
+  // v0.12.5 — analyzeBlockchainCycle
+  // -----------------------------------------------------------------------
+
+  it('analyzeBlockchainCycle returns result on success', async () => {
+    const mockCycleResult = {
+      cycle_phase: 'accumulation',
+      phase_confidence: 85,
+      fair_value_estimate: 72000,
+      deviation_from_fair: -7.5,
+      risk_factors: [{ factor: 'mvrv_elevated', importance: 0.3, value: 1.5 }],
+      model: 'blockchain-cycle-v1',
+    };
+    mockFetch(mockCycleResult);
+    const result = await client.analyzeBlockchainCycle({
+      halving_cycle_progress: 23.3,
+      days_since_halving: 150,
+      days_to_next_halving: 1100,
+      block_reward: 3.125,
+      hashrate_change_30d: 2.3,
+      difficulty_change_14d: 2.3,
+      nvt_ratio: 55,
+      mvrv_z_score: 1.5,
+      inflation_rate: 0.83,
+      fee_revenue_share: 5.2,
+      mempool_size_mb: 18,
+      avg_fee_rate: 15,
+      hash_ribbon_signal: 0,
+    });
+    expect(result?.cycle_phase).toBe('accumulation');
+    expect(result?.phase_confidence).toBe(85);
+    expect(result?.fair_value_estimate).toBe(72000);
+    expect(result?.model).toBe('blockchain-cycle-v1');
+  });
+
+  it('analyzeBlockchainCycle returns null on error response', async () => {
+    mockFetch(null, false);
+    const result = await client.analyzeBlockchainCycle({
+      halving_cycle_progress: 0,
+      days_since_halving: 0,
+      days_to_next_halving: 0,
+      block_reward: 0,
+      hashrate_change_30d: 0,
+      difficulty_change_14d: 0,
+      nvt_ratio: 0,
+      mvrv_z_score: 0,
+      inflation_rate: 0,
+      fee_revenue_share: 0,
+      mempool_size_mb: 0,
+      avg_fee_rate: 0,
+      hash_ribbon_signal: 0,
+    });
+    expect(result).toBeNull();
+  });
+
+  it('analyzeBlockchainCycle returns null on timeout', async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('timeout'));
+    const result = await client.analyzeBlockchainCycle({
+      halving_cycle_progress: 0,
+      days_since_halving: 0,
+      days_to_next_halving: 0,
+      block_reward: 0,
+      hashrate_change_30d: 0,
+      difficulty_change_14d: 0,
+      nvt_ratio: 0,
+      mvrv_z_score: 0,
+      inflation_rate: 0,
+      fee_revenue_share: 0,
+      mempool_size_mb: 0,
+      avg_fee_rate: 0,
+      hash_ribbon_signal: 0,
+    });
+    expect(result).toBeNull();
+  });
+
+  it('analyzeBlockchainCycle calls correct endpoint', async () => {
+    const mockResult = {
+      cycle_phase: 'early_markup',
+      phase_confidence: 70,
+      fair_value_estimate: 80000,
+      deviation_from_fair: -12,
+      risk_factors: [],
+      model: 'blockchain-cycle-v1',
+    };
+    mockFetch(mockResult);
+    await client.analyzeBlockchainCycle({
+      halving_cycle_progress: 40,
+      days_since_halving: 300,
+      days_to_next_halving: 800,
+      block_reward: 3.125,
+      hashrate_change_30d: 5,
+      difficulty_change_14d: 3,
+      nvt_ratio: 60,
+      mvrv_z_score: 2.5,
+      inflation_rate: 0.83,
+      fee_revenue_share: 5.2,
+      mempool_size_mb: 20,
+      avg_fee_rate: 20,
+      hash_ribbon_signal: 1,
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8000/predict/blockchain-cycle',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+  });
 });

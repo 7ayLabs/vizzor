@@ -386,3 +386,32 @@ export interface ModelAccuracyStats {
   by_direction: Record<string, { total: number; correct: number; accuracy: number }>;
   period_days: number;
 }
+
+// ---------------------------------------------------------------------------
+// v0.12.5 — Blockchain cycle analysis
+// ---------------------------------------------------------------------------
+
+export interface BlockchainCycleMLFeatures {
+  halving_cycle_progress: number;
+  days_since_halving: number;
+  days_to_next_halving: number;
+  block_reward: number;
+  hashrate_change_30d: number;
+  difficulty_change_14d: number;
+  nvt_ratio: number;
+  mvrv_z_score: number;
+  inflation_rate: number;
+  fee_revenue_share: number;
+  mempool_size_mb: number;
+  avg_fee_rate: number;
+  hash_ribbon_signal: number; // -1, 0, 1
+}
+
+export interface BlockchainCycleMLResult {
+  cycle_phase: 'accumulation' | 'early_markup' | 'late_markup' | 'distribution' | 'markdown';
+  phase_confidence: number;
+  fair_value_estimate: number;
+  deviation_from_fair: number;
+  risk_factors: { factor: string; importance: number; value: number }[];
+  model: string;
+}

@@ -32,6 +32,14 @@ export function formatRelativeTime(iso: string): string {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
+export function formatRelativeTimestamp(epochMs: number): string {
+  const diff = Math.floor((Date.now() - epochMs) / 1000);
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
 export function riskLevelColor(level: string): string {
   switch (level) {
     case 'low':

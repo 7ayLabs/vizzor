@@ -32,6 +32,8 @@ export type {
   BytecodeRiskMLResult,
   PortfolioPredMLFeatures,
   PortfolioPredMLResult,
+  BlockchainCycleMLFeatures,
+  BlockchainCycleMLResult,
 } from './types.js';
-export { buildFeatureVector } from './feature-engineer.js';
+export { buildFeatureVector, buildBlockchainFeatureVector } from './feature-engineer.js';
 export { MLClient, initMLClient, getMLClient } from './client.js';

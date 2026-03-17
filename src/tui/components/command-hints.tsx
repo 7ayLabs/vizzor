@@ -15,6 +15,7 @@ const COMMANDS = [
   { name: 'remove', args: '<symbol>', desc: 'Remove from ticker' },
   { name: 'agent', args: '<create|list|start|stop|status|delete>', desc: 'Manage agents' },
   { name: 'provider', args: '[list|<name>]', desc: 'Switch AI provider' },
+  { name: 'alerts', args: '[--unread] [clear]', desc: 'View/manage notifications' },
   { name: 'config', args: '[set <key> <value>]', desc: 'Show/set config' },
   { name: 'clear', args: '', desc: 'Clear messages' },
   { name: 'help', args: '', desc: 'Show help' },

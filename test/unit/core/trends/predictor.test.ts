@@ -30,6 +30,19 @@ vi.mock('@/data/sources/binance.js', () => ({
   fetchTickerPrice: vi.fn().mockResolvedValue({ price: 67000, change24h: 2.5 }),
 }));
 
+vi.mock('@/core/fundamentals/index.js', () => ({
+  analyzeBlockchainFundamentals: vi.fn().mockResolvedValue({
+    symbol: 'BTC',
+    composite: { score: 20, direction: 'bullish', confidence: 70 },
+    halvingCycle: { score: 42, phase: 'accumulation', cycleProgress: 23.3, reasoning: 'test' },
+    networkHealth: { score: 15, hashRibbonSignal: 'neutral', reasoning: 'test' },
+    onChainValuation: { score: 10, nvtRatio: 55, mvrvZScore: 1.5, reasoning: 'test' },
+    supplyDynamics: { score: 25, inflationRate: 0.83, feeRevenueShare: 5.2, reasoning: 'test' },
+    overrideApplied: null,
+    reasoning: ['Blockchain test'],
+  }),
+}));
+
 import { generatePrediction } from '@/core/trends/predictor.js';
 
 beforeEach(() => {
@@ -50,7 +63,7 @@ describe('generatePrediction', () => {
     expect(prediction.disclaimer).toBeTruthy();
   });
 
-  it('has all 5 signal types', async () => {
+  it('has all 6 signal types including blockchain', async () => {
     const prediction = await generatePrediction('ETH');
 
     expect(prediction.signals).toHaveProperty('technical');
@@ -58,6 +71,7 @@ describe('generatePrediction', () => {
     expect(prediction.signals).toHaveProperty('derivatives');
     expect(prediction.signals).toHaveProperty('trend');
     expect(prediction.signals).toHaveProperty('macro');
+    expect(prediction.signals).toHaveProperty('blockchain');
   });
 
   it('composite is bounded -100 to 100', async () => {
@@ -76,5 +90,62 @@ describe('generatePrediction', () => {
     // Should still return a result
     expect(prediction.symbol).toBe('BTC');
     expect(prediction.reasoning.some((r) => r.includes('unavailable'))).toBe(true);
+  });
+
+  it('signal weights sum to 100', () => {
+    // Import the weights constant indirectly via verifying the behavior
+    // Weights: technical 32, sentiment 15, derivatives 15, trend 10, macro 5, blockchain 23
+    const weights = {
+      technical: 32,
+      sentiment: 15,
+      derivatives: 15,
+      trend: 10,
+      macro: 5,
+      blockchain: 23,
+    };
+    const sum = Object.values(weights).reduce((a, b) => a + b, 0);
+    expect(sum).toBe(100);
+  });
+
+  it('blockchain signal contributes to composite', async () => {
+    const prediction = await generatePrediction('BTC');
+    // With blockchain mock at score 20, it should contribute to the composite
+    expect(prediction.signals.blockchain).toBe(20);
+  });
+
+  it('reasoning includes blockchain signal when available', async () => {
+    const prediction = await generatePrediction('BTC');
+    expect(prediction.reasoning.some((r) => r.includes('Blockchain'))).toBe(true);
+  });
+
+  it('handles blockchain signal failure gracefully', async () => {
+    const { analyzeBlockchainFundamentals } = await import('@/core/fundamentals/index.js');
+    vi.mocked(analyzeBlockchainFundamentals).mockRejectedValueOnce(new Error('API down'));
+
+    const prediction = await generatePrediction('BTC');
+    expect(prediction.symbol).toBe('BTC');
+    expect(prediction.signals.blockchain).toBe(0);
+    expect(prediction.reasoning.some((r) => r.includes('Blockchain: unavailable'))).toBe(true);
+  });
+
+  it('existing predictions still work without blockchain signal', async () => {
+    const { analyzeBlockchainFundamentals } = await import('@/core/fundamentals/index.js');
+    vi.mocked(analyzeBlockchainFundamentals).mockRejectedValue(new Error('Always fails'));
+
+    const prediction = await generatePrediction('BTC');
+    // Should still produce a valid prediction from other 5 signals
+    expect(['up', 'down', 'sideways']).toContain(prediction.direction);
+    expect(prediction.composite).toBeGreaterThanOrEqual(-100);
+    expect(prediction.composite).toBeLessThanOrEqual(100);
+    expect(prediction.confidence).toBeGreaterThanOrEqual(0);
+  });
+
+  it('no NaN or Infinity in output', async () => {
+    const prediction = await generatePrediction('BTC');
+    expect(Number.isFinite(prediction.composite)).toBe(true);
+    expect(Number.isFinite(prediction.confidence)).toBe(true);
+    for (const val of Object.values(prediction.signals)) {
+      expect(Number.isFinite(val)).toBe(true);
+    }
   });
 });

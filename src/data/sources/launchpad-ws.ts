@@ -4,6 +4,7 @@
 // ---------------------------------------------------------------------------
 
 import { createLogger } from '../../utils/logger.js';
+import { emitNotification } from '../../notifications/event-bus.js';
 
 const log = createLogger('launchpad-ws');
 
@@ -381,6 +382,23 @@ export class LaunchpadWSListener {
         this.eventsReceived++;
         this.lastEventAt = Date.now();
         log.info(`Migration detected: ${event.symbol} (${event.mint}) -> ${event.dexProgram}`);
+
+        emitNotification({
+          type: 'migration_detected',
+          title: `Token Migration: ${event.symbol || event.mint.slice(0, 8)}`,
+          message: `Bonding curve completed — migrated to ${event.dexProgram} DEX (market cap: $${event.marketCap.toLocaleString()})`,
+          severity: 'info',
+          symbol: event.symbol || event.mint,
+          metadata: {
+            mint: event.mint,
+            name: event.name,
+            symbol: event.symbol,
+            creator: event.creator,
+            dexProgram: event.dexProgram,
+            marketCap: event.marketCap,
+            liquidity: event.liquidity,
+          },
+        });
 
         try {
           this.callback(event);

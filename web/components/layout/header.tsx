@@ -5,6 +5,7 @@ import { useApi } from '@/hooks/use-api';
 import { formatUsd, formatPct } from '@/lib/utils';
 import { CryptoIcon } from '@/components/ui/crypto-icon';
 import { VizzorLogo } from '@/components/ui/vizzor-logo';
+import { NotificationPanel } from '@/components/dashboard/notification-panel';
 import type { MarketPrice, MLHealth } from '@/lib/types';
 
 // prettier-ignore
@@ -129,9 +130,10 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
       {/* Center: ticker */}
       <Ticker />
 
-      {/* Right: health */}
+      {/* Right: health + notifications */}
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
         <HealthDots />
+        <NotificationPanel />
       </div>
     </header>
   );

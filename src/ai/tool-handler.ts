@@ -369,6 +369,59 @@ async function handleToolUnsafe(name: string, input: unknown): Promise<unknown> 
     case 'get_prediction': {
       const symbol = String(params['symbol'] ?? 'BTC');
       const prediction = await generatePrediction(symbol);
+
+      // Auto-create alert rules based on prediction context
+      try {
+        const { randomUUID } = await import('node:crypto');
+        const { insertAlertRule, getAlertRules } = await import('../notifications/store.js');
+        const ticker = await fetchTickerPrice(symbol);
+        const price = ticker.price;
+        const sym = prediction.symbol.toUpperCase();
+        const existing = getAlertRules().filter((r) => r.symbols?.includes(sym));
+
+        // Support / resistance thresholds (5% band from current price)
+        const hasAbove = existing.some((r) => r.type === 'price_threshold' && r.priceAbove != null);
+        const hasBelow = existing.some((r) => r.type === 'price_threshold' && r.priceBelow != null);
+
+        if (!hasAbove) {
+          const resistancePrice = Math.round(price * 1.05 * 100) / 100;
+          insertAlertRule({
+            id: randomUUID(),
+            type: 'price_threshold',
+            enabled: true,
+            symbols: [sym],
+            priceAbove: resistancePrice,
+            createdAt: Date.now(),
+          });
+        }
+        if (!hasBelow) {
+          const supportPrice = Math.round(price * 0.95 * 100) / 100;
+          insertAlertRule({
+            id: randomUUID(),
+            type: 'price_threshold',
+            enabled: true,
+            symbols: [sym],
+            priceBelow: supportPrice,
+            createdAt: Date.now(),
+          });
+        }
+
+        // Pump/dump detection for this symbol
+        const hasPump = existing.some((r) => r.type === 'pump_detected');
+        if (!hasPump) {
+          insertAlertRule({
+            id: randomUUID(),
+            type: 'pump_detected',
+            enabled: true,
+            symbols: [sym],
+            pumpSeverity: ['medium', 'high', 'critical'],
+            createdAt: Date.now(),
+          });
+        }
+      } catch {
+        // Non-critical — alerts are best-effort
+      }
+
       return {
         symbol: prediction.symbol,
         direction: prediction.direction,
@@ -1116,6 +1169,278 @@ async function handleToolUnsafe(name: string, input: unknown): Promise<unknown> 
           volumeDeltaDivergence: volDelta?.divergence ?? 'unknown',
         },
       };
+    }
+
+    // -----------------------------------------------------------------------
+    // Blockchain Fundamentals tools — v0.12.5
+    // -----------------------------------------------------------------------
+
+    case 'get_blockchain_fundamentals': {
+      const symbol = String(params['symbol'] ?? 'BTC');
+      const { analyzeBlockchainFundamentals } = await import('../core/fundamentals/index.js');
+      const result = await analyzeBlockchainFundamentals(symbol);
+      return {
+        symbol: result.symbol,
+        composite: result.composite,
+        halvingCycle: {
+          phase: result.halvingCycle.phase,
+          cycleProgress: result.halvingCycle.cycleProgress,
+          score: result.halvingCycle.score,
+          daysToNextHalving: result.halvingCycle.daysToNextHalving,
+        },
+        networkHealth: {
+          score: result.networkHealth.score,
+          hashRibbonSignal: result.networkHealth.hashRibbonSignal,
+          mempoolHealth: result.networkHealth.mempoolHealth,
+        },
+        onChainValuation: {
+          score: result.onChainValuation.score,
+          nvtRatio: result.onChainValuation.nvtRatio,
+          mvrvZScore: result.onChainValuation.mvrvZScore,
+          nvtSignal: result.onChainValuation.nvtSignal,
+          mvrvSignal: result.onChainValuation.mvrvSignal,
+        },
+        supplyDynamics: {
+          score: result.supplyDynamics.score,
+          inflationRate: result.supplyDynamics.inflationRate,
+          feeRevenueShare: result.supplyDynamics.feeRevenueShare,
+          percentMined: result.supplyDynamics.percentMined,
+        },
+        overrideApplied: result.overrideApplied,
+        reasoning: result.reasoning,
+      };
+    }
+
+    case 'get_halving_cycle': {
+      const { analyzeHalvingCycle } = await import('../core/fundamentals/index.js');
+      const { fetchBitcoinNetworkStats } = await import('../data/sources/blockchain-info.js');
+      const network = await fetchBitcoinNetworkStats();
+      const halving = analyzeHalvingCycle(network.blockHeight);
+      return {
+        phase: halving.phase,
+        cycleProgress: halving.cycleProgress,
+        score: halving.score,
+        daysInCycle: halving.daysInCycle,
+        daysToNextHalving: halving.daysToNextHalving,
+        dampening: halving.dampening,
+        reasoning: halving.reasoning,
+      };
+    }
+
+    case 'get_network_health': {
+      const { fetchNetworkHealth } = await import('../data/sources/blockchain-info.js');
+      const { fetchNVTRatio, fetchMVRVZScore } = await import('../data/sources/onchain-metrics.js');
+      const [healthResult, nvtResult, mvrvResult] = await Promise.allSettled([
+        fetchNetworkHealth(),
+        fetchNVTRatio(),
+        fetchMVRVZScore(),
+      ]);
+      const health = healthResult.status === 'fulfilled' ? healthResult.value : null;
+      const nvt = nvtResult.status === 'fulfilled' ? nvtResult.value : null;
+      const mvrv = mvrvResult.status === 'fulfilled' ? mvrvResult.value : null;
+      return {
+        healthScore: health?.healthScore ?? 0,
+        confidence: health?.confidence ?? 0,
+        network: health?.network ?? null,
+        mining: health?.mining ?? null,
+        nvt: nvt ? { ratio: nvt.ratio, signal: nvt.signal, score: nvt.score } : null,
+        mvrv: mvrv ? { zScore: mvrv.zScore, signal: mvrv.signal, score: mvrv.score } : null,
+        sources: health?.sources ?? [],
+      };
+    }
+
+    case 'resolve_predictions': {
+      const { getChronoVisor } = await import('../core/chronovisor/engine.js');
+      const engine = getChronoVisor();
+      const resolver = engine.getPredictionResolver();
+      const resolved = await resolver.resolvePending();
+      const stats = resolver.getStats();
+      const accuracy = engine.getAccuracyTracker().getAccuracy(undefined, undefined, 30);
+      return {
+        resolved_this_cycle: resolved,
+        running_stats: {
+          total_resolved: stats.totalResolved,
+          correct: stats.correct,
+          incorrect: stats.incorrect,
+          session_accuracy:
+            stats.totalResolved > 0
+              ? `${((stats.correct / stats.totalResolved) * 100).toFixed(1)}%`
+              : 'N/A',
+        },
+        historical_accuracy: {
+          overall: `${(accuracy.overall * 100).toFixed(1)}%`,
+          total_predictions: accuracy.total,
+          correct_predictions: accuracy.correct,
+          by_horizon: Object.fromEntries(
+            Object.entries(accuracy.byHorizon).map(([h, acc]) => [h, `${(acc * 100).toFixed(1)}%`]),
+          ),
+        },
+        weights_updated: resolved > 0,
+      };
+    }
+
+    case 'get_prediction_accuracy': {
+      const symbol = params['symbol'] ? String(params['symbol']).toUpperCase() : undefined;
+      const days = params['days'] ? Number(params['days']) : 30;
+      const { getChronoVisor } = await import('../core/chronovisor/engine.js');
+      const engine = getChronoVisor();
+      const accuracy = engine.getAccuracyTracker().getAccuracy(symbol, undefined, days);
+      const weights = engine.getWeightLearner().getWeights(symbol);
+      const resolverStats = engine.getPredictionResolver().getStats();
+      const pending = engine.getAccuracyTracker().getPendingPredictions();
+      const symbolPending = symbol ? pending.filter((p) => p.symbol === symbol) : pending;
+      return {
+        symbol: symbol ?? 'ALL',
+        period_days: days,
+        accuracy: {
+          overall: `${(accuracy.overall * 100).toFixed(1)}%`,
+          total_resolved: accuracy.total,
+          correct: accuracy.correct,
+          by_horizon: Object.fromEntries(
+            Object.entries(accuracy.byHorizon).map(([h, acc]) => [h, `${(acc * 100).toFixed(1)}%`]),
+          ),
+        },
+        pending_predictions: symbolPending.length,
+        learned_weights: {
+          onChain: `${(weights.onChain * 100).toFixed(1)}%`,
+          mlEnsemble: `${(weights.mlEnsemble * 100).toFixed(1)}%`,
+          predictionMarkets: `${(weights.predictionMarkets * 100).toFixed(1)}%`,
+          socialNarrative: `${(weights.socialNarrative * 100).toFixed(1)}%`,
+          patternMatch: `${(weights.patternMatch * 100).toFixed(1)}%`,
+        },
+        resolver_active: resolverStats.isRunning,
+        feedback_loop:
+          accuracy.total > 0
+            ? 'ACTIVE — weights adapting from historical accuracy'
+            : 'WAITING — need resolved predictions to start learning',
+      };
+    }
+
+    // -----------------------------------------------------------------------
+    // Notification & Alert tools
+    // -----------------------------------------------------------------------
+
+    case 'set_price_alert': {
+      const symbol = String(params['symbol'] ?? '').toUpperCase();
+      const above = params['above'] as number | undefined;
+      const below = params['below'] as number | undefined;
+
+      if (!symbol) return { error: 'Symbol is required.' };
+      if (above === undefined && below === undefined) {
+        return { error: 'At least one of "above" or "below" must be specified.' };
+      }
+
+      const { randomUUID } = await import('node:crypto');
+      const { insertAlertRule } = await import('../notifications/store.js');
+
+      const rule = {
+        id: randomUUID(),
+        type: 'price_threshold' as const,
+        enabled: true,
+        symbols: [symbol],
+        priceAbove: above,
+        priceBelow: below,
+        createdAt: Date.now(),
+      };
+      insertAlertRule(rule);
+
+      const conditions: string[] = [];
+      if (above !== undefined) conditions.push(`above $${above.toLocaleString()}`);
+      if (below !== undefined) conditions.push(`below $${below.toLocaleString()}`);
+
+      return {
+        status: 'Alert created',
+        ruleId: rule.id,
+        symbol,
+        conditions: conditions.join(' or '),
+        message: `Price alert set for ${symbol}: notify when price goes ${conditions.join(' or ')}.`,
+      };
+    }
+
+    case 'get_alerts': {
+      const limit = (params['limit'] as number | undefined) ?? 20;
+      const unreadOnly = (params['unreadOnly'] as boolean | undefined) ?? false;
+
+      const { getNotifications, getAlertRules } = await import('../notifications/store.js');
+      const notifications = getNotifications({ unreadOnly, limit });
+      const rules = getAlertRules();
+
+      return {
+        alert_rules: {
+          count: rules.length,
+          active: rules.filter((r) => r.enabled).length,
+          rules: rules.map((r) => ({
+            id: r.id,
+            type: r.type,
+            enabled: r.enabled,
+            symbols: r.symbols,
+            priceAbove: r.priceAbove,
+            priceBelow: r.priceBelow,
+            pumpSeverity: r.pumpSeverity,
+            agentActions: r.agentActions,
+            accuracyMilestone: r.accuracyMilestone,
+            createdAt: new Date(r.createdAt).toISOString(),
+          })),
+        },
+        recent_notifications: {
+          count: notifications.length,
+          notifications: notifications.map((n) => ({
+            id: n.id,
+            type: n.type,
+            title: n.title,
+            message: n.message,
+            severity: n.severity,
+            symbol: n.symbol,
+            read: n.read,
+            createdAt: new Date(n.createdAt).toISOString(),
+          })),
+        },
+      };
+    }
+
+    case 'configure_alerts': {
+      const action = String(params['action'] ?? '');
+      const ruleId = params['ruleId'] as string | undefined;
+      const typeFilter = params['type'] as string | undefined;
+
+      const { getAlertRules, updateAlertRule, deleteAlertRule } =
+        await import('../notifications/store.js');
+
+      if (action === 'list') {
+        let rules = getAlertRules();
+        if (typeFilter) rules = rules.filter((r) => r.type === typeFilter);
+        return {
+          count: rules.length,
+          rules: rules.map((r) => ({
+            id: r.id,
+            type: r.type,
+            enabled: r.enabled,
+            symbols: r.symbols,
+            priceAbove: r.priceAbove,
+            priceBelow: r.priceBelow,
+            pumpSeverity: r.pumpSeverity,
+            agentActions: r.agentActions,
+            createdAt: new Date(r.createdAt).toISOString(),
+          })),
+        };
+      }
+
+      if (!ruleId) return { error: 'ruleId is required for enable/disable/delete.' };
+
+      if (action === 'enable') {
+        updateAlertRule(ruleId, { enabled: true });
+        return { status: 'Rule enabled', ruleId };
+      }
+      if (action === 'disable') {
+        updateAlertRule(ruleId, { enabled: false });
+        return { status: 'Rule disabled', ruleId };
+      }
+      if (action === 'delete') {
+        deleteAlertRule(ruleId);
+        return { status: 'Rule deleted', ruleId };
+      }
+
+      return { error: `Unknown action: ${action}. Use "list", "enable", "disable", or "delete".` };
     }
 
     default:

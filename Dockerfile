@@ -5,8 +5,9 @@ ENV HUSKY=0
 
 # --- Dependencies ---
 FROM base AS deps
+RUN apk add --no-cache python3 make g++
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile --prod --ignore-scripts
+RUN pnpm install --frozen-lockfile --prod
 
 # --- Build ---
 FROM base AS build

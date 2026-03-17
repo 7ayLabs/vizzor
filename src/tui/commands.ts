@@ -133,6 +133,8 @@ export async function executeCommand(name: string, args: string[]): Promise<Comm
       return handleProvider(args);
     case 'config':
       return handleConfig(args);
+    case 'alerts':
+      return handleAlerts(args);
     case 'agent':
       return handleAgent(args);
     case 'backtest':
@@ -763,5 +765,56 @@ async function handleConfig(args: string[]): Promise<CommandResult> {
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     return { blocks: [], text: `Config error: ${message}` };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// /alerts [--unread] [clear]
+// ---------------------------------------------------------------------------
+
+async function handleAlerts(args: string[]): Promise<CommandResult> {
+  try {
+    const { getNotifications, markAllRead, getUnreadCount } =
+      await import('../notifications/store.js');
+
+    // /alerts clear — mark all as read
+    if (args[0] === 'clear') {
+      markAllRead();
+      return { blocks: [], text: 'All notifications marked as read.' };
+    }
+
+    const unreadOnly = args.includes('--unread');
+    const notifications = getNotifications({ unreadOnly, limit: 30 });
+    const unreadCount = getUnreadCount();
+
+    if (notifications.length === 0) {
+      return {
+        blocks: [],
+        text: unreadOnly ? 'No unread notifications.' : 'No notifications.',
+      };
+    }
+
+    const lines = notifications.map((n) => {
+      const time = new Date(n.createdAt).toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+      const unread = n.read ? ' ' : '*';
+      const sev = n.severity.toUpperCase().charAt(0);
+      return `${unread} ${time}  [${sev}] ${n.title} — ${n.message}`;
+    });
+
+    const header = unreadOnly
+      ? `Unread notifications (${unreadCount}):`
+      : `Notifications (${unreadCount} unread):`;
+
+    return {
+      blocks: [],
+      text: [header, '', ...lines, '', 'Use /alerts clear to mark all as read.'].join('\n'),
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { blocks: [], text: `Alerts error: ${message}` };
   }
 }

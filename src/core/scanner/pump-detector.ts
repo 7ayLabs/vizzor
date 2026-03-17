@@ -4,6 +4,7 @@
 // ---------------------------------------------------------------------------
 
 import { createLogger } from '../../utils/logger.js';
+import { emitNotification } from '../../notifications/event-bus.js';
 
 const log = createLogger('pump-detector');
 
@@ -190,6 +191,28 @@ export class PumpDetector {
 
     if (signal) {
       this.recordSignal(signal);
+
+      emitNotification({
+        type: 'pump_detected',
+        title: `${signal.type.toUpperCase()} Detected: ${token}`,
+        message: `${signal.severity.toUpperCase()} ${signal.type} — price ${signal.priceChangePct > 0 ? '+' : ''}${signal.priceChangePct.toFixed(2)}%, volume ${signal.volumeSpike.toFixed(1)}x`,
+        severity:
+          signal.severity === 'critical' || signal.severity === 'high'
+            ? 'critical'
+            : signal.severity === 'medium'
+              ? 'warning'
+              : 'info',
+        symbol: token,
+        metadata: {
+          type: signal.type,
+          severity: signal.severity,
+          cusum: signal.cusum,
+          priceChangePct: signal.priceChangePct,
+          volumeSpike: signal.volumeSpike,
+          duration: signal.duration,
+        },
+      });
+
       log.info(
         `${signal.type.toUpperCase()} detected for ${token}: severity=${signal.severity}, ` +
           `cusum=${signal.cusum.toFixed(4)}, priceChange=${signal.priceChangePct.toFixed(2)}%, ` +

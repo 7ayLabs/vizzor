@@ -7,6 +7,7 @@ import { getMLClient } from '../../../ml/client.js';
 import { stopAllAgents } from '../manager.js';
 import { logAuditEvent } from '../../../security/audit.js';
 import { createLogger } from '../../../utils/logger.js';
+import { emitNotification } from '../../../notifications/event-bus.js';
 
 const log = createLogger('risk');
 
@@ -47,6 +48,14 @@ export function triggerEmergencyStop(reason: string): number {
   });
 
   log.warn(`EMERGENCY STOP: ${reason} — ${stopped} agent(s) halted`);
+
+  emitNotification({
+    type: 'risk_event',
+    title: 'EMERGENCY STOP',
+    message: `Kill switch triggered: ${reason} — ${stopped} agent(s) halted`,
+    severity: 'critical',
+    metadata: { reason, agentsStopped: stopped },
+  });
 
   return stopped;
 }

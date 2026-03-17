@@ -5,12 +5,14 @@ interface StatusBarProps {
   provider: string;
   chain: string;
   connected: boolean;
+  unreadCount?: number;
 }
 
 export const StatusBar = React.memo(function StatusBar({
   provider,
   chain,
   connected,
+  unreadCount = 0,
 }: StatusBarProps): React.JSX.Element {
   const [time, setTime] = useState(() =>
     new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
@@ -40,6 +42,14 @@ export const StatusBar = React.memo(function StatusBar({
       <Text dimColor>
         chain: <Text bold>{chain}</Text>
       </Text>
+      {unreadCount > 0 && (
+        <>
+          <Text dimColor>{'  \u2502  '}</Text>
+          <Text color="yellow" bold>
+            {'\u{1F514}'} {unreadCount}
+          </Text>
+        </>
+      )}
       <Spacer />
       <Text dimColor>{time}</Text>
     </Box>

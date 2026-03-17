@@ -12,8 +12,9 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       ML_ENABLED: "true"
       ML_SIDECAR_URL: http://ml-sidecar:8000
-      NODE_ENV: production
-      API_ENABLE_AUTH: "true"
+      ML_API_SECRET: ${ML_API_SECRET}
+      NODE_ENV: development
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
     restart: unless-stopped
 
   ml-sidecar:
@@ -77,7 +78,7 @@ services:
     ports:
       - "3001:3001"
     environment:
-      - NEXT_PUBLIC_API_URL=http://vizzor-api:3000
+      - NEXT_PUBLIC_API_URL=http://localhost:3000
     depends_on:
       - vizzor-api
     restart: unless-stopped

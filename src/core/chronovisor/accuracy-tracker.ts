@@ -15,6 +15,7 @@ interface PredictionRow {
   predicted_direction: string;
   probability: number;
   composite_score: number;
+  initial_price: number;
   created_at: number;
   resolved_at: number | null;
   actual_direction: string | null;
@@ -40,8 +41,8 @@ export class AccuracyTracker {
 
     db.prepare(
       `INSERT OR IGNORE INTO chronovisor_predictions
-       (id, symbol, horizon, predicted_direction, probability, composite_score, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+       (id, symbol, horizon, predicted_direction, probability, composite_score, initial_price, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       record.id,
       record.symbol,
@@ -49,11 +50,12 @@ export class AccuracyTracker {
       record.predictedDirection,
       record.probability,
       record.compositeScore,
+      record.initialPrice,
       record.createdAt,
     );
 
     log.debug(
-      `Logged prediction ${record.id}: ${record.symbol} ${record.horizon} ${record.predictedDirection}`,
+      `Logged prediction ${record.id}: ${record.symbol} ${record.horizon} ${record.predictedDirection} @ $${record.initialPrice}`,
     );
   }
 
@@ -179,7 +181,8 @@ export class AccuracyTracker {
   // -------------------------------------------------------------------------
 
   private ensureTable(): void {
-    getDb().exec(`
+    const db = getDb();
+    db.exec(`
       CREATE TABLE IF NOT EXISTS chronovisor_predictions (
         id TEXT PRIMARY KEY,
         symbol TEXT NOT NULL,
@@ -187,12 +190,21 @@ export class AccuracyTracker {
         predicted_direction TEXT NOT NULL,
         probability REAL NOT NULL,
         composite_score REAL NOT NULL,
+        initial_price REAL NOT NULL DEFAULT 0,
         created_at INTEGER NOT NULL,
         resolved_at INTEGER,
         actual_direction TEXT,
         was_correct INTEGER
       )
     `);
+    // Migration: add initial_price column if missing (pre-v0.12.5 tables)
+    try {
+      db.exec(
+        'ALTER TABLE chronovisor_predictions ADD COLUMN initial_price REAL NOT NULL DEFAULT 0',
+      );
+    } catch {
+      // Column already exists
+    }
   }
 
   private rowToRecord(row: PredictionRow): PredictionRecord {
@@ -203,6 +215,7 @@ export class AccuracyTracker {
       predictedDirection: row.predicted_direction as PredictionRecord['predictedDirection'],
       probability: row.probability,
       compositeScore: row.composite_score,
+      initialPrice: row.initial_price,
       createdAt: row.created_at,
       resolvedAt: row.resolved_at,
       actualDirection: row.actual_direction as PredictionRecord['actualDirection'],

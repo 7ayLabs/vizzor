@@ -3,6 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import { createLogger } from '../../utils/logger.js';
+import { emitNotification } from '../../notifications/event-bus.js';
 
 const log = createLogger('balance-monitor');
 
@@ -107,6 +108,20 @@ export class BalanceMonitor {
 
           alerts.push(alert);
           this.alertCallback(alert);
+
+          emitNotification({
+            type: 'balance_low',
+            title: `Low Balance: ${watch.chain}`,
+            message: `Agent ${watch.agentId} balance on ${watch.chain} is ${balance} (threshold: ${watch.threshold})`,
+            severity: 'critical',
+            metadata: {
+              agentId: watch.agentId,
+              chain: watch.chain,
+              address: watch.address,
+              balance: balance.toString(),
+              threshold: watch.threshold.toString(),
+            },
+          });
 
           log.warn(
             `LOW BALANCE ALERT: agent=${watch.agentId} chain=${watch.chain} ` +

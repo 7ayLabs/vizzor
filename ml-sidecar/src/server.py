@@ -24,6 +24,7 @@ from .models.intent_classifier import IntentClassifier
 from .models.pump_detector import PumpDetectorModel
 from .models.narrative_detector import NarrativeDetectorModel
 from .models.divergence_detector import DivergenceDetectorModel
+from .models.blockchain_cycle_analyzer import BlockchainCycleAnalyzer
 from .training.train_rug import RugTrainer
 from .training.train_trend import TrendTrainer
 from .training.train_regime import RegimeTrainer
@@ -462,6 +463,7 @@ intent_classifier = IntentClassifier()
 pump_detector = PumpDetectorModel()
 narrative_detector = NarrativeDetectorModel()
 divergence_detector = DivergenceDetectorModel()
+blockchain_cycle_analyzer = BlockchainCycleAnalyzer()
 start_time = time.time()
 predictions_served = 0
 
@@ -485,6 +487,7 @@ async def lifespan(_app: FastAPI):
     pump_detector.load()
     narrative_detector.load()
     divergence_detector.load()
+    blockchain_cycle_analyzer.load()
     yield
 
 
@@ -890,6 +893,57 @@ async def detect_divergence(request: Request):
     }
 
 
+# --- v0.12.5 Blockchain Cycle Endpoint ---
+
+
+class BlockchainCycleFeatures(BaseModel):
+    halving_cycle_progress: float = Field(0.0, ge=0, le=100)
+    days_since_halving: float = Field(0.0, ge=0, le=2000)
+    days_to_next_halving: float = Field(0.0, ge=0, le=2000)
+    block_reward: float = Field(3.125, ge=0, le=50)
+    hashrate_change_30d: float = Field(0.0, ge=-100, le=1000)
+    difficulty_change_14d: float = Field(0.0, ge=-100, le=1000)
+    nvt_ratio: float = Field(55.0, ge=0, le=1000)
+    mvrv_z_score: float = Field(1.5, ge=-10, le=20)
+    inflation_rate: float = Field(0.83, ge=0, le=100)
+    fee_revenue_share: float = Field(5.0, ge=0, le=100)
+    mempool_size_mb: float = Field(0.0, ge=0, le=10000)
+    avg_fee_rate: float = Field(0.0, ge=0, le=10000)
+    hash_ribbon_signal: float = Field(0.0, ge=-1, le=1)
+
+
+class BlockchainCycleRiskFactor(BaseModel):
+    factor: str
+    importance: float
+    value: float
+
+
+class BlockchainCycleResponse(BaseModel):
+    cycle_phase: str
+    phase_confidence: float
+    fair_value_estimate: float
+    deviation_from_fair: float
+    risk_factors: list[BlockchainCycleRiskFactor]
+    model: str
+
+
+@app.post("/predict/blockchain-cycle", response_model=BlockchainCycleResponse)
+async def predict_blockchain_cycle(features: BlockchainCycleFeatures) -> BlockchainCycleResponse:
+    global predictions_served
+    predictions_served += 1
+
+    result = blockchain_cycle_analyzer.predict(features.model_dump())
+
+    return BlockchainCycleResponse(
+        cycle_phase=result["cycle_phase"],
+        phase_confidence=result["phase_confidence"],
+        fair_value_estimate=result["fair_value_estimate"],
+        deviation_from_fair=result["deviation_from_fair"],
+        risk_factors=[BlockchainCycleRiskFactor(**f) for f in result["risk_factors"]],
+        model=result["model"],
+    )
+
+
 # --- Training Pipeline Endpoints ---
 
 
@@ -1070,6 +1124,13 @@ async def health():
                 "loaded": divergence_detector.is_loaded,
                 "lastTrained": divergence_detector.last_trained,
                 "accuracy": divergence_detector.accuracy,
+            },
+            {
+                "name": "blockchain-cycle-analyzer",
+                "version": blockchain_cycle_analyzer.version,
+                "loaded": blockchain_cycle_analyzer.is_loaded,
+                "lastTrained": blockchain_cycle_analyzer.last_trained,
+                "accuracy": blockchain_cycle_analyzer.accuracy,
             },
         ],
         "uptime": int(time.time() - start_time),

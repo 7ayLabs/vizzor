@@ -16,6 +16,9 @@ import { backtestRoutes } from './routes/v1/backtest.js';
 import { agentRoutes } from './routes/v1/agents.js';
 import { portfolioRoutes } from './routes/v1/portfolio.js';
 import { registerChatRoutes } from './routes/v1/chat.js';
+import { registerChronoVisorRoutes } from './routes/v1/chronovisor.js';
+import { registerNotificationRoutes } from './routes/v1/notifications.js';
+import { registerConversationRoutes } from './routes/v1/conversations.js';
 import { authMiddleware } from './auth/middleware.js';
 import { errorHandler } from './middleware/error-handler.js';
 
@@ -109,10 +112,23 @@ export async function startApiServer(options: {
   await server.register(registerMarketRoutes, { prefix: '/v1/market' });
   await server.register(registerAnalysisRoutes, { prefix: '/v1/analysis' });
   await server.register(registerSecurityRoutes, { prefix: '/v1/security' });
+  await server.register(registerChronoVisorRoutes, { prefix: '/v1/chronovisor' });
+  await server.register(registerNotificationRoutes, { prefix: '/v1' });
   await server.register(registerChatRoutes, { prefix: '/v1' });
+  await server.register(registerConversationRoutes, { prefix: '/v1' });
   await server.register(backtestRoutes);
   await server.register(agentRoutes);
   await server.register(portfolioRoutes);
+
+  // Initialize notification service
+  try {
+    const { initNotificationService } = await import('../notifications/service.js');
+    await initNotificationService();
+  } catch (err) {
+    log.warn(
+      `Notification service init failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 
   await server.listen({ port: options.port, host: options.host });
   log.info(`Vizzor API listening on ${options.host}:${options.port}`);

@@ -72,8 +72,11 @@ export interface AIProvider {
   ): Promise<string>;
 }
 
-/** Maximum iterations for the agentic tool-use loop. */
-export const MAX_ITERATIONS = 10;
+/** Maximum iterations for the agentic tool-use loop.
+ *  v0.12.5: raised from 10 → 25 to support multi-token analysis
+ *  with 6 signal sources (TA, sentiment, derivatives, trend, macro, blockchain).
+ */
+export const MAX_ITERATIONS = 25;
 
 /** Default models per provider. */
 export const DEFAULT_MODELS: Record<string, string> = {

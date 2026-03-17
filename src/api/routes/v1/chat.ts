@@ -15,6 +15,7 @@ import type {
 import { buildContextBlock } from '../../../ai/context-injector.js';
 import { getAvailableProviders } from '../../../ai/providers/registry.js';
 import { createLogger } from '../../../utils/logger.js';
+import { createConversation, addMessage } from '../../../data/conversations.js';
 
 const log = createLogger('api:chat');
 
@@ -77,12 +78,19 @@ export async function registerChatRoutes(server: FastifyInstance): Promise<void>
               required: ['role', 'content'],
             },
           },
+          conversationId: {
+            type: 'string',
+            description: 'Existing conversation ID for persistence',
+          },
         },
         required: ['messages'],
       },
     },
     handler: async (request, reply) => {
-      const { messages } = request.body as { messages: ChatMessage[] };
+      const { messages, conversationId: incomingConvId } = request.body as {
+        messages: ChatMessage[];
+        conversationId?: string;
+      };
 
       if (!messages.length) {
         return reply.status(400).send({ error: 'messages array cannot be empty' });
@@ -106,6 +114,9 @@ export async function registerChatRoutes(server: FastifyInstance): Promise<void>
         reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
       };
 
+      // --- Conversation persistence setup ---
+      let convId = incomingConvId ?? null;
+
       try {
         const provider = getProvider();
         const systemPrompt = buildChatSystemPrompt();
@@ -114,6 +125,20 @@ export async function registerChatRoutes(server: FastifyInstance): Promise<void>
         const lastUserMsg = messages[messages.length - 1] as ChatMessage;
         const priorMessages = messages.slice(0, -1) as ProviderChatMessage[];
         const userMessage = lastUserMsg.content;
+
+        // Auto-create conversation if none provided
+        if (!convId) {
+          const title = userMessage.length > 50 ? userMessage.slice(0, 50) + '...' : userMessage;
+          convId = createConversation(title);
+          write('conversation', { conversationId: convId });
+        }
+
+        // Persist the user message
+        addMessage(convId, { role: 'user', content: userMessage });
+
+        // Collectors for assistant response persistence
+        const collectedToolCalls: unknown[] = [];
+        let collectedTokenData: unknown[] | undefined;
 
         if (!provider.supportsTools) {
           // Non-tool provider: inject context and do single pass
@@ -131,6 +156,7 @@ export async function registerChatRoutes(server: FastifyInstance): Promise<void>
               : allTokens;
           if (tokens.length > 0) {
             write('token_data', { tokens });
+            collectedTokenData = tokens;
           }
 
           const enrichedPrompt = OLLAMA_SYSTEM_PROMPT + (contextText ? '\n' + contextText : '');
@@ -143,7 +169,18 @@ export async function registerChatRoutes(server: FastifyInstance): Promise<void>
             onToolEnd: () => {
               /* handled by wrappedHandler */
             },
-            onDone: (fullText) => write('done', { fullText }),
+            onDone: (fullText) => {
+              write('done', { fullText });
+              // Persist assistant message
+              if (convId) {
+                addMessage(convId, {
+                  role: 'assistant',
+                  content: fullText,
+                  toolCalls: collectedToolCalls.length > 0 ? collectedToolCalls : undefined,
+                  tokenData: collectedTokenData,
+                });
+              }
+            },
           };
 
           await provider.analyzeStream(
@@ -163,6 +200,7 @@ export async function registerChatRoutes(server: FastifyInstance): Promise<void>
           write('tool_start', { tool: name, input });
           const result = await handleTool(name, input);
           write('tool_result', { tool: name, result });
+          collectedToolCalls.push({ tool: name, input, result });
           return result;
         };
 
@@ -170,7 +208,18 @@ export async function registerChatRoutes(server: FastifyInstance): Promise<void>
           onText: (delta) => write('text', { delta }),
           onToolStart: (toolName) => write('tool_start', { tool: toolName, input: {} }),
           onToolEnd: (toolName) => write('tool_result', { tool: toolName, result: {} }),
-          onDone: (fullText) => write('done', { fullText }),
+          onDone: (fullText) => {
+            write('done', { fullText });
+            // Persist assistant message
+            if (convId) {
+              addMessage(convId, {
+                role: 'assistant',
+                content: fullText,
+                toolCalls: collectedToolCalls.length > 0 ? collectedToolCalls : undefined,
+                tokenData: collectedTokenData,
+              });
+            }
+          },
         };
 
         await provider.analyzeStream(

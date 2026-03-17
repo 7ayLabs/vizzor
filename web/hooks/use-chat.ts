@@ -4,17 +4,37 @@ import { useState, useCallback, useRef } from 'react';
 import type { ChatMessage, ToolCallResult, TokenDataPoint } from '@/lib/types';
 import { parseSSE } from '@/lib/sse-parser';
 import { API_BASE } from '@/lib/constants';
+import { useApi } from '@/hooks/use-api';
 
 let msgId = 0;
 function nextId(): string {
   return `msg-${++msgId}-${Date.now()}`;
 }
 
-export function useChat() {
+const ALERT_TOOLS = new Set(['set_price_alert', 'get_alerts', 'configure_alerts']);
+
+interface ConversationListItem {
+  id: string;
+  title: string;
+  messageCount: number;
+  updatedAt: number;
+}
+
+interface UseChatOptions {
+  onAlertToolResult?: () => void;
+}
+
+export function useChat(options?: UseChatOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const [wsConnection, setWsConnection] = useState<WebSocket | null>(null);
+
+  const { data: conversations, mutate: mutateConversations } = useApi<ConversationListItem[]>(
+    '/v1/conversations',
+    { refreshInterval: 60000 },
+  );
 
   // Connect via WebSocket for supplementary real-time data (not replacing SSE chat)
   const connectWebSocket = useCallback((apiKey: string) => {
@@ -75,10 +95,15 @@ export function useChat() {
           content: m.content,
         }));
 
+        const body: Record<string, unknown> = { messages: allMessages };
+        if (conversationId) {
+          body.conversationId = conversationId;
+        }
+
         const res = await fetch(`${API_BASE}/v1/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: allMessages }),
+          body: JSON.stringify(body),
           signal: controller.signal,
         });
 
@@ -142,6 +167,14 @@ export function useChat() {
                     return { ...m, toolCalls: calls };
                   }),
                 );
+                if (ALERT_TOOLS.has(payload.tool as string)) {
+                  options?.onAlertToolResult?.();
+                }
+                break;
+
+              case 'conversation':
+                setConversationId(payload.conversationId as string);
+                void mutateConversations();
                 break;
 
               case 'done':
@@ -152,6 +185,7 @@ export function useChat() {
                       : m,
                   ),
                 );
+                void mutateConversations();
                 break;
 
               case 'error':
@@ -190,7 +224,7 @@ export function useChat() {
         );
       }
     },
-    [messages],
+    [messages, conversationId, mutateConversations, options],
   );
 
   const stopStreaming = useCallback(() => {
@@ -203,6 +237,55 @@ export function useChat() {
     setIsStreaming(false);
   }, []);
 
+  const newConversation = useCallback(() => {
+    abortRef.current?.abort();
+    setConversationId(null);
+    setMessages([]);
+    setIsStreaming(false);
+  }, []);
+
+  const loadConversation = useCallback(async (id: string) => {
+    const res = await fetch(`${API_BASE}/v1/conversations/${id}`);
+    if (!res.ok) return;
+    const data = (await res.json()) as {
+      id: string;
+      title: string;
+      messages: {
+        id: string;
+        role: string;
+        content: string;
+        toolCalls: unknown[] | null;
+        tokenData: unknown[] | null;
+        timestamp: number;
+      }[];
+    };
+    setConversationId(id);
+    setMessages(
+      data.messages.map((m) => ({
+        id: m.id,
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+        toolCalls: (m.toolCalls as ChatMessage['toolCalls']) ?? undefined,
+        tokenData: (m.tokenData as ChatMessage['tokenData']) ?? undefined,
+        timestamp: m.timestamp,
+        isStreaming: false,
+      })),
+    );
+  }, []);
+
+  const deleteConversation = useCallback(
+    async (id: string) => {
+      await fetch(`${API_BASE}/v1/conversations/${id}`, { method: 'DELETE' });
+      // If we deleted the active conversation, reset
+      if (id === conversationId) {
+        setConversationId(null);
+        setMessages([]);
+      }
+      void mutateConversations();
+    },
+    [conversationId, mutateConversations],
+  );
+
   const disconnectWebSocket = useCallback(() => {
     if (wsConnection) {
       wsConnection.close();
@@ -213,9 +296,14 @@ export function useChat() {
   return {
     messages,
     isStreaming,
+    conversationId,
+    conversations: conversations ?? [],
     sendMessage,
     stopStreaming,
     clearChat,
+    newConversation,
+    loadConversation,
+    deleteConversation,
     connectWebSocket,
     disconnectWebSocket,
     wsConnection,

@@ -268,7 +268,7 @@ export const VIZZOR_TOOLS: AITool[] = [
   {
     name: 'get_prediction',
     description:
-      'Generate a multi-signal composite prediction combining technical analysis (40%), sentiment (20%), derivatives (20%), trend (15%), and macro (5%). Returns direction, confidence, composite score, and reasoning.',
+      'Generate a multi-signal composite prediction combining technical analysis (32%), blockchain fundamentals (23%), sentiment (15%), derivatives (15%), trend (10%), and macro (5%). Blockchain fundamentals act as contrapeso to reflexive price signals. Returns direction, confidence, composite score, and reasoning.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -722,6 +722,148 @@ export const VIZZOR_TOOLS: AITool[] = [
         symbol: { type: 'string', description: 'Token symbol.' },
       },
       required: ['symbol'],
+    },
+  },
+
+  // -------------------------------------------------------------------------
+  // Blockchain Fundamentals tools — v0.12.5
+  // -------------------------------------------------------------------------
+  {
+    name: 'get_blockchain_fundamentals',
+    description:
+      'Analyze blockchain fundamentals as a CONTRAPESO to reflexive price-based signals. Returns MVRV Z-Score (valuation vs realized price), NVT ratio (network value vs transaction volume), halving cycle phase, hashrate health, and supply dynamics. Use this to check if a rally has fundamental support or if a dip is fundamentally justified. BTC has full coverage; other chains have basic metrics.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        symbol: {
+          type: 'string',
+          description: 'Token symbol (e.g. "BTC", "ETH"). BTC has the most comprehensive data.',
+        },
+      },
+      required: ['symbol'],
+    },
+  },
+  {
+    name: 'get_halving_cycle',
+    description:
+      'Get Bitcoin halving cycle analysis: current asymmetric phase (accumulation/early_markup/late_markup/distribution/markdown), cycle progress percentage, days to next halving, block reward, and cycle dampening factor. The dampening reflects that ETF flows now dominate over mining supply impact.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: 'get_network_health',
+    description:
+      'Get Bitcoin network health metrics: hashrate, Hash Ribbon signal (miner capitulation vs golden cross), difficulty adjustment, mempool congestion, NVT ratio, and MVRV Z-Score. Hash Ribbon golden cross in accumulation phase is historically the strongest BTC buy signal.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {},
+      required: [],
+    },
+  },
+
+  // -------------------------------------------------------------------------
+  // Prediction feedback loop tools — v0.12.5
+  // -------------------------------------------------------------------------
+  {
+    name: 'resolve_predictions',
+    description:
+      'Resolve expired ChronoVisor predictions by comparing initial price vs current price. This is the FEEDBACK LOOP that makes predictions improve over time. Returns how many predictions were resolved, their accuracy, and triggers Bayesian weight adaptation. Call this periodically or after making predictions to close the learning loop.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: 'get_prediction_accuracy',
+    description:
+      'Get historical prediction accuracy metrics for ChronoVisor. Shows overall accuracy, per-horizon breakdown (1h/4h/1d/7d), total predictions resolved, and current learned weights. Use this to evaluate how well predictions are performing and which signal categories are most accurate.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        symbol: {
+          type: 'string',
+          description: 'Token symbol to filter accuracy (e.g. "BTC"). Omit for global accuracy.',
+        },
+        days: {
+          type: 'number',
+          description: 'Lookback window in days. Defaults to 30.',
+        },
+      },
+      required: [],
+    },
+  },
+
+  // -------------------------------------------------------------------------
+  // Notification & Alert tools
+  // -------------------------------------------------------------------------
+  {
+    name: 'set_price_alert',
+    description:
+      'Create a price alert that will notify the user when a token price crosses above or below a threshold. The alert persists until deleted.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        symbol: {
+          type: 'string',
+          description: 'Token symbol (e.g. "BTC", "ETH", "SOL").',
+        },
+        above: {
+          type: 'number',
+          description: 'Alert when price goes above this value.',
+        },
+        below: {
+          type: 'number',
+          description: 'Alert when price drops below this value.',
+        },
+      },
+      required: ['symbol'],
+    },
+  },
+  {
+    name: 'get_alerts',
+    description:
+      'Get all configured alert rules AND recent notifications. Returns alert_rules (price thresholds, pump detection, etc. — auto-created when predictions run) and recent_notifications (triggered events). Use this when the user asks about their alerts, notifications, or monitoring rules.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        limit: {
+          type: 'number',
+          description: 'Maximum number of notifications to return. Defaults to 20.',
+        },
+        unreadOnly: {
+          type: 'boolean',
+          description: 'If true, only return unread notifications.',
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'configure_alerts',
+    description:
+      'Manage alert rules — list, enable, disable, or delete alert configurations. Use action "list" to see all rules, "enable"/"disable" to toggle, or "delete" to remove a rule.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        action: {
+          type: 'string',
+          description: 'Action to perform: "list", "enable", "disable", or "delete".',
+        },
+        ruleId: {
+          type: 'string',
+          description: 'The alert rule ID to act on (required for enable/disable/delete).',
+        },
+        type: {
+          type: 'string',
+          description:
+            'Filter rules by type when listing (e.g. "price_threshold", "pump_detected").',
+        },
+      },
+      required: ['action'],
     },
   },
 ];

@@ -34,23 +34,35 @@ import type {
   PumpDetectionMLResult,
   NarrativeMLResult,
   DivergenceMLResult,
+  BlockchainCycleMLFeatures,
+  BlockchainCycleMLResult,
 } from './types.js';
 
 const log = createLogger('ml-client');
 
 export class MLClient {
   private baseUrl: string;
+  private apiSecret: string;
   private healthy = false;
 
-  constructor(baseUrl: string) {
+  constructor(baseUrl: string, apiSecret?: string) {
     this.baseUrl = baseUrl.replace(/\/$/, '');
+    this.apiSecret = apiSecret ?? process.env['ML_API_SECRET'] ?? '';
+  }
+
+  private get authHeaders(): Record<string, string> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (this.apiSecret) {
+      headers['x-api-secret'] = this.apiSecret;
+    }
+    return headers;
   }
 
   async predict(features: FeatureVector): Promise<MLPredictionResult | null> {
     try {
       const res = await fetch(`${this.baseUrl}/predict`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.authHeaders,
         body: JSON.stringify(features),
         signal: AbortSignal.timeout(5000),
       });
@@ -66,7 +78,7 @@ export class MLClient {
     try {
       const res = await fetch(`${this.baseUrl}/predict/batch`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.authHeaders,
         body: JSON.stringify({ features }),
         signal: AbortSignal.timeout(15000),
       });
@@ -83,7 +95,7 @@ export class MLClient {
     try {
       const res = await fetch(`${this.baseUrl}/anomalies`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.authHeaders,
         body: JSON.stringify({ flows }),
         signal: AbortSignal.timeout(10000),
       });
@@ -113,7 +125,7 @@ export class MLClient {
     try {
       const res = await fetch(`${this.baseUrl}/predict/rug`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.authHeaders,
         body: JSON.stringify(features),
         signal: AbortSignal.timeout(5000),
       });
@@ -129,7 +141,7 @@ export class MLClient {
     try {
       const res = await fetch(`${this.baseUrl}/predict/wallet`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.authHeaders,
         body: JSON.stringify(features),
         signal: AbortSignal.timeout(5000),
       });
@@ -145,7 +157,7 @@ export class MLClient {
     try {
       const res = await fetch(`${this.baseUrl}/predict/sentiment`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.authHeaders,
         body: JSON.stringify({ text }),
         signal: AbortSignal.timeout(5000),
       });
@@ -161,7 +173,7 @@ export class MLClient {
     try {
       const res = await fetch(`${this.baseUrl}/predict/sentiment/batch`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.authHeaders,
         body: JSON.stringify({ texts }),
         signal: AbortSignal.timeout(15000),
       });
@@ -182,7 +194,7 @@ export class MLClient {
     try {
       const res = await fetch(`${this.baseUrl}/predict/trend`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.authHeaders,
         body: JSON.stringify(features),
         signal: AbortSignal.timeout(5000),
       });
@@ -198,7 +210,7 @@ export class MLClient {
     try {
       const res = await fetch(`${this.baseUrl}/predict/ta`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.authHeaders,
         body: JSON.stringify(features),
         signal: AbortSignal.timeout(5000),
       });
@@ -214,7 +226,7 @@ export class MLClient {
     try {
       const res = await fetch(`${this.baseUrl}/predict/strategy`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.authHeaders,
         body: JSON.stringify(features),
         signal: AbortSignal.timeout(5000),
       });
@@ -230,7 +242,7 @@ export class MLClient {
     try {
       const res = await fetch(`${this.baseUrl}/predict/regime`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.authHeaders,
         body: JSON.stringify(features),
         signal: AbortSignal.timeout(5000),
       });
@@ -246,7 +258,7 @@ export class MLClient {
     try {
       const res = await fetch(`${this.baseUrl}/predict/project-risk`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.authHeaders,
         body: JSON.stringify(features),
         signal: AbortSignal.timeout(5000),
       });
@@ -262,7 +274,7 @@ export class MLClient {
     try {
       const res = await fetch(`${this.baseUrl}/predict/portfolio-opt`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.authHeaders,
         body: JSON.stringify(features),
         signal: AbortSignal.timeout(5000),
       });
@@ -278,7 +290,7 @@ export class MLClient {
     try {
       const res = await fetch(`${this.baseUrl}/predict/intent`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.authHeaders,
         body: JSON.stringify({ text }),
         signal: AbortSignal.timeout(5000),
       });
@@ -294,7 +306,7 @@ export class MLClient {
     try {
       const res = await fetch(`${this.baseUrl}/predict/bytecode-risk`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.authHeaders,
         body: JSON.stringify(features),
         signal: AbortSignal.timeout(5000),
       });
@@ -312,7 +324,7 @@ export class MLClient {
     try {
       const res = await fetch(`${this.baseUrl}/predict/portfolio-forward`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.authHeaders,
         body: JSON.stringify(features),
         signal: AbortSignal.timeout(5000),
       });
@@ -336,7 +348,7 @@ export class MLClient {
     try {
       const res = await fetch(`${this.baseUrl}/detect-pump`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.authHeaders,
         body: JSON.stringify({ token, prices, volumes }),
         signal: AbortSignal.timeout(5000),
       });
@@ -352,7 +364,7 @@ export class MLClient {
     try {
       const res = await fetch(`${this.baseUrl}/detect-narrative`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.authHeaders,
         body: JSON.stringify({ texts }),
         signal: AbortSignal.timeout(10000),
       });
@@ -372,7 +384,7 @@ export class MLClient {
     try {
       const res = await fetch(`${this.baseUrl}/detect-divergence`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.authHeaders,
         body: JSON.stringify({ market_odds: marketOdds, prices }),
         signal: AbortSignal.timeout(5000),
       });
@@ -384,11 +396,29 @@ export class MLClient {
     }
   }
 
+  async analyzeBlockchainCycle(
+    features: BlockchainCycleMLFeatures,
+  ): Promise<BlockchainCycleMLResult | null> {
+    try {
+      const res = await fetch(`${this.baseUrl}/predict/blockchain-cycle`, {
+        method: 'POST',
+        headers: this.authHeaders,
+        body: JSON.stringify(features),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!res.ok) return null;
+      return (await res.json()) as BlockchainCycleMLResult;
+    } catch (err) {
+      log.debug(`ML blockchain cycle failed: ${err instanceof Error ? err.message : String(err)}`);
+      return null;
+    }
+  }
+
   async trainModel(modelName: string, params?: Record<string, unknown>): Promise<unknown> {
     try {
       const res = await fetch(`${this.baseUrl}/train`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.authHeaders,
         body: JSON.stringify({ model: modelName, ...params }),
         signal: AbortSignal.timeout(300000), // 5 min for training
       });
@@ -404,7 +434,7 @@ export class MLClient {
     try {
       const res = await fetch(`${this.baseUrl}/evaluate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.authHeaders,
         body: JSON.stringify({ model: modelName }),
         signal: AbortSignal.timeout(60000),
       });

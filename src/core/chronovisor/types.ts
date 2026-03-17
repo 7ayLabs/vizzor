@@ -57,6 +57,7 @@ export interface PredictionRecord {
   predictedDirection: 'up' | 'down' | 'sideways';
   probability: number;
   compositeScore: number;
+  initialPrice: number;
   createdAt: number;
   resolvedAt: number | null;
   actualDirection: 'up' | 'down' | 'sideways' | null;

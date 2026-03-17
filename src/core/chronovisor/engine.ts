@@ -13,6 +13,7 @@ import type {
 import { WeightLearner } from './weight-learner.js';
 import { AccuracyTracker } from './accuracy-tracker.js';
 import { PatternLibrary } from './pattern-library.js';
+import { PredictionResolver } from './prediction-resolver.js';
 import { fetchAllPredictionMarketSignals } from '../../data/sources/prediction-markets/index.js';
 import { getMLClient } from '../../ml/client.js';
 import { createLogger } from '../../utils/logger.js';
@@ -28,6 +29,8 @@ const lazyBinance = () =>
   }));
 const lazyFeatureEngineer = () =>
   import('../../ml/feature-engineer.js').then((m) => m.buildFeatureVector);
+const lazyBinancePrice = () =>
+  import('../../data/sources/binance.js').then((m) => m.fetchTickerPrice);
 
 const log = createLogger('chronovisor');
 
@@ -49,12 +52,15 @@ export class ChronoVisorEngine {
   private readonly weightLearner: WeightLearner;
   private readonly accuracyTracker: AccuracyTracker;
   private readonly patternLibrary: PatternLibrary;
+  private readonly predictionResolver: PredictionResolver;
 
   constructor() {
     this.weightLearner = new WeightLearner();
     this.accuracyTracker = new AccuracyTracker();
     this.patternLibrary = new PatternLibrary();
-    log.info('ChronoVisor engine initialized');
+    this.predictionResolver = new PredictionResolver(this.accuracyTracker, this.weightLearner);
+    this.predictionResolver.start();
+    log.info('ChronoVisor engine initialized (resolver active)');
   }
 
   // -----------------------------------------------------------------------
@@ -71,6 +77,10 @@ export class ChronoVisorEngine {
 
   getPatternLibrary(): PatternLibrary {
     return this.patternLibrary;
+  }
+
+  getPredictionResolver(): PredictionResolver {
+    return this.predictionResolver;
   }
 
   // -----------------------------------------------------------------------
@@ -125,7 +135,19 @@ export class ChronoVisorEngine {
       this.generateHorizonPrediction(normalizedSymbol, horizon, composite, signals),
     );
 
-    // 5. Log each prediction for accuracy tracking
+    // 5. Fetch current price for accuracy tracking (initial_price)
+    let initialPrice = 0;
+    try {
+      const fetchPrice = await lazyBinancePrice();
+      const ticker = await fetchPrice(normalizedSymbol);
+      initialPrice = ticker.price;
+    } catch {
+      log.debug(
+        `Could not fetch initial price for ${normalizedSymbol} — accuracy tracking degraded`,
+      );
+    }
+
+    // 6. Log each prediction for accuracy tracking
     const now = Math.floor(Date.now() / 1000);
     for (const pred of predictions) {
       const id = `${normalizedSymbol}_${pred.horizon}_${now}`;
@@ -136,11 +158,12 @@ export class ChronoVisorEngine {
         predictedDirection: pred.direction,
         probability: pred.probability,
         compositeScore: composite.score,
+        initialPrice,
         createdAt: now,
       });
     }
 
-    // 6. Fetch historical accuracy (may be null if no resolved predictions yet)
+    // 7. Fetch historical accuracy (may be null if no resolved predictions yet)
     const rawAccuracy = this.accuracyTracker.getAccuracy(normalizedSymbol);
     const accuracy =
       rawAccuracy.total > 0

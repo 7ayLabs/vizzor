@@ -5,6 +5,7 @@
 
 import { createLogger } from '../../utils/logger.js';
 import { getDb } from '../../data/cache.js';
+import { emitNotification } from '../../notifications/event-bus.js';
 
 const log = createLogger('smart-money');
 
@@ -259,6 +260,22 @@ export class SmartMoneyTracker {
             timestamp: now,
           });
         }
+      }
+      // Emit notification for each signal
+      for (const sig of signals) {
+        emitNotification({
+          type: 'smart_money_signal',
+          title: `Smart Money: ${sig.type.replace(/_/g, ' ')}`,
+          message: `${sig.type.replace(/_/g, ' ')} detected for ${token} — wallet ${sig.wallet.slice(0, 8)}... (confidence: ${(sig.confidence * 100).toFixed(0)}%)`,
+          severity: sig.confidence >= 0.7 ? 'warning' : 'info',
+          symbol: token,
+          metadata: {
+            signalType: sig.type,
+            wallet: sig.wallet,
+            amount: sig.amount,
+            confidence: sig.confidence,
+          },
+        });
       }
     } catch (err) {
       log.error(

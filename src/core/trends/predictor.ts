@@ -1,5 +1,6 @@
 // ---------------------------------------------------------------------------
-// Multi-signal prediction engine
+// Multi-signal prediction engine — v0.12.5
+// Adds blockchain fundamentals signal (23%) as contrapeso to reflexive signals
 // ---------------------------------------------------------------------------
 
 import { analyzeTechnicals } from '../technical-analysis/index.js';
@@ -27,6 +28,7 @@ export interface Prediction {
     derivatives: number;
     trend: number;
     macro: number;
+    blockchain: number;
   };
   composite: number; // -100 to +100
   disclaimer: string;
@@ -34,23 +36,26 @@ export interface Prediction {
 
 // Signal weights (must sum to 100)
 const WEIGHTS = {
-  technical: 40,
-  sentiment: 20,
-  derivatives: 20,
-  trend: 15,
+  technical: 32,
+  sentiment: 15,
+  derivatives: 15,
+  trend: 10,
   macro: 5,
+  blockchain: 23,
 };
+
+const TOTAL_SIGNALS = 6;
 
 /**
  * Generate a multi-signal composite prediction for a symbol.
- * Gathers: technical analysis + sentiment + derivatives + Fear & Greed + price trend.
+ * Gathers: technical + sentiment + derivatives + trend + macro + blockchain fundamentals.
  */
 export async function generatePrediction(symbol: string): Promise<Prediction> {
   const reasoning: string[] = [];
-  const signals = { technical: 0, sentiment: 0, derivatives: 0, trend: 0, macro: 0 };
+  const signals = { technical: 0, sentiment: 0, derivatives: 0, trend: 0, macro: 0, blockchain: 0 };
   let completeness = 0;
 
-  // 1. Technical Analysis (weight: 40%)
+  // 1. Technical Analysis (weight: 32%)
   try {
     const ta = await analyzeTechnicals(symbol, '4h');
     signals.technical = ta.composite.score;
@@ -65,7 +70,7 @@ export async function generatePrediction(symbol: string): Promise<Prediction> {
     reasoning.push('Technical: unavailable');
   }
 
-  // 2. Sentiment (weight: 20%)
+  // 2. Sentiment (weight: 15%)
   try {
     const sentiment = await analyzeSentiment(symbol);
     // Normalize -1 to +1 → -100 to +100
@@ -76,7 +81,7 @@ export async function generatePrediction(symbol: string): Promise<Prediction> {
     reasoning.push('Sentiment: unavailable');
   }
 
-  // 3. Derivatives (weight: 20%)
+  // 3. Derivatives (weight: 15%)
   try {
     const [fundingResult, oiResult] = await Promise.allSettled([
       fetchFundingRate(symbol),
@@ -122,7 +127,7 @@ export async function generatePrediction(symbol: string): Promise<Prediction> {
     reasoning.push('Derivatives: unavailable');
   }
 
-  // 4. Price trend (weight: 15%)
+  // 4. Price trend (weight: 10%)
   try {
     const price = await fetchTickerPrice(symbol);
     if (price.change24h > 5) {
@@ -169,13 +174,30 @@ export async function generatePrediction(symbol: string): Promise<Prediction> {
     reasoning.push('Macro: unavailable');
   }
 
+  // 6. Blockchain Fundamentals (weight: 23%)
+  try {
+    const { analyzeBlockchainFundamentals } = await import('../fundamentals/index.js');
+    const fundamentals = await analyzeBlockchainFundamentals(symbol);
+    signals.blockchain = fundamentals.composite.score;
+    completeness++;
+    reasoning.push(
+      `Blockchain: ${fundamentals.composite.direction} (score ${fundamentals.composite.score})`,
+    );
+    if (fundamentals.overrideApplied) {
+      reasoning.push(`  Override: ${fundamentals.overrideApplied}`);
+    }
+  } catch {
+    reasoning.push('Blockchain: unavailable');
+  }
+
   // Composite weighted score
   const composite =
     (signals.technical * WEIGHTS.technical +
       signals.sentiment * WEIGHTS.sentiment +
       signals.derivatives * WEIGHTS.derivatives +
       signals.trend * WEIGHTS.trend +
-      signals.macro * WEIGHTS.macro) /
+      signals.macro * WEIGHTS.macro +
+      signals.blockchain * WEIGHTS.blockchain) /
     100;
 
   // Direction
@@ -189,12 +211,13 @@ export async function generatePrediction(symbol: string): Promise<Prediction> {
     signals.derivatives,
     signals.trend,
     signals.macro,
+    signals.blockchain,
   ];
   const positiveCount = signalValues.filter((v) => v > 0).length;
   const negativeCount = signalValues.filter((v) => v < 0).length;
   const agreement =
     Math.max(positiveCount, negativeCount) / Math.max(1, positiveCount + negativeCount);
-  const confidence = Math.round(Math.min(95, (completeness / 5) * agreement * 100));
+  const confidence = Math.round(Math.min(95, (completeness / TOTAL_SIGNALS) * agreement * 100));
 
   const rulePrediction: Prediction = {
     symbol: symbol.toUpperCase(),

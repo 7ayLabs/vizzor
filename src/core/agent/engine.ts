@@ -16,6 +16,7 @@ import { getStrategy } from './manager.js';
 import { logDecision } from './manager.js';
 import { PaperTradingEngine } from './paper-trading.js';
 import { createLogger } from '../../utils/logger.js';
+import { emitNotification } from '../../notifications/event-bus.js';
 
 const logger = createLogger('agent-engine');
 
@@ -115,6 +116,22 @@ export class AgentEngine {
           logger.info(
             `Agent ${this.state.config.name} → ${decision.action.toUpperCase()} ${symbol} (confidence: ${decision.confidence}%)`,
           );
+
+          emitNotification({
+            type: 'agent_decision',
+            title: `Agent ${decision.action.toUpperCase()}: ${symbol}`,
+            message: `${this.state.config.name} decided to ${decision.action} ${symbol} with ${decision.confidence}% confidence — ${decision.reasoning}`,
+            severity: decision.confidence >= 80 ? 'info' : 'warning',
+            symbol,
+            metadata: {
+              agentId: this.state.config.id,
+              agentName: this.state.config.name,
+              action: decision.action,
+              confidence: decision.confidence,
+              reasoning: decision.reasoning,
+              price: signals.price,
+            },
+          });
 
           // Execute trade based on mode
           if (this.paperEngine && this.state.config.mode === 'paper') {

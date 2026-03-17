@@ -16,6 +16,8 @@ import type { Message } from './components/message-list.js';
 import { useAIStream } from './hooks/use-ai-stream.js';
 import { useCommand } from './hooks/use-command.js';
 import { usePriceTicker } from './hooks/use-price-ticker.js';
+import { useNotifications } from './hooks/use-notifications.js';
+import { NotificationBanner } from './components/notification-banner.js';
 import { isSlashCommand, parseCommand } from './commands.js';
 import { loadConfig } from '../config/loader.js';
 import { DEFAULT_CHAIN, CHAIN_REGISTRY, KNOWN_SYMBOLS } from '../config/constants.js';
@@ -43,6 +45,7 @@ function App(): React.JSX.Element {
     useAIStream();
   const { isExecuting, executeSlashCommand } = useCommand();
   const ticker = usePriceTicker();
+  const { toast, unreadCount, dismissToast } = useNotifications();
 
   // -----------------------------------------------------------------------
   // Ticker keyboard navigation (Tab to focus, arrows to navigate, Enter to analyze)
@@ -306,7 +309,7 @@ function App(): React.JSX.Element {
   return (
     <Box flexDirection="column" paddingX={1}>
       {/* Status bar */}
-      <StatusBar provider={providerName} chain={chainName} connected />
+      <StatusBar provider={providerName} chain={chainName} connected unreadCount={unreadCount} />
 
       {/* Live price ticker — Tab to focus, arrows to navigate, Enter to analyze */}
       <PriceTicker ticker={ticker} focused={tickerFocused} onAddPress={undefined} />
@@ -343,6 +346,9 @@ function App(): React.JSX.Element {
 
       {/* Command hints when typing / */}
       {currentInput.startsWith('/') && <CommandHints filter={currentInput} />}
+
+      {/* Notification toast */}
+      <NotificationBanner notification={toast} onDismiss={dismissToast} />
 
       {/* Input bar */}
       <Box marginTop={1}>

@@ -216,6 +216,49 @@ export interface MLHealth {
   predictionsServed: number;
 }
 
+// GET /v1/chronovisor/:symbol/accuracy
+export interface PredictionAccuracy {
+  symbol: string;
+  period_days: number;
+  accuracy: {
+    overall: string;
+    total_resolved: number;
+    correct: number;
+    by_horizon: Record<string, string>;
+  };
+  pending_predictions: number;
+  learned_weights: Record<string, string>;
+  resolver_active: boolean;
+  feedback_loop: string;
+}
+
+// GET /v1/notifications
+export interface NotificationItem {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  severity: 'info' | 'warning' | 'critical';
+  symbol?: string;
+  metadata: Record<string, unknown>;
+  read: boolean;
+  createdAt: number;
+}
+
+// GET /v1/alerts
+export interface AlertRuleItem {
+  id: string;
+  type: string;
+  enabled: boolean;
+  symbols?: string[];
+  priceAbove?: number;
+  priceBelow?: number;
+  pumpSeverity?: string[];
+  agentActions?: string[];
+  accuracyMilestone?: number;
+  createdAt: number;
+}
+
 // POST /v1/market/ml/regime
 export interface RegimeResult {
   regime: 'trending_bull' | 'trending_bear' | 'ranging' | 'volatile' | 'capitulation';

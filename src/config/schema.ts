@@ -67,6 +67,39 @@ export const vizzorConfigSchema = z.object({
       enableAuth: true,
       corsOrigin: 'http://localhost:3000',
     })),
+  notifications: z
+    .object({
+      desktop: z.boolean().default(true),
+      websocket: z.boolean().default(true),
+      n8n: z.boolean().default(false),
+      toastDismissMs: z.number().default(5000),
+      pollIntervalMs: z.number().default(30000),
+      cooldownMs: z.number().default(300000),
+      maxToastStack: z.number().default(3),
+      alerts: z
+        .array(
+          z.object({
+            type: z.string(),
+            enabled: z.boolean().default(true),
+            symbols: z.array(z.string()).optional(),
+            priceAbove: z.number().optional(),
+            priceBelow: z.number().optional(),
+            pumpSeverity: z.array(z.enum(['low', 'medium', 'high', 'critical'])).optional(),
+            agentActions: z.array(z.enum(['buy', 'sell'])).optional(),
+            accuracyMilestone: z.number().optional(),
+          }),
+        )
+        .optional(),
+    })
+    .default(() => ({
+      desktop: true,
+      websocket: true,
+      n8n: false,
+      toastDismissMs: 5000,
+      pollIntervalMs: 30000,
+      cooldownMs: 300000,
+      maxToastStack: 3,
+    })),
   n8n: z
     .object({
       enabled: z.boolean().default(false),
