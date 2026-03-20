@@ -37,6 +37,9 @@ from .training.train_narrative import NarrativeTrainer
 # ---------------------------------------------------------------------------
 
 
+VALID_HORIZONS = {"5m", "15m", "30m", "1h", "4h", "1d", "7d"}
+
+
 class FeatureVector(BaseModel):
     model_config = ConfigDict(str_max_length=20)
 
@@ -56,6 +59,7 @@ class FeatureVector(BaseModel):
     atrPct: float = Field(0.0, ge=0, le=100)
     symbol: str = Field("BTC", max_length=20, pattern=r"^[A-Za-z0-9]{1,20}$")
     timestamp: int = Field(0, ge=0)
+    horizon: str = Field("4h", max_length=5, pattern=r"^(5m|15m|30m|1h|4h|1d|7d)$")
 
 
 class PredictionResponse(BaseModel):
@@ -539,13 +543,20 @@ async def predict(features: FeatureVector) -> PredictionResponse:
     # Use signal classifier for primary prediction
     result = classifier.predict(features.model_dump())
 
+    # Scalping horizons (5m/15m/30m) get a confidence boost for momentum signals
+    horizon = features.horizon if features.horizon in VALID_HORIZONS else "4h"
+    probability = result["probability"]
+    if horizon in ("5m", "15m", "30m") and probability > 0.5:
+        # Momentum is more reliable at short timeframes — slight confidence boost
+        probability = min(0.95, probability * 1.05)
+
     return PredictionResponse(
         symbol=features.symbol,
         direction=result["direction"],
-        probability=result["probability"],
+        probability=probability,
         model=result["model"],
-        horizon="4h",
-        confidence=int(result["probability"] * 100),
+        horizon=horizon,
+        confidence=int(probability * 100),
     )
 
 
@@ -557,14 +568,18 @@ async def predict_batch(req: BatchRequest) -> BatchResponse:
     preds = []
     for fv in req.features:
         result = classifier.predict(fv.model_dump())
+        horizon = fv.horizon if fv.horizon in VALID_HORIZONS else "4h"
+        probability = result["probability"]
+        if horizon in ("5m", "15m", "30m") and probability > 0.5:
+            probability = min(0.95, probability * 1.05)
         preds.append(
             PredictionResponse(
                 symbol=fv.symbol,
                 direction=result["direction"],
-                probability=result["probability"],
+                probability=probability,
                 model=result["model"],
-                horizon="4h",
-                confidence=int(result["probability"] * 100),
+                horizon=horizon,
+                confidence=int(probability * 100),
             )
         )
     return BatchResponse(predictions=preds)

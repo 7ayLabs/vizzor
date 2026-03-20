@@ -74,7 +74,11 @@ export async function registerChronoVisorRoutes(server: FastifyInstance): Promis
           symbol: r.symbol,
           direction: r.predicted_direction,
           confidence: r.probability * 100,
+          compositeScore: r.composite_score,
+          initialPrice: r.initial_price,
           createdAt: new Date(r.created_at * 1000).toISOString(),
+          resolvedAt: r.resolved_at ? new Date(r.resolved_at * 1000).toISOString() : null,
+          actualDirection: r.actual_direction,
           status,
           horizon: r.horizon,
         };
@@ -97,7 +101,10 @@ export async function registerChronoVisorRoutes(server: FastifyInstance): Promis
       querystring: {
         type: 'object',
         properties: {
-          horizons: { type: 'string', description: 'Comma-separated horizons (1h,4h,1d,7d)' },
+          horizons: {
+            type: 'string',
+            description: 'Comma-separated horizons (5m,15m,30m,1h,4h,1d,7d)',
+          },
         },
       },
     },

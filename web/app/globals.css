@@ -117,6 +117,14 @@ body {
   animation: slide-in 0.2s ease-out;
 }
 
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.animate-slide-in-right {
+  animation: slide-in-right 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+
 /* ═══ Chat markdown styles ═══ */
 
 .chat-content p {
@@ -462,11 +470,52 @@ body {
 /* Dashboard card hover accent — white glow */
 .dash-card {
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  padding: 1rem 1.25rem;
+}
+
+@media (min-width: 640px) {
+  .dash-card {
+    padding: 1.25rem 1.5rem;
+  }
 }
 
 .dash-card:hover {
   border-color: rgba(255, 255, 255, 0.15);
   box-shadow: 0 0 20px rgba(255, 255, 255, 0.03);
+}
+
+/* Dashboard widget title — unified */
+.dash-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.45);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Dashboard big stat value */
+.dash-stat {
+  font-size: 1rem;
+  font-family: var(--font-inter), ui-monospace, monospace;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+@media (min-width: 640px) {
+  .dash-stat {
+    font-size: 1.125rem;
+  }
+}
+
+/* Dashboard hero card — larger treatment */
+.dash-hero {
+  padding: 1.25rem 1.5rem;
+}
+
+@media (min-width: 640px) {
+  .dash-hero {
+    padding: 1.5rem 2rem;
+  }
 }
 
 /* Extended stagger delays for dashboard grids */

@@ -9,11 +9,12 @@ import { createLogger } from '../../utils/logger.js';
 const log = createLogger('chronovisor:weight-learner');
 
 const DEFAULT_WEIGHTS: WeightConfig = {
-  onChain: 0.3,
-  mlEnsemble: 0.25,
-  predictionMarkets: 0.2,
-  socialNarrative: 0.15,
-  patternMatch: 0.1,
+  onChain: 0.25,
+  mlEnsemble: 0.2,
+  predictionMarkets: 0.15,
+  socialNarrative: 0.1,
+  patternMatch: 0.05,
+  logicRules: 0.15,
 };
 
 /** Keys of WeightConfig in a fixed order for consistency. */
@@ -23,6 +24,7 @@ const WEIGHT_KEYS: (keyof WeightConfig)[] = [
   'predictionMarkets',
   'socialNarrative',
   'patternMatch',
+  'logicRules',
 ];
 
 interface WeightRow {

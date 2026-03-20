@@ -238,15 +238,41 @@ async function handleToolUnsafe(name: string, input: unknown): Promise<unknown> 
 
     case 'get_crypto_news': {
       const symbol = params['symbol'] ? String(params['symbol']) : undefined;
+      const limit = params['limit'] ? Number(params['limit']) : 20;
       const news = await fetchCryptoNews(symbol, getConfig().cryptopanicApiKey);
+
+      if (news.length === 0) {
+        return {
+          news: [],
+          dataAvailability: 'no_data',
+          message:
+            'No news data available. Sentiment cannot be inferred — treat as unknown, not neutral.',
+        };
+      }
+
+      // Compute aggregate sentiment from available news
+      const sentimentCounts = { positive: 0, negative: 0, neutral: 0 };
+      for (const n of news) {
+        sentimentCounts[n.sentiment]++;
+      }
+      const dominantSentiment =
+        sentimentCounts.positive > sentimentCounts.negative
+          ? 'positive'
+          : sentimentCounts.negative > sentimentCounts.positive
+            ? 'negative'
+            : 'neutral';
+
       return {
-        news: news.slice(0, 10).map((n) => ({
+        news: news.slice(0, limit).map((n) => ({
           title: n.title,
           sentiment: n.sentiment,
           source: n.source.title,
           publishedAt: n.publishedAt,
           url: n.url,
         })),
+        dataAvailability: 'available',
+        aggregateSentiment: dominantSentiment,
+        sentimentBreakdown: sentimentCounts,
       };
     }
 
@@ -368,65 +394,14 @@ async function handleToolUnsafe(name: string, input: unknown): Promise<unknown> 
 
     case 'get_prediction': {
       const symbol = String(params['symbol'] ?? 'BTC');
-      const prediction = await generatePrediction(symbol);
-
-      // Auto-create alert rules based on prediction context
-      try {
-        const { randomUUID } = await import('node:crypto');
-        const { insertAlertRule, getAlertRules } = await import('../notifications/store.js');
-        const ticker = await fetchTickerPrice(symbol);
-        const price = ticker.price;
-        const sym = prediction.symbol.toUpperCase();
-        const existing = getAlertRules().filter((r) => r.symbols?.includes(sym));
-
-        // Support / resistance thresholds (5% band from current price)
-        const hasAbove = existing.some((r) => r.type === 'price_threshold' && r.priceAbove != null);
-        const hasBelow = existing.some((r) => r.type === 'price_threshold' && r.priceBelow != null);
-
-        if (!hasAbove) {
-          const resistancePrice = Math.round(price * 1.05 * 100) / 100;
-          insertAlertRule({
-            id: randomUUID(),
-            type: 'price_threshold',
-            enabled: true,
-            symbols: [sym],
-            priceAbove: resistancePrice,
-            createdAt: Date.now(),
-          });
-        }
-        if (!hasBelow) {
-          const supportPrice = Math.round(price * 0.95 * 100) / 100;
-          insertAlertRule({
-            id: randomUUID(),
-            type: 'price_threshold',
-            enabled: true,
-            symbols: [sym],
-            priceBelow: supportPrice,
-            createdAt: Date.now(),
-          });
-        }
-
-        // Pump/dump detection for this symbol
-        const hasPump = existing.some((r) => r.type === 'pump_detected');
-        if (!hasPump) {
-          insertAlertRule({
-            id: randomUUID(),
-            type: 'pump_detected',
-            enabled: true,
-            symbols: [sym],
-            pumpSeverity: ['medium', 'high', 'critical'],
-            createdAt: Date.now(),
-          });
-        }
-      } catch {
-        // Non-critical — alerts are best-effort
-      }
-
+      const horizon = String(params['horizon'] ?? '4h');
+      const prediction = await generatePrediction(symbol, horizon);
       return {
         symbol: prediction.symbol,
         direction: prediction.direction,
         confidence: prediction.confidence,
         composite: prediction.composite,
+        horizon,
         timeframe: prediction.timeframe,
         signals: prediction.signals,
         reasoning: prediction.reasoning,
@@ -952,12 +927,29 @@ async function handleToolUnsafe(name: string, input: unknown): Promise<unknown> 
       // Dynamic import to avoid circular deps
       const { getChronoVisor } = await import('../core/chronovisor/engine.js');
       const engine = getChronoVisor();
-      const horizons = params['horizons']
-        ? (String(params['horizons'])
+      const validHorizons = new Set(['5m', '15m', '30m', '1h', '4h', '1d', '7d']);
+      const requestedRaw = params['horizons']
+        ? String(params['horizons'])
             .split(',')
-            .map((h) => h.trim()) as ('1h' | '4h' | '1d' | '7d')[])
-        : (['1h', '4h', '1d'] as const);
+            .map((h) => h.trim())
+        : ['4h'];
+      const validFiltered = requestedRaw.filter(
+        (h): h is '5m' | '15m' | '30m' | '1h' | '4h' | '1d' | '7d' => validHorizons.has(h),
+      );
+      const invalidHorizons = requestedRaw.filter((h) => !validHorizons.has(h));
+      const horizons = validFiltered.length > 0 ? validFiltered : (['4h'] as const);
       const result = await engine.predict(String(params['symbol']), [...horizons]);
+
+      // Include filter info so the user knows what happened
+      if (invalidHorizons.length > 0) {
+        return {
+          ...result,
+          _filterInfo: {
+            invalidHorizons,
+            message: `Unsupported horizons ignored: ${invalidHorizons.join(', ')}. Valid: 5m, 15m, 30m, 1h, 4h, 1d, 7d`,
+          },
+        };
+      }
       return result;
     }
 
@@ -1307,11 +1299,12 @@ async function handleToolUnsafe(name: string, input: unknown): Promise<unknown> 
           predictionMarkets: `${(weights.predictionMarkets * 100).toFixed(1)}%`,
           socialNarrative: `${(weights.socialNarrative * 100).toFixed(1)}%`,
           patternMatch: `${(weights.patternMatch * 100).toFixed(1)}%`,
+          logicRules: `${(weights.logicRules * 100).toFixed(1)}%`,
         },
         resolver_active: resolverStats.isRunning,
         feedback_loop:
           accuracy.total > 0
-            ? 'ACTIVE — weights adapting from historical accuracy'
+            ? 'ACTIVE — per-signal accuracy tracking + Bayesian weight adaptation'
             : 'WAITING — need resolved predictions to start learning',
       };
     }
@@ -1322,12 +1315,21 @@ async function handleToolUnsafe(name: string, input: unknown): Promise<unknown> 
 
     case 'set_price_alert': {
       const symbol = String(params['symbol'] ?? '').toUpperCase();
-      const above = params['above'] as number | undefined;
-      const below = params['below'] as number | undefined;
+      const aboveRaw = params['above'];
+      const belowRaw = params['below'];
+
+      // Validate numeric inputs
+      const above =
+        typeof aboveRaw === 'number' && isFinite(aboveRaw) && aboveRaw > 0 ? aboveRaw : undefined;
+      const below =
+        typeof belowRaw === 'number' && isFinite(belowRaw) && belowRaw > 0 ? belowRaw : undefined;
 
       if (!symbol) return { error: 'Symbol is required.' };
       if (above === undefined && below === undefined) {
-        return { error: 'At least one of "above" or "below" must be specified.' };
+        return { error: 'At least one of "above" or "below" must be a valid positive number.' };
+      }
+      if (above !== undefined && below !== undefined && above <= below) {
+        return { error: '"above" must be greater than "below".' };
       }
 
       const { randomUUID } = await import('node:crypto');

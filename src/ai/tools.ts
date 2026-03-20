@@ -276,6 +276,11 @@ export const VIZZOR_TOOLS: AITool[] = [
           type: 'string',
           description: 'The token symbol (e.g. "BTC", "ETH", "SOL").',
         },
+        horizon: {
+          type: 'string',
+          description:
+            'Prediction timeframe. Scalping: "5m" (5 min), "15m" (15 min), "30m" (30 min). Standard: "1h" (1 hour), "4h" (4 hours), "1d" (1 day), "7d" (7 days). Match the user\'s requested timeframe exactly. Defaults to "4h".',
+        },
       },
       required: ['symbol'],
     },
@@ -559,7 +564,7 @@ export const VIZZOR_TOOLS: AITool[] = [
         horizons: {
           type: 'string',
           description:
-            'Comma-separated prediction horizons: "1h", "4h", "1d", "7d". Defaults to "1h,4h,1d".',
+            'Comma-separated prediction horizons. Scalping: "5m", "15m", "30m". Standard: "1h", "4h", "1d", "7d". IMPORTANT: Only include the specific horizon the user asked for. If user says "5 minute scalp", use "5m". If "1 hour prediction", use "1h". Do NOT default to multiple horizons unless the user asks for a general prediction. Defaults to "4h".',
         },
       },
       required: ['symbol'],
@@ -780,7 +785,7 @@ export const VIZZOR_TOOLS: AITool[] = [
   {
     name: 'get_prediction_accuracy',
     description:
-      'Get historical prediction accuracy metrics for ChronoVisor. Shows overall accuracy, per-horizon breakdown (1h/4h/1d/7d), total predictions resolved, and current learned weights. Use this to evaluate how well predictions are performing and which signal categories are most accurate.',
+      'Get historical prediction accuracy metrics for ChronoVisor. Shows overall accuracy, per-horizon breakdown (5m/15m/30m/1h/4h/1d/7d), total predictions resolved, and current learned weights. Use this to evaluate how well predictions are performing and which signal categories are most accurate.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -826,7 +831,7 @@ export const VIZZOR_TOOLS: AITool[] = [
   {
     name: 'get_alerts',
     description:
-      'Get all configured alert rules AND recent notifications. Returns alert_rules (price thresholds, pump detection, etc. — auto-created when predictions run) and recent_notifications (triggered events). Use this when the user asks about their alerts, notifications, or monitoring rules.',
+      'Get all configured alert rules AND recent notifications. Returns alert_rules (price thresholds, pump detection, etc.) and recent_notifications (triggered events). Use this when the user asks about their alerts, notifications, or monitoring rules.',
     input_schema: {
       type: 'object' as const,
       properties: {

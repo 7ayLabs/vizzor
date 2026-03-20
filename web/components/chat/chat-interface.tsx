@@ -108,19 +108,16 @@ export function ChatInterface() {
   const replyMessage = replyingTo ? messages.find((m) => m.id === replyingTo) : null;
 
   return (
-    <div className="flex min-h-full">
-      {/* Mobile sidebar overlay */}
+    <div className="relative flex min-h-full">
+      {/* Sidebar overlay */}
       {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-30 bg-black/50 md:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
+        <div className="fixed inset-0 z-30 bg-black/50" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* Conversation sidebar */}
+      {/* Conversation sidebar — always overlay, never inline */}
       <aside
         className={cn(
-          'fixed z-40 top-0 left-0 h-full w-56 bg-white/[0.02] border-r border-white/[0.06] flex flex-col transition-transform duration-200 md:relative md:translate-x-0 md:z-0 shrink-0',
+          'fixed z-40 top-0 left-0 h-full w-64 bg-[var(--bg-primary)] border-r border-white/[0.08] flex flex-col transition-transform duration-200',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
@@ -129,14 +126,23 @@ export function ChatInterface() {
           <span className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">
             History
           </span>
-          <button
-            onClick={handleNewConversation}
-            className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs text-[var(--text-secondary)] hover:text-white hover:bg-white/[0.06] transition-colors"
-            title="New chat"
-          >
-            <i className="fa-solid fa-plus text-[10px]" />
-            <span>New</span>
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handleNewConversation}
+              className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs text-[var(--text-secondary)] hover:text-white hover:bg-white/[0.06] transition-colors"
+              title="New chat"
+            >
+              <i className="fa-solid fa-plus text-[10px]" />
+              <span>New</span>
+            </button>
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="flex items-center justify-center w-7 h-7 rounded-md text-[var(--text-muted)] hover:text-white hover:bg-white/[0.06] transition-colors"
+              title="Close"
+            >
+              <i className="fa-solid fa-xmark text-xs" />
+            </button>
+          </div>
         </div>
 
         {/* Conversation list */}
@@ -186,19 +192,8 @@ export function ChatInterface() {
         </div>
       </aside>
 
-      {/* Main chat area */}
+      {/* Main chat area — takes full width always */}
       <div className="flex flex-col min-h-full flex-1 min-w-0">
-        {/* Mobile toggle button */}
-        <div className="md:hidden flex items-center px-3 py-2 border-b border-white/[0.06]">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="flex items-center gap-2 px-2 py-1.5 rounded-md text-xs text-[var(--text-secondary)] hover:text-white hover:bg-white/[0.06] transition-colors"
-          >
-            <i className="fa-solid fa-bars text-sm" />
-            <span>Conversations</span>
-          </button>
-        </div>
-
         {/* Messages area -- grows naturally, parent <main> handles scroll */}
         <div ref={scrollRef} className="flex-1">
           {messages.length === 0 ? (
@@ -273,12 +268,24 @@ export function ChatInterface() {
 
         {/* Input -- sticky at bottom of scroll area */}
         <div className="sticky bottom-0 z-10 bg-[var(--bg-primary)] max-w-5xl mx-auto w-full">
-          <ChatInput
-            onSend={handleSend}
-            onStop={stopStreaming}
-            onClear={messages.length > 0 ? clearChat : undefined}
-            isStreaming={isStreaming}
-          />
+          <div className="flex items-end gap-1.5">
+            {/* Compact history toggle button */}
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="flex items-center justify-center w-9 h-9 ml-3 sm:ml-4 mb-[18px] sm:mb-[20px] rounded-lg border border-white/[0.08] bg-white/[0.04] text-[var(--text-muted)] hover:text-white hover:bg-white/[0.08] transition-colors shrink-0"
+              title="Chat history"
+            >
+              <i className="fa-solid fa-clock-rotate-left text-sm" />
+            </button>
+            <div className="flex-1 min-w-0">
+              <ChatInput
+                onSend={handleSend}
+                onStop={stopStreaming}
+                onClear={messages.length > 0 ? clearChat : undefined}
+                isStreaming={isStreaming}
+              />
+            </div>
+          </div>
         </div>
       </div>
     </div>

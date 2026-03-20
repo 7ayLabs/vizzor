@@ -4,7 +4,7 @@
 
 import { useState, useCallback, useRef } from 'react';
 import { getProvider, getToolHandler } from '../../ai/client.js';
-import { buildChatSystemPrompt, OLLAMA_SYSTEM_PROMPT } from '../../ai/prompts/chat.js';
+import { buildChatSystemPrompt, buildOllamaSystemPrompt } from '../../ai/prompts/chat.js';
 import { VIZZOR_TOOLS } from '../../ai/tools.js';
 import { buildContextBlock } from '../../ai/context-injector.js';
 import type { ChatMessage } from '../../ai/providers/types.js';
@@ -119,7 +119,7 @@ export function useAIStream(): UseAIStreamResult {
       const startStream = async (): Promise<void> => {
         if (!provider.supportsTools) {
           const { contextText: context } = await buildContextBlock(message);
-          const systemPrompt = OLLAMA_SYSTEM_PROMPT + (context ? '\n' + context : '');
+          const systemPrompt = buildOllamaSystemPrompt() + (context ? '\n' + context : '');
           await provider.analyzeStream(
             systemPrompt,
             message,

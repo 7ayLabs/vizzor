@@ -109,23 +109,51 @@ export async function fetchTrendingTokens(): Promise<TrendingToken[]> {
     // DexScreener unavailable
   }
 
-  // CoinGecko: trending coins
+  // CoinGecko: trending coins (with actual price data)
   try {
     const response = await fetch('https://api.coingecko.com/api/v3/search/trending');
     if (response.ok) {
       const data = (await response.json()) as {
         coins: { item: { id: string; name: string; symbol: string; market_cap_rank: number } }[];
       };
-      for (const { item } of (data.coins ?? []).slice(0, 7)) {
+      const trendingItems = (data.coins ?? []).slice(0, 7);
+
+      // Batch-fetch actual prices for all trending coins
+      const coinIds = trendingItems.map(({ item }) => item.id).join(',');
+      let priceMap: Record<
+        string,
+        { usd?: number; usd_24h_change?: number; usd_24h_vol?: number; usd_market_cap?: number }
+      > = {};
+
+      if (coinIds) {
+        try {
+          const priceRes = await fetch(
+            `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(coinIds)}&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true&include_market_cap=true`,
+          );
+          if (priceRes.ok) {
+            priceMap = (await priceRes.json()) as typeof priceMap;
+          }
+        } catch {
+          // Price fetch failed — proceed with N/A prices
+        }
+      }
+
+      for (const { item } of trendingItems) {
+        const priceData = priceMap[item.id];
+        const priceUsd = priceData?.usd;
+        const change24h = priceData?.usd_24h_change ?? 0;
+        const volume = priceData?.usd_24h_vol ?? 0;
+        const mcap = priceData?.usd_market_cap ?? null;
+
         results.push({
           name: item.name,
           symbol: item.symbol.toUpperCase(),
           chain: 'multi',
-          priceUsd: '(see CoinGecko)',
-          priceChange24h: 0,
-          volume24h: 0,
+          priceUsd: priceUsd !== undefined && isFinite(priceUsd) ? String(priceUsd) : '',
+          priceChange24h: isFinite(change24h) ? change24h : 0,
+          volume24h: isFinite(volume) ? volume : 0,
           liquidity: 0,
-          marketCap: null,
+          marketCap: mcap !== null && isFinite(mcap) ? mcap : null,
           url: `https://www.coingecko.com/en/coins/${item.id}`,
           source: 'coingecko',
         });

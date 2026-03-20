@@ -46,18 +46,33 @@ const WEIGHTS = {
 
 const TOTAL_SIGNALS = 6;
 
+/** Map horizon strings to technical analysis timeframes. */
+const HORIZON_TO_TA: Record<string, string> = {
+  '5m': '5m',
+  '15m': '15m',
+  '30m': '30m',
+  '1h': '1h',
+  '4h': '4h',
+  '1d': '1d',
+  '7d': '1d',
+};
+
 /**
  * Generate a multi-signal composite prediction for a symbol.
  * Gathers: technical + sentiment + derivatives + trend + macro + blockchain fundamentals.
+ *
+ * @param symbol Token symbol (e.g. BTC, ETH, SOL)
+ * @param horizon Prediction horizon (5m, 15m, 30m, 1h, 4h, 1d, 7d) — affects TA timeframe
  */
-export async function generatePrediction(symbol: string): Promise<Prediction> {
+export async function generatePrediction(symbol: string, horizon = '4h'): Promise<Prediction> {
   const reasoning: string[] = [];
   const signals = { technical: 0, sentiment: 0, derivatives: 0, trend: 0, macro: 0, blockchain: 0 };
   let completeness = 0;
 
   // 1. Technical Analysis (weight: 32%)
   try {
-    const ta = await analyzeTechnicals(symbol, '4h');
+    const taTimeframe = HORIZON_TO_TA[horizon] ?? '4h';
+    const ta = await analyzeTechnicals(symbol, taTimeframe);
     signals.technical = ta.composite.score;
     completeness++;
     reasoning.push(
@@ -223,7 +238,7 @@ export async function generatePrediction(symbol: string): Promise<Prediction> {
     symbol: symbol.toUpperCase(),
     direction,
     confidence,
-    timeframe: '7 days',
+    timeframe: horizon,
     reasoning,
     signals,
     composite: Math.round(composite),

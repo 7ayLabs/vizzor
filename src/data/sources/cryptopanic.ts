@@ -40,11 +40,18 @@ interface RawPost {
  * If an API token is provided, uses authenticated endpoint for better filtering.
  */
 export async function fetchCryptoNews(symbol?: string, apiToken?: string): Promise<CryptoNews[]> {
-  // CryptoPanic requires auth_token even for free tier.
-  // If no token provided, return empty rather than erroring.
-  if (!apiToken) {
-    return [];
+  // Try CryptoPanic first (if token available), then fall back to CryptoCompare
+  if (apiToken) {
+    const results = await fetchFromCryptoPanic(symbol, apiToken);
+    if (results.length > 0) return results;
   }
+
+  // Fallback: CryptoCompare free news API (no key required)
+  return fetchFromCryptoCompare(symbol);
+}
+
+async function fetchFromCryptoPanic(symbol?: string, apiToken?: string): Promise<CryptoNews[]> {
+  if (!apiToken) return [];
 
   const params = new URLSearchParams({ auth_token: apiToken });
   if (symbol) {
@@ -54,14 +61,10 @@ export async function fetchCryptoNews(symbol?: string, apiToken?: string): Promi
   const url = `${BASE_URL}/posts/?${params.toString()}`;
   const res = await fetch(url);
 
-  if (!res.ok) {
-    return [];
-  }
+  if (!res.ok) return [];
 
   const contentType = res.headers.get('content-type') ?? '';
-  if (!contentType.includes('application/json')) {
-    return [];
-  }
+  if (!contentType.includes('application/json')) return [];
 
   let data: { results: RawPost[] };
   try {
@@ -72,7 +75,6 @@ export async function fetchCryptoNews(symbol?: string, apiToken?: string): Promi
   const posts = data.results ?? [];
 
   return posts.map((post): CryptoNews => {
-    // Derive sentiment from vote counts
     const { positive, negative } = post.votes;
     let sentiment: CryptoNews['sentiment'] = 'neutral';
     if (positive > negative * 2) sentiment = 'positive';
@@ -89,4 +91,44 @@ export async function fetchCryptoNews(symbol?: string, apiToken?: string): Promi
       kind: post.kind === 'media' ? 'media' : 'news',
     };
   });
+}
+
+// ---------------------------------------------------------------------------
+// CoinGecko News fallback — free, no API key required
+// https://api.coingecko.com/api/v3/news
+// ---------------------------------------------------------------------------
+
+interface CoinGeckoNewsItem {
+  id: number;
+  title: string;
+  description: string;
+  url: string;
+  news_site: string;
+  created_at: number; // unix timestamp
+  thumb_2x?: string;
+}
+
+async function fetchFromCryptoCompare(_symbol?: string): Promise<CryptoNews[]> {
+  try {
+    const res = await fetch('https://api.coingecko.com/api/v3/news?page=1');
+    if (!res.ok) return [];
+
+    const data = (await res.json()) as { data?: CoinGeckoNewsItem[] };
+    const items = data.data ?? [];
+
+    return items.slice(0, 20).map(
+      (item): CryptoNews => ({
+        id: item.id,
+        title: item.title,
+        url: item.url,
+        source: { title: item.news_site, domain: item.news_site },
+        sentiment: 'neutral',
+        currencies: [],
+        publishedAt: new Date(item.created_at * 1000).toISOString(),
+        kind: 'news',
+      }),
+    );
+  } catch {
+    return [];
+  }
 }

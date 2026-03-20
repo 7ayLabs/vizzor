@@ -125,6 +125,17 @@ export async function initNotificationService(): Promise<void> {
     log.info(`[${notification.severity}] ${notification.title}: ${notification.message}`);
   });
 
+  // Start price alert bridge — polls prices against user-configured thresholds
+  try {
+    const { startPriceAlertBridge } = await import('./bridges/price-alert-bridge.js');
+    await startPriceAlertBridge(config.pollIntervalMs, config.cooldownMs);
+    log.info('Price alert bridge started');
+  } catch (err) {
+    log.debug(
+      `Price alert bridge not available: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
   log.info('Notification service initialized');
 }
 

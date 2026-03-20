@@ -8,14 +8,27 @@ import { fetchFearGreedIndex } from '../data/sources/fear-greed.js';
 import { calculateRSI } from '../core/technical-analysis/indicators.js';
 import type { FeatureVector, BlockchainCycleMLFeatures } from './types.js';
 
-export async function buildFeatureVector(symbol: string): Promise<FeatureVector> {
+/** Map prediction horizon to the best kline timeframe for feature engineering. */
+const HORIZON_TO_KLINE: Record<string, string> = {
+  '5m': '5m',
+  '15m': '15m',
+  '30m': '30m',
+  '1h': '1h',
+  '4h': '4h',
+  '1d': '1d',
+  '7d': '1d',
+};
+
+export async function buildFeatureVector(symbol: string, horizon?: string): Promise<FeatureVector> {
+  const klineTimeframe = HORIZON_TO_KLINE[horizon ?? '4h'] ?? '4h';
+
   // Gather all data in parallel
   const [ta, fundingResult, tickerResult, fgResult, klines] = await Promise.allSettled([
-    analyzeTechnicals(symbol, '4h'),
+    analyzeTechnicals(symbol, klineTimeframe),
     fetchFundingRate(symbol),
     fetchTickerPrice(symbol),
     fetchFearGreedIndex(1),
-    fetchKlines(symbol, '4h', 100),
+    fetchKlines(symbol, klineTimeframe, 100),
   ]);
 
   const indicators = ta.status === 'fulfilled' ? ta.value.indicators : null;
@@ -71,6 +84,7 @@ export async function buildFeatureVector(symbol: string): Promise<FeatureVector>
     atrPct,
     symbol: symbol.toUpperCase(),
     timestamp: Date.now(),
+    horizon: horizon ?? '4h',
   };
 }
 

@@ -57,7 +57,7 @@ describe('generatePrediction', () => {
     expect(['up', 'down', 'sideways']).toContain(prediction.direction);
     expect(prediction.confidence).toBeGreaterThanOrEqual(0);
     expect(prediction.confidence).toBeLessThanOrEqual(100);
-    expect(prediction.timeframe).toBe('7 days');
+    expect(prediction.timeframe).toBe('4h');
     expect(prediction.reasoning).toBeInstanceOf(Array);
     expect(prediction.reasoning.length).toBeGreaterThan(0);
     expect(prediction.disclaimer).toBeTruthy();

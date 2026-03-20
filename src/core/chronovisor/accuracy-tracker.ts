@@ -2,7 +2,7 @@
 // Accuracy tracker — logs predictions and computes per-model accuracy
 // ---------------------------------------------------------------------------
 
-import type { PredictionRecord } from './types.js';
+import type { PredictionRecord, SignalSnapshot } from './types.js';
 import { getDb } from '../../data/cache.js';
 import { createLogger } from '../../utils/logger.js';
 
@@ -20,6 +20,7 @@ interface PredictionRow {
   resolved_at: number | null;
   actual_direction: string | null;
   was_correct: number | null;
+  signal_snapshot: string | null;
 }
 
 export class AccuracyTracker {
@@ -33,16 +34,19 @@ export class AccuracyTracker {
 
   /**
    * Log a new prediction for future accuracy tracking.
+   * Includes signal snapshot for per-signal accuracy computation.
    */
   logPrediction(
     record: Omit<PredictionRecord, 'resolvedAt' | 'actualDirection' | 'wasCorrect'>,
   ): void {
     const db = getDb();
 
+    const snapshotJson = record.signalSnapshot ? JSON.stringify(record.signalSnapshot) : null;
+
     db.prepare(
       `INSERT OR IGNORE INTO chronovisor_predictions
-       (id, symbol, horizon, predicted_direction, probability, composite_score, initial_price, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, symbol, horizon, predicted_direction, probability, composite_score, initial_price, created_at, signal_snapshot)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       record.id,
       record.symbol,
@@ -52,10 +56,11 @@ export class AccuracyTracker {
       record.compositeScore,
       record.initialPrice,
       record.createdAt,
+      snapshotJson,
     );
 
     log.debug(
-      `Logged prediction ${record.id}: ${record.symbol} ${record.horizon} ${record.predictedDirection} @ $${record.initialPrice}`,
+      `Logged prediction ${record.id}: ${record.symbol} ${record.horizon} ${record.predictedDirection} @ $${record.initialPrice} (${record.signalSnapshot ? Object.keys(record.signalSnapshot).length : 0} signals)`,
     );
   }
 
@@ -194,20 +199,52 @@ export class AccuracyTracker {
         created_at INTEGER NOT NULL,
         resolved_at INTEGER,
         actual_direction TEXT,
-        was_correct INTEGER
+        was_correct INTEGER,
+        signal_snapshot TEXT
       )
     `);
-    // Migration: add initial_price column if missing (pre-v0.12.5 tables)
+    // Migrations: add columns if missing from older tables
+    const migrations = [
+      'ALTER TABLE chronovisor_predictions ADD COLUMN initial_price REAL NOT NULL DEFAULT 0',
+      'ALTER TABLE chronovisor_predictions ADD COLUMN signal_snapshot TEXT',
+    ];
+    for (const sql of migrations) {
+      try {
+        db.exec(sql);
+      } catch {
+        // Column already exists
+      }
+    }
+  }
+
+  /**
+   * Get the signal snapshot for a specific prediction (for per-signal accuracy).
+   */
+  getSignalSnapshot(predictionId: string): SignalSnapshot | null {
+    const db = getDb();
+    const row = db
+      .prepare('SELECT signal_snapshot FROM chronovisor_predictions WHERE id = ?')
+      .get(predictionId) as { signal_snapshot: string | null } | undefined;
+
+    if (!row?.signal_snapshot) return null;
+
     try {
-      db.exec(
-        'ALTER TABLE chronovisor_predictions ADD COLUMN initial_price REAL NOT NULL DEFAULT 0',
-      );
+      return JSON.parse(row.signal_snapshot) as SignalSnapshot;
     } catch {
-      // Column already exists
+      return null;
     }
   }
 
   private rowToRecord(row: PredictionRow): PredictionRecord {
+    let signalSnapshot: SignalSnapshot | null = null;
+    if (row.signal_snapshot) {
+      try {
+        signalSnapshot = JSON.parse(row.signal_snapshot) as SignalSnapshot;
+      } catch {
+        signalSnapshot = null;
+      }
+    }
+
     return {
       id: row.id,
       symbol: row.symbol,
@@ -220,6 +257,7 @@ export class AccuracyTracker {
       resolvedAt: row.resolved_at,
       actualDirection: row.actual_direction as PredictionRecord['actualDirection'],
       wasCorrect: row.was_correct === null ? null : row.was_correct === 1,
+      signalSnapshot,
     };
   }
 }

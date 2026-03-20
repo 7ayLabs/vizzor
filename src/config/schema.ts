@@ -100,6 +100,47 @@ export const vizzorConfigSchema = z.object({
       cooldownMs: 300000,
       maxToastStack: 3,
     })),
+  chronovisor: z
+    .object({
+      weights: z
+        .object({
+          onChain: z.number().default(0.25),
+          mlEnsemble: z.number().default(0.2),
+          predictionMarkets: z.number().default(0.15),
+          socialNarrative: z.number().default(0.1),
+          patternMatch: z.number().default(0.05),
+          logicRules: z.number().default(0.15),
+        })
+        .default(() => ({
+          onChain: 0.25,
+          mlEnsemble: 0.2,
+          predictionMarkets: 0.15,
+          socialNarrative: 0.1,
+          patternMatch: 0.05,
+          logicRules: 0.15,
+        })),
+      metaReasoning: z
+        .object({
+          minCompleteness: z.number().default(0.3),
+          agreementBonus: z.number().default(0.15),
+          volatilityPenalty: z.number().default(0.2),
+        })
+        .default(() => ({
+          minCompleteness: 0.3,
+          agreementBonus: 0.15,
+          volatilityPenalty: 0.2,
+        })),
+      resolver: z
+        .object({
+          graceMs: z.number().default(5000),
+          maxIntervalMs: z.number().default(900000),
+        })
+        .default(() => ({
+          graceMs: 5000,
+          maxIntervalMs: 900000,
+        })),
+    })
+    .optional(),
   n8n: z
     .object({
       enabled: z.boolean().default(false),

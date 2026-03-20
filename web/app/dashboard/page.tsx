@@ -1,13 +1,8 @@
 'use client';
 
-import { MarketOverview } from '@/components/dashboard/market-overview';
-import { MLStatus } from '@/components/dashboard/ml-status';
-import { RegimeIndicator } from '@/components/dashboard/regime-indicator';
 import { PredictionOverview } from '@/components/dashboard/prediction-overview';
-import { SentimentOverview } from '@/components/dashboard/sentiment-overview';
-import { TrendingTokens } from '@/components/dashboard/trending-tokens';
 import { NewsFeed } from '@/components/dashboard/news-feed';
-import { AgentSummary } from '@/components/dashboard/agent-summary';
+import { PredictionAccuracyPanel } from '@/components/dashboard/prediction-accuracy';
 
 export default function DashboardPage() {
   return (
@@ -19,29 +14,14 @@ export default function DashboardPage() {
         <span className="inline-block w-2 h-2 rounded-full bg-[var(--success)] pulse-dot" />
       </div>
 
-      {/* Hero row: Market Stats + Regime */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
-        <MarketOverview />
-        <RegimeIndicator />
-      </div>
+      {/* HERO: Chronovisor Predictions — full width */}
+      <PredictionOverview />
 
-      {/* Chronovisor row: Predictions + Sentiment */}
+      {/* Row 2: Prediction Accuracy + Latest News */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
-        <PredictionOverview />
-        <SentimentOverview />
-      </div>
-
-      {/* Trending tokens */}
-      <TrendingTokens />
-
-      {/* Bottom row: News + Agents */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+        <PredictionAccuracyPanel />
         <NewsFeed />
-        <AgentSummary />
       </div>
-
-      {/* ML Sidecar — full width at bottom */}
-      <MLStatus />
     </div>
   );
 }

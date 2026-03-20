@@ -130,6 +130,15 @@ export async function startApiServer(options: {
     );
   }
 
+  // Initialize ChronoVisor engine + prediction resolver (persistent background process)
+  try {
+    const { initChronoVisor } = await import('../core/chronovisor/engine.js');
+    initChronoVisor();
+    log.info('ChronoVisor engine + resolver initialized');
+  } catch (err) {
+    log.warn(`ChronoVisor init failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
   await server.listen({ port: options.port, host: options.host });
   log.info(`Vizzor API listening on ${options.host}:${options.port}`);
   if (!isProd) {

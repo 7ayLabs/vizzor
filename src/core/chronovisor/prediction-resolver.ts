@@ -7,6 +7,7 @@
 import type { PredictionRecord, WeightConfig } from './types.js';
 import type { AccuracyTracker } from './accuracy-tracker.js';
 import type { WeightLearner } from './weight-learner.js';
+import type { PatternLibrary } from './pattern-library.js';
 import { createLogger } from '../../utils/logger.js';
 import { emitNotification } from '../../notifications/event-bus.js';
 
@@ -14,17 +15,37 @@ const log = createLogger('chronovisor:resolver');
 
 /** Maps horizon strings to their duration in seconds. */
 const HORIZON_SECONDS: Record<string, number> = {
-  '1h': 3600,
+  '5m': 300,
+  '15m': 900,
+  '30m': 1_800,
+  '1h': 3_600,
   '4h': 14_400,
   '1d': 86_400,
   '7d': 604_800,
 };
 
-/** Minimum price change % to classify as up/down (avoid noise). */
-const SIDEWAYS_THRESHOLD = 0.3;
+/**
+ * Minimum price change % to classify as up/down (avoid noise).
+ * Scalping horizons use a tighter threshold since smaller moves are meaningful.
+ */
+const SIDEWAYS_THRESHOLD: Record<string, number> = {
+  '5m': 0.05,
+  '15m': 0.1,
+  '30m': 0.15,
+  '1h': 0.3,
+  '4h': 0.3,
+  '1d': 0.3,
+  '7d': 0.3,
+};
 
-/** Default resolve cycle interval: 15 minutes. */
-const DEFAULT_INTERVAL_MS = 15 * 60 * 1000;
+/** Maximum resolve cycle interval (used when no predictions are pending). */
+const MAX_INTERVAL_MS = 15 * 60 * 1000;
+
+/** Minimum resolve cycle interval (floor to avoid busy-looping). */
+const MIN_INTERVAL_MS = 10 * 1000; // 10 seconds
+
+/** Grace period after horizon expires before attempting resolve (allows price to settle). */
+const GRACE_MS = 5_000; // 5 seconds
 
 /** Weight keys for signal accuracy tracking. */
 const WEIGHT_KEYS: (keyof WeightConfig)[] = [
@@ -33,6 +54,7 @@ const WEIGHT_KEYS: (keyof WeightConfig)[] = [
   'predictionMarkets',
   'socialNarrative',
   'patternMatch',
+  'logicRules',
 ];
 
 export interface ResolverStats {
@@ -56,17 +78,26 @@ export class PredictionResolver {
 
   private readonly tracker: AccuracyTracker;
   private readonly learner: WeightLearner;
-  private readonly intervalMs: number;
+  private readonly patternLibrary: PatternLibrary | null;
+  private readonly maxIntervalMs: number;
 
   /**
    * @param tracker  AccuracyTracker instance (from ChronoVisorEngine)
    * @param learner  WeightLearner instance (from ChronoVisorEngine)
-   * @param intervalMs  How often to run the resolve cycle (default 15 min)
+   * @param patternLibrary  PatternLibrary instance for auto-population (optional)
+   * @param maxIntervalMs  Max interval between resolve cycles (default 15 min).
+   *   The resolver adaptively shortens this when scalping predictions are pending.
    */
-  constructor(tracker: AccuracyTracker, learner: WeightLearner, intervalMs = DEFAULT_INTERVAL_MS) {
+  constructor(
+    tracker: AccuracyTracker,
+    learner: WeightLearner,
+    patternLibrary?: PatternLibrary,
+    maxIntervalMs = MAX_INTERVAL_MS,
+  ) {
     this.tracker = tracker;
     this.learner = learner;
-    this.intervalMs = Math.max(60_000, intervalMs); // minimum 1 minute
+    this.patternLibrary = patternLibrary ?? null;
+    this.maxIntervalMs = Math.max(MIN_INTERVAL_MS, maxIntervalMs);
   }
 
   // -------------------------------------------------------------------------
@@ -77,7 +108,7 @@ export class PredictionResolver {
     if (this.running) return;
     this.running = true;
     this.stats.isRunning = true;
-    log.info(`PredictionResolver started (interval: ${this.intervalMs / 1000}s)`);
+    log.info(`PredictionResolver started (adaptive, max interval: ${this.maxIntervalMs / 1000}s)`);
     void this.scheduleNextCycle(true); // run immediately
   }
 
@@ -145,10 +176,11 @@ export class PredictionResolver {
       for (const pred of predictions) {
         const changePct = ((currentPrice - pred.initialPrice) / pred.initialPrice) * 100;
 
+        const threshold = SIDEWAYS_THRESHOLD[pred.horizon] ?? 0.3;
         let actualDirection: 'up' | 'down' | 'sideways';
-        if (changePct > SIDEWAYS_THRESHOLD) {
+        if (changePct > threshold) {
           actualDirection = 'up';
-        } else if (changePct < -SIDEWAYS_THRESHOLD) {
+        } else if (changePct < -threshold) {
           actualDirection = 'down';
         } else {
           actualDirection = 'sideways';
@@ -185,6 +217,24 @@ export class PredictionResolver {
             currentPrice,
           },
         });
+
+        // Auto-populate pattern library from resolved predictions
+        if (this.patternLibrary && pred.signalSnapshot) {
+          try {
+            const snapValues = Object.values(pred.signalSnapshot);
+            if (snapValues.length > 0) {
+              const featureVector = snapValues.map((s) => s.cf);
+              this.patternLibrary.addPattern(
+                `${pred.symbol}_${pred.horizon}_${actualDirection}`,
+                featureVector,
+                actualDirection,
+                changePct,
+              );
+            }
+          } catch {
+            // Pattern storage is best-effort
+          }
+        }
       }
 
       // After resolving all predictions for this symbol, update weights
@@ -230,10 +280,43 @@ export class PredictionResolver {
   // Private helpers
   // -------------------------------------------------------------------------
 
+  /**
+   * Compute adaptive delay: sleep until the soonest prediction expires + grace,
+   * clamped between MIN_INTERVAL_MS and maxIntervalMs.
+   */
+  private computeNextDelay(): number {
+    const pending = this.tracker.getPendingPredictions();
+    if (pending.length === 0) return this.maxIntervalMs;
+
+    const now = Math.floor(Date.now() / 1000);
+    let soonestExpiry = Infinity;
+
+    for (const pred of pending) {
+      const windowSec = HORIZON_SECONDS[pred.horizon] ?? 3600;
+      const expiresAt = pred.createdAt + windowSec;
+      if (expiresAt < soonestExpiry) {
+        soonestExpiry = expiresAt;
+      }
+    }
+
+    if (soonestExpiry === Infinity) return this.maxIntervalMs;
+
+    // Time until soonest expiry + grace period
+    const msUntilExpiry = (soonestExpiry - now) * 1000 + GRACE_MS;
+
+    // If already expired, resolve ASAP (with minimum floor)
+    if (msUntilExpiry <= 0) return MIN_INTERVAL_MS;
+
+    // Clamp between min and max
+    return Math.max(MIN_INTERVAL_MS, Math.min(this.maxIntervalMs, msUntilExpiry));
+  }
+
   private async scheduleNextCycle(immediate: boolean): Promise<void> {
     if (!immediate) {
+      const delay = this.computeNextDelay();
+      log.debug(`Next resolve cycle in ${(delay / 1000).toFixed(0)}s`);
       await new Promise<void>((resolve) => {
-        this.timer = setTimeout(resolve, this.intervalMs);
+        this.timer = setTimeout(resolve, delay);
       });
     }
     if (!this.running) return;
@@ -250,24 +333,70 @@ export class PredictionResolver {
 
   /**
    * Compute per-signal accuracy and update the WeightLearner for a symbol.
-   * Uses the last 30 days of resolved predictions.
+   * Uses signal snapshots to track which signals were individually correct.
    */
   private updateSymbolWeights(symbol: string): void {
     try {
       const accuracy = this.tracker.getAccuracy(symbol, undefined, 30);
       if (accuracy.total < 5) return; // not enough data to learn from
 
-      // For now, we use overall accuracy for all signal keys since we don't
-      // track per-signal correctness. A future improvement would be to track
-      // which signals contributed most to correct vs incorrect predictions.
+      // Get recent resolved predictions with signal snapshots
+      const recentPredictions = this.tracker
+        .getRecentPredictions(symbol, 50)
+        .filter((p) => p.wasCorrect !== null && p.signalSnapshot !== null);
+
+      if (recentPredictions.length < 3) {
+        // Not enough signal snapshot data — fall back to overall accuracy
+        const signalAccuracies: Record<string, number> = {};
+        for (const key of WEIGHT_KEYS) {
+          signalAccuracies[key] = accuracy.overall;
+        }
+        this.learner.updateWeights(symbol, signalAccuracies);
+        return;
+      }
+
+      // Compute per-signal accuracy from snapshots
+      const signalStats: Record<string, { correct: number; total: number }> = {};
+      for (const key of WEIGHT_KEYS) {
+        signalStats[key] = { correct: 0, total: 0 };
+      }
+
+      for (const pred of recentPredictions) {
+        if (!pred.signalSnapshot || pred.actualDirection === null) continue;
+
+        for (const key of WEIGHT_KEYS) {
+          const snap = pred.signalSnapshot[key];
+          if (!snap || snap.cf === 0) continue; // signal was inactive
+
+          const stat = signalStats[key];
+          if (!stat) continue;
+          stat.total++;
+          // A signal was "correct" if its direction matched the actual outcome
+          const signalBullish = snap.direction === 'bullish';
+          const actualUp = pred.actualDirection === 'up';
+          const signalBearish = snap.direction === 'bearish';
+          const actualDown = pred.actualDirection === 'down';
+
+          if ((signalBullish && actualUp) || (signalBearish && actualDown)) {
+            stat.correct++;
+          }
+        }
+      }
+
+      // Build per-signal accuracy map
       const signalAccuracies: Record<string, number> = {};
       for (const key of WEIGHT_KEYS) {
-        signalAccuracies[key] = accuracy.overall;
+        const stats = signalStats[key] ?? { correct: 0, total: 0 };
+        signalAccuracies[key] = stats.total >= 3 ? stats.correct / stats.total : 0.5; // uninformative prior for insufficient data
       }
 
       this.learner.updateWeights(symbol, signalAccuracies);
       log.debug(
-        `Updated weights for ${symbol}: accuracy=${(accuracy.overall * 100).toFixed(1)}% (${accuracy.correct}/${accuracy.total})`,
+        `Updated weights for ${symbol} with per-signal accuracy: ${JSON.stringify(
+          Object.fromEntries(
+            Object.entries(signalAccuracies).map(([k, v]) => [k, `${(v * 100).toFixed(0)}%`]),
+          ),
+        )}`,
       );
     } catch (err) {
       log.debug(

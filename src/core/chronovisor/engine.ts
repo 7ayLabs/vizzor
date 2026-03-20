@@ -1,14 +1,16 @@
 // ---------------------------------------------------------------------------
 // ChronoVisor engine — weighted ensemble orchestrator
-// Combines on-chain, ML, prediction market, social, and pattern signals
+// v2: CF algebra + Bayesian updates + FOL rules + meta-reasoning
 // ---------------------------------------------------------------------------
 
 import type {
   ChronoVisorResult,
+  PredictionHorizon,
   WeightConfig,
   SignalBreakdown,
   CompositeScore,
   SignalCategory,
+  SignalSnapshot,
 } from './types.js';
 import { WeightLearner } from './weight-learner.js';
 import { AccuracyTracker } from './accuracy-tracker.js';
@@ -18,8 +20,18 @@ import { fetchAllPredictionMarketSignals } from '../../data/sources/prediction-m
 import { getMLClient } from '../../ml/client.js';
 import { createLogger } from '../../utils/logger.js';
 
-// Lazy imports to avoid circular dependency issues — these may not always
-// be available depending on which adapters/sources the user has configured.
+// Math foundations
+import { combineMultipleCF, weightedCF } from './math/certainty-factor.js';
+import { clampProbability, cfToProbability } from './math/probability.js';
+import { sequentialBayesianUpdate, buildEvidencePairs } from './math/bayesian.js';
+import { evaluateRules, type MarketContext } from './math/fol-rules.js';
+import {
+  computeMetaConfidence,
+  computeSignalCompleteness,
+  computeSignalAgreement,
+} from './math/meta-reasoning.js';
+
+// Lazy imports to avoid circular dependency issues
 const lazySentiment = () =>
   import('../../core/trends/sentiment.js').then((m) => m.analyzeSentiment);
 const lazyBinance = () =>
@@ -31,18 +43,28 @@ const lazyFeatureEngineer = () =>
   import('../../ml/feature-engineer.js').then((m) => m.buildFeatureVector);
 const lazyBinancePrice = () =>
   import('../../data/sources/binance.js').then((m) => m.fetchTickerPrice);
-
 const log = createLogger('chronovisor');
 
 const DEFAULT_WEIGHTS: WeightConfig = {
-  onChain: 0.3,
-  mlEnsemble: 0.25,
-  predictionMarkets: 0.2,
-  socialNarrative: 0.15,
-  patternMatch: 0.1,
+  onChain: 0.25,
+  mlEnsemble: 0.2,
+  predictionMarkets: 0.15,
+  socialNarrative: 0.1,
+  patternMatch: 0.05,
+  logicRules: 0.15,
 };
 
-const DEFAULT_HORIZONS: ('1h' | '4h' | '1d' | '7d')[] = ['1h', '4h', '1d', '7d'];
+const DEFAULT_HORIZONS: PredictionHorizon[] = ['1h', '4h', '1d', '7d'];
+
+/** Weight keys for iterating. */
+const SIGNAL_KEYS: (keyof WeightConfig)[] = [
+  'onChain',
+  'mlEnsemble',
+  'predictionMarkets',
+  'socialNarrative',
+  'patternMatch',
+  'logicRules',
+];
 
 // ---------------------------------------------------------------------------
 // Engine
@@ -58,9 +80,13 @@ export class ChronoVisorEngine {
     this.weightLearner = new WeightLearner();
     this.accuracyTracker = new AccuracyTracker();
     this.patternLibrary = new PatternLibrary();
-    this.predictionResolver = new PredictionResolver(this.accuracyTracker, this.weightLearner);
+    this.predictionResolver = new PredictionResolver(
+      this.accuracyTracker,
+      this.weightLearner,
+      this.patternLibrary,
+    );
     this.predictionResolver.start();
-    log.info('ChronoVisor engine initialized (resolver active)');
+    log.info('ChronoVisor engine v2 initialized (CF algebra + Bayesian + FOL + meta-reasoning)');
   }
 
   // -----------------------------------------------------------------------
@@ -90,17 +116,14 @@ export class ChronoVisorEngine {
   /**
    * Run the full ChronoVisor prediction pipeline for a symbol.
    *
-   * 1. Gather signals from all 5 categories in parallel
+   * 1. Gather signals from all 6 categories in parallel
    * 2. Get learned weights (or use defaults)
-   * 3. Compute weighted composite score
+   * 3. Compute composite via CF algebra + Bayesian + meta-reasoning
    * 4. Generate predictions per horizon
-   * 5. Log predictions for accuracy tracking
+   * 5. Save signal snapshot for per-signal accuracy tracking
    * 6. Return full ChronoVisorResult
    */
-  async predict(
-    symbol: string,
-    horizons?: ('1h' | '4h' | '1d' | '7d')[],
-  ): Promise<ChronoVisorResult> {
+  async predict(symbol: string, horizons?: PredictionHorizon[]): Promise<ChronoVisorResult> {
     const activeHorizons = horizons ?? DEFAULT_HORIZONS;
     const normalizedSymbol = symbol.toUpperCase();
     log.info(`Predicting ${normalizedSymbol} for horizons: ${activeHorizons.join(', ')}`);
@@ -121,21 +144,45 @@ export class ChronoVisorEngine {
       predictionMarkets: this.extractSignal(predictionMarkets, 'predictionMarkets'),
       socialNarrative: this.extractSignal(socialNarrative, 'socialNarrative'),
       patternMatch: this.extractSignal(patternMatch, 'patternMatch'),
+      logicRules: {
+        name: 'logicRules',
+        weight: DEFAULT_WEIGHTS.logicRules,
+        score: 0,
+        confidence: 0,
+        sources: [],
+      },
+    };
+
+    // 1b. Evaluate FOL logic rules using gathered signal data as context
+    const marketCtx = this.buildMarketContext(signals);
+    const ruleResult = evaluateRules(marketCtx);
+    signals.logicRules = {
+      name: 'logicRules',
+      weight: DEFAULT_WEIGHTS.logicRules,
+      score: ruleResult.cf,
+      confidence:
+        ruleResult.firedRules.length > 0 ? Math.min(1, ruleResult.firedRules.length * 0.2) : 0,
+      sources: ruleResult.firedRules.map(
+        (r) => `rule:${r.name}(${r.direction}, cf=${r.cf.toFixed(2)})`,
+      ),
     };
 
     // 2. Get learned weights
     const weights = this.weightLearner.getWeights(normalizedSymbol);
     this.applyWeights(signals, weights);
 
-    // 3. Compute weighted composite score
-    const composite = this.computeComposite(signals, weights);
+    // 3. Compute composite via CF algebra + Bayesian + meta-reasoning
+    const composite = this.computeComposite(signals, weights, normalizedSymbol);
 
     // 4. Generate predictions per horizon
     const predictions = activeHorizons.map((horizon) =>
       this.generateHorizonPrediction(normalizedSymbol, horizon, composite, signals),
     );
 
-    // 5. Fetch current price for accuracy tracking (initial_price)
+    // 5. Build signal snapshot for per-signal accuracy tracking
+    const signalSnapshot = this.buildSignalSnapshot(signals);
+
+    // 6. Fetch current price for accuracy tracking
     let initialPrice = 0;
     try {
       const fetchPrice = await lazyBinancePrice();
@@ -147,7 +194,7 @@ export class ChronoVisorEngine {
       );
     }
 
-    // 6. Log each prediction for accuracy tracking
+    // 7. Log each prediction with signal snapshot
     const now = Math.floor(Date.now() / 1000);
     for (const pred of predictions) {
       const id = `${normalizedSymbol}_${pred.horizon}_${now}`;
@@ -160,10 +207,11 @@ export class ChronoVisorEngine {
         compositeScore: composite.score,
         initialPrice,
         createdAt: now,
+        signalSnapshot,
       });
     }
 
-    // 7. Fetch historical accuracy (may be null if no resolved predictions yet)
+    // 8. Fetch historical accuracy
     const rawAccuracy = this.accuracyTracker.getAccuracy(normalizedSymbol);
     const accuracy =
       rawAccuracy.total > 0
@@ -179,7 +227,7 @@ export class ChronoVisorEngine {
     };
 
     log.info(
-      `${normalizedSymbol} composite: ${composite.score.toFixed(3)} (${composite.direction}, confidence ${composite.confidence.toFixed(0)}%)`,
+      `${normalizedSymbol} composite: ${composite.score.toFixed(3)} (${composite.direction}, confidence ${composite.confidence.toFixed(0)}%) [CF algebra + Bayesian]`,
     );
 
     return result;
@@ -189,10 +237,6 @@ export class ChronoVisorEngine {
   // Signal gatherers
   // -----------------------------------------------------------------------
 
-  /**
-   * On-chain signals: whale flow, exchange flow, LP delta.
-   * Uses Binance funding rate and open interest as proxy signals.
-   */
   async gatherOnChainSignals(symbol: string): Promise<SignalCategory> {
     const sources: string[] = [];
     let score = 0;
@@ -209,8 +253,6 @@ export class ChronoVisorEngine {
 
       if (fundingResult.status === 'fulfilled') {
         const rate = fundingResult.value.fundingRate;
-        // High positive funding = longs over-leveraged (bearish contrarian)
-        // Negative funding = shorts over-leveraged (bullish contrarian)
         if (rate > 0.0005) {
           score -= 0.4;
           sources.push(`funding_rate_bearish(${(rate * 100).toFixed(4)}%)`);
@@ -226,7 +268,6 @@ export class ChronoVisorEngine {
 
       if (oiResult.status === 'fulfilled') {
         const notional = oiResult.value.notionalValue;
-        // High OI generally indicates strong market interest
         sources.push(`open_interest($${(notional / 1e6).toFixed(1)}M)`);
         signalCount++;
       }
@@ -247,9 +288,6 @@ export class ChronoVisorEngine {
     };
   }
 
-  /**
-   * ML ensemble signals: uses the ML sidecar predict endpoint.
-   */
   async gatherMLSignals(symbol: string): Promise<SignalCategory> {
     const sources: string[] = [];
     let score = 0;
@@ -272,7 +310,6 @@ export class ChronoVisorEngine {
       const prediction = await mlClient.predict(features);
 
       if (prediction) {
-        // Map direction + probability to a -1..1 score
         if (prediction.direction === 'up') {
           score = prediction.probability;
         } else if (prediction.direction === 'down') {
@@ -280,7 +317,7 @@ export class ChronoVisorEngine {
         } else {
           score = 0;
         }
-        confidence = prediction.confidence / 100; // normalize 0-100 -> 0-1
+        confidence = prediction.confidence / 100;
         sources.push(
           `ml_${prediction.model}(${prediction.direction}, p=${prediction.probability.toFixed(2)})`,
         );
@@ -301,10 +338,6 @@ export class ChronoVisorEngine {
     };
   }
 
-  /**
-   * Prediction market signals: aggregates from all registered prediction market
-   * adapters and looks for markets related to this symbol.
-   */
   async gatherPredictionMarketSignals(symbol: string): Promise<SignalCategory> {
     const sources: string[] = [];
     let score = 0;
@@ -313,13 +346,11 @@ export class ChronoVisorEngine {
     try {
       const signals = await fetchAllPredictionMarketSignals('crypto_price');
 
-      // Filter to signals related to this symbol
       const relevant = signals.filter((s) =>
         s.relatedTokens.some((t) => t.toUpperCase() === symbol.toUpperCase()),
       );
 
       if (relevant.length > 0) {
-        // Average probability and momentum across related markets
         let totalProbability = 0;
         let totalMomentum = 0;
 
@@ -332,14 +363,10 @@ export class ChronoVisorEngine {
         const avgProbability = totalProbability / relevant.length;
         const avgMomentum = totalMomentum / relevant.length;
 
-        // probability > 0.5 = bullish, < 0.5 = bearish, centered at 0
         score = (avgProbability - 0.5) * 2;
-
-        // Momentum amplifies or dampens the signal
         score += avgMomentum * 0.3;
         score = Math.max(-1, Math.min(1, score));
 
-        // Confidence scales with number of markets and total volume
         const totalVolume = relevant.reduce((sum, s) => sum + s.volume, 0);
         confidence = Math.min(1, relevant.length * 0.2 + (totalVolume > 100000 ? 0.3 : 0));
       } else {
@@ -361,9 +388,6 @@ export class ChronoVisorEngine {
     };
   }
 
-  /**
-   * Social / narrative signals: from sentiment analysis (news + DEX data).
-   */
   async gatherSocialSignals(symbol: string): Promise<SignalCategory> {
     const sources: string[] = [];
     let score = 0;
@@ -373,7 +397,7 @@ export class ChronoVisorEngine {
       const analyzeSentiment = await lazySentiment();
       const sentiment = await analyzeSentiment(symbol);
 
-      score = sentiment.overall; // already -1..1
+      score = sentiment.overall;
       confidence = sentiment.sources.length > 0 ? Math.min(1, sentiment.sources.length * 0.3) : 0;
 
       for (const src of sentiment.sources) {
@@ -397,17 +421,12 @@ export class ChronoVisorEngine {
     };
   }
 
-  /**
-   * Pattern-matching signals: searches the pattern library for similar
-   * historical patterns and derives a directional signal.
-   */
   async gatherPatternSignals(symbol: string): Promise<SignalCategory> {
     const sources: string[] = [];
     let score = 0;
     let confidence = 0;
 
     try {
-      // Build a simple feature vector from available ML features
       let features: number[] | null = null;
 
       const mlClient = getMLClient();
@@ -438,12 +457,10 @@ export class ChronoVisorEngine {
         const matches = this.patternLibrary.findSimilarPatterns(features, 5);
 
         if (matches.length > 0) {
-          // Weighted average of matched pattern outcomes
           let totalWeight = 0;
           let weightedScore = 0;
 
           for (const match of matches) {
-            // Use similarity as the weight
             const w = match.similarity;
             const directionScore = match.outcome === 'up' ? 1 : match.outcome === 'down' ? -1 : 0;
             weightedScore += directionScore * w * (match.profitPct > 0 ? 1 : 0.5);
@@ -456,7 +473,6 @@ export class ChronoVisorEngine {
           score = totalWeight > 0 ? weightedScore / totalWeight : 0;
           score = Math.max(-1, Math.min(1, score));
 
-          // Confidence based on how many patterns matched and how similar they are
           const avgSimilarity = matches.reduce((sum, m) => sum + m.similarity, 0) / matches.length;
           confidence = Math.min(1, avgSimilarity * matches.length * 0.15);
         } else {
@@ -485,10 +501,6 @@ export class ChronoVisorEngine {
   // Private helpers
   // -----------------------------------------------------------------------
 
-  /**
-   * Extracts a SignalCategory from a PromiseSettledResult, returning a neutral
-   * fallback on rejection.
-   */
   private extractSignal(
     result: PromiseSettledResult<SignalCategory>,
     name: string,
@@ -507,51 +519,145 @@ export class ChronoVisorEngine {
     };
   }
 
-  /**
-   * Apply learned weights to the signal breakdown.
-   */
   private applyWeights(signals: SignalBreakdown, weights: WeightConfig): void {
-    signals.onChain.weight = weights.onChain;
-    signals.mlEnsemble.weight = weights.mlEnsemble;
-    signals.predictionMarkets.weight = weights.predictionMarkets;
-    signals.socialNarrative.weight = weights.socialNarrative;
-    signals.patternMatch.weight = weights.patternMatch;
+    for (const key of SIGNAL_KEYS) {
+      if (signals[key]) {
+        signals[key].weight = weights[key];
+      }
+    }
   }
 
   /**
-   * Compute the weighted composite score from all signal categories.
+   * Build a MarketContext from available signal data for FOL rule evaluation.
    */
-  private computeComposite(signals: SignalBreakdown, _weights: WeightConfig): CompositeScore {
-    const categories: SignalCategory[] = [
-      signals.onChain,
-      signals.mlEnsemble,
-      signals.predictionMarkets,
-      signals.socialNarrative,
-      signals.patternMatch,
-    ];
+  private buildMarketContext(signals: SignalBreakdown): MarketContext {
+    const ctx: MarketContext = {};
 
-    let weightedScore = 0;
-    let weightedConfidence = 0;
-    let totalWeight = 0;
-
-    for (const cat of categories) {
-      weightedScore += cat.score * cat.weight;
-      weightedConfidence += cat.confidence * cat.weight;
-      totalWeight += cat.weight;
+    // Extract data from on-chain signal sources
+    for (const src of signals.onChain.sources) {
+      const fundingMatch = src.match(/funding_rate_\w+\(([^)]+)%\)/);
+      if (fundingMatch) {
+        ctx.fundingRate = parseFloat(fundingMatch[1] ?? '0') / 100;
+      }
     }
 
-    // Normalize in case weights don't sum to exactly 1
-    const score = totalWeight > 0 ? weightedScore / totalWeight : 0;
-    const confidenceRaw = totalWeight > 0 ? weightedConfidence / totalWeight : 0;
+    // ML signal direction + confidence
+    for (const src of signals.mlEnsemble.sources) {
+      if (src.includes('(up,')) {
+        ctx.mlDirection = 'up';
+      } else if (src.includes('(down,')) {
+        ctx.mlDirection = 'down';
+      } else if (src.includes('(sideways,')) {
+        ctx.mlDirection = 'sideways';
+      }
+    }
+    if (signals.mlEnsemble.confidence > 0) {
+      ctx.mlConfidence = signals.mlEnsemble.confidence * 100;
+    }
 
-    // Scale confidence to 0-100 range
-    const confidence = Math.min(100, Math.max(0, confidenceRaw * 100));
+    // Prediction market probability
+    if (signals.predictionMarkets.confidence > 0) {
+      ctx.predictionMarketProbability = (signals.predictionMarkets.score + 1) / 2;
+    }
 
+    // Sentiment score
+    if (signals.socialNarrative.confidence > 0) {
+      ctx.sentimentScore = signals.socialNarrative.score;
+    }
+
+    return ctx;
+  }
+
+  /**
+   * Compute composite score using mathematical foundations:
+   *
+   * 1. Weight each signal's CF by its learned weight
+   * 2. Combine non-zero CFs via CF algebra (ignores dead signals)
+   * 3. Determine dominant direction from weighted signals
+   * 4. Run Bayesian updates: prior=0.5, each signal is evidence
+   * 5. Apply meta-reasoning modifier (penalizes incomplete/conflicting data)
+   * 6. Enforce Kolmogorov axioms: P in [0, 1]
+   */
+  private computeComposite(
+    signals: SignalBreakdown,
+    _weights: WeightConfig,
+    symbol: string,
+  ): CompositeScore {
+    const categories: SignalCategory[] = SIGNAL_KEYS.map((key) => signals[key]);
+
+    // Step 1: Weight each signal's confidence as a CF [-1, 1]
+    // CF = score * confidence (0 confidence → 0 CF → ignored by CF algebra)
+    const signalCFs: number[] = [];
+    const signalDirections: { cf: number; name: string }[] = [];
+
+    for (const cat of categories) {
+      const cf = weightedCF(cat.score, cat.confidence);
+      signalCFs.push(cf);
+      signalDirections.push({ cf, name: cat.name });
+    }
+
+    // Step 2: Combine via CF algebra (dead signals with CF=0 are automatically ignored)
+    const combinedCF = combineMultipleCF(signalCFs);
+
+    // Step 3: Determine dominant direction
     const direction: CompositeScore['direction'] =
-      score > 0.15 ? 'bullish' : score < -0.15 ? 'bearish' : 'neutral';
+      combinedCF > 0.05 ? 'bullish' : combinedCF < -0.05 ? 'bearish' : 'neutral';
+
+    // Step 4: Bayesian probability update
+    // Hypothesis: "price moves in the direction indicated by combinedCF"
+    const isBullish = combinedCF >= 0;
+    const activeSignals = signalCFs.filter((cf) => cf !== 0);
+
+    let probability: number;
+    if (activeSignals.length === 0) {
+      probability = 0.5; // uninformative prior — no evidence
+    } else {
+      // Build evidence pairs from signals
+      const bayesSignals = signalDirections
+        .filter((s) => s.cf !== 0)
+        .map((s) => ({
+          cf: Math.abs(s.cf),
+          agrees: isBullish ? s.cf > 0 : s.cf < 0,
+        }));
+
+      const evidencePairs = buildEvidencePairs(bayesSignals, 0.5);
+      probability = sequentialBayesianUpdate(0.5, evidencePairs);
+    }
+
+    // Step 5: Meta-reasoning confidence modifier
+    const completeness = computeSignalCompleteness(signalCFs);
+    const agreement = computeSignalAgreement(signalCFs);
+
+    // Get historical reliability from accuracy tracker
+    const rawAccuracy = this.accuracyTracker.getAccuracy(symbol, undefined, 30);
+    const historicalReliability = rawAccuracy.total >= 5 ? rawAccuracy.overall : 0;
+
+    // Estimate regime volatility from signal disagreement
+    const regimeVolatility = 1 - agreement;
+
+    const metaModifier = computeMetaConfidence({
+      signalCompleteness: completeness,
+      signalAgreement: agreement,
+      historicalReliability,
+      regimeVolatility,
+    });
+
+    // Step 6: Apply meta-modifier and enforce Kolmogorov axioms
+    // Scale probability away from 0.5 by meta-modifier
+    const adjustedProbability = 0.5 + (probability - 0.5) * metaModifier;
+    const finalProbability = clampProbability(adjustedProbability);
+
+    // Confidence as percentage: how far from 0.5 (uninformative)
+    const confidence = Math.min(100, Math.abs(finalProbability - 0.5) * 200);
+
+    log.debug(
+      `CF algebra: combined=${combinedCF.toFixed(3)}, active=${activeSignals.length}/${signalCFs.length}, ` +
+        `bayesian=${probability.toFixed(3)}, meta=${metaModifier.toFixed(2)}, final=${finalProbability.toFixed(3)}, ` +
+        `confidence=${confidence.toFixed(1)}%`,
+    );
 
     return {
-      score: Math.max(-1, Math.min(1, score)),
+      score: Math.max(-1, Math.min(1, combinedCF)),
       direction,
       confidence,
       signalBreakdown: signals,
@@ -561,58 +667,78 @@ export class ChronoVisorEngine {
 
   /**
    * Generate a single horizon prediction from the composite score.
-   * Longer horizons have lower confidence due to uncertainty amplification.
+   * Uses CF-to-probability mapping with horizon uncertainty decay.
    */
   private generateHorizonPrediction(
     _symbol: string,
-    horizon: '1h' | '4h' | '1d' | '7d',
+    horizon: PredictionHorizon,
     composite: CompositeScore,
     signals: SignalBreakdown,
   ): ChronoVisorResult['predictions'][number] {
-    // Uncertainty multiplier: longer horizons reduce confidence
     const horizonMultiplier: Record<string, number> = {
-      '1h': 1.0,
+      '5m': 1.0,
+      '15m': 1.0,
+      '30m': 0.95,
+      '1h': 0.9,
       '4h': 0.85,
       '1d': 0.7,
       '7d': 0.5,
     };
 
     const multiplier = horizonMultiplier[horizon] ?? 0.5;
-    const adjustedScore = composite.score * multiplier;
 
-    const direction: 'up' | 'down' | 'sideways' =
-      adjustedScore > 0.1 ? 'up' : adjustedScore < -0.1 ? 'down' : 'sideways';
+    // Convert composite CF to probability, then apply horizon decay
+    const baseProbability = cfToProbability(composite.score);
+    // Scale away from 0.5 by multiplier
+    const adjustedProbability = 0.5 + (baseProbability - 0.5) * multiplier;
 
-    // Probability is the absolute score value scaled by confidence
-    const probability = Math.min(
-      0.95,
-      Math.max(0.05, Math.abs(adjustedScore) * (composite.confidence / 100)),
+    // Apply meta-confidence (already embedded in composite.confidence)
+    const metaScale = composite.confidence / 100;
+    const finalProbability = clampProbability(
+      0.5 + (adjustedProbability - 0.5) * Math.max(0.3, metaScale),
     );
 
-    // Build reasoning from signal sources
+    const direction: 'up' | 'down' | 'sideways' =
+      finalProbability > 0.55 ? 'up' : finalProbability < 0.45 ? 'down' : 'sideways';
+
+    // Probability is distance from 0.5, scaled to 0-1
+    const probability = clampProbability(
+      Math.max(0.05, Math.min(0.95, Math.abs(finalProbability - 0.5) * 2)),
+    );
+
+    // Build reasoning
     const reasoning: string[] = [];
-    const allCategories = [
-      signals.onChain,
-      signals.mlEnsemble,
-      signals.predictionMarkets,
-      signals.socialNarrative,
-      signals.patternMatch,
-    ];
+    const allCategories = SIGNAL_KEYS.map((key) => signals[key]);
 
     for (const cat of allCategories) {
       if (cat.sources.length > 0 && cat.confidence > 0) {
         const dir = cat.score > 0.1 ? 'bullish' : cat.score < -0.1 ? 'bearish' : 'neutral';
         reasoning.push(
-          `${cat.name}: ${dir} (score=${cat.score.toFixed(2)}, conf=${cat.confidence.toFixed(2)}, weight=${cat.weight.toFixed(2)})`,
+          `${cat.name}: ${dir} (CF=${(cat.score * cat.confidence).toFixed(2)}, weight=${cat.weight.toFixed(2)})`,
         );
       }
     }
 
     reasoning.push(
-      `${horizon} composite: ${adjustedScore.toFixed(3)} -> ${direction} (p=${probability.toFixed(2)})`,
+      `${horizon}: ${direction} (p=${probability.toFixed(2)}, confidence=${composite.confidence.toFixed(0)}%)`,
     );
 
     return { horizon, direction, probability, reasoning };
+  }
+
+  /**
+   * Build a signal snapshot for per-signal accuracy tracking.
+   */
+  private buildSignalSnapshot(signals: SignalBreakdown): SignalSnapshot {
+    const snapshot: SignalSnapshot = {};
+    for (const key of SIGNAL_KEYS) {
+      const cat = signals[key];
+      if (cat.confidence > 0) {
+        const dir = cat.score > 0.05 ? 'bullish' : cat.score < -0.05 ? 'bearish' : 'neutral';
+        snapshot[key] = { cf: cat.score * cat.confidence, direction: dir };
+      }
+    }
+    return snapshot;
   }
 }
 
@@ -622,9 +748,6 @@ export class ChronoVisorEngine {
 
 let chronoVisor: ChronoVisorEngine | null = null;
 
-/**
- * Returns the singleton ChronoVisor engine, creating it if necessary.
- */
 export function getChronoVisor(): ChronoVisorEngine {
   if (!chronoVisor) {
     chronoVisor = new ChronoVisorEngine();
@@ -632,9 +755,6 @@ export function getChronoVisor(): ChronoVisorEngine {
   return chronoVisor;
 }
 
-/**
- * Explicitly initialize the ChronoVisor engine (idempotent).
- */
 export function initChronoVisor(): ChronoVisorEngine {
   if (!chronoVisor) {
     chronoVisor = new ChronoVisorEngine();

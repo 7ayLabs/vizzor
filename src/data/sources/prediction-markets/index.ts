@@ -29,6 +29,24 @@ export function getPredictionMarketAdapters(): PredictionMarketAdapter[] {
   return [...adapters];
 }
 
+/** Whether default adapters have been auto-registered. */
+let defaultsRegistered = false;
+
+/**
+ * Auto-register the built-in crypto prediction market adapter on first use.
+ */
+async function ensureDefaultAdapters(): Promise<void> {
+  if (defaultsRegistered) return;
+  defaultsRegistered = true;
+
+  try {
+    const { createCryptoPredictionMarketAdapter } = await import('./crypto-markets.js');
+    registerPredictionMarketAdapter(createCryptoPredictionMarketAdapter());
+  } catch {
+    log.debug('Failed to auto-register crypto prediction market adapter');
+  }
+}
+
 /**
  * Fetch signals from all registered prediction market adapters, optionally
  * filtered by category. Deduplicates by marketId (first adapter wins).
@@ -36,6 +54,9 @@ export function getPredictionMarketAdapters(): PredictionMarketAdapter[] {
 export async function fetchAllPredictionMarketSignals(
   category?: string,
 ): Promise<PredictionMarketSignal[]> {
+  // Lazily register default adapters on first call
+  await ensureDefaultAdapters();
+
   if (adapters.length === 0) {
     log.debug('No prediction market adapters registered');
     return [];
